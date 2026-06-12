@@ -4,7 +4,7 @@ Este es el proyecto de Backend independiente desarrollado en Node.js + Express y
 
 ## Instrucciones para levantar el Backend
 
-1. Abre una terminal dentro de esta carpeta (`C:\Users\ezequ\Desktop\express-backend`).
+1. Abre una terminal dentro de la carpeta donde descargaste el proyecto.
 2. Levanta el servidor y la base de datos con:
    ```bash
    docker compose up --build
