@@ -3,6 +3,7 @@ const cors = require('cors');
 const { sequelize } = require('./models');
 const { swaggerUi, swaggerDocs } = require('./config/swagger');
 const itemRoutes = require('./routes/itemRoutes');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Setup API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api', itemRoutes);
 
 // Database initialization helper with retry logic for connection & syncing
@@ -26,6 +28,10 @@ async function initDb(retries = 5, delay = 2000) {
       
       await sequelize.sync();
       console.log('Database synced successfully. Models mapped to tables.');
+      
+      const { seedDatabase } = require('./services/dbSeeder');
+      await seedDatabase();
+      
       return true;
     } catch (err) {
       console.error(`Database connection failed. Retries remaining: ${retries - 1}`, err.message);
