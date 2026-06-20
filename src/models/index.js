@@ -1,10 +1,19 @@
 const sequelize = require('../config/database');
 const Item = require('./Item');
+const User = require('./User');
+const Role = require('./Role');
+const Plantilla = require('./Plantilla');
 
-// Define Associations here if you add more entities later
-// e.g., User.hasMany(Item); Item.belongsTo(User);
+// Define Associations
+Role.hasMany(User, { foreignKey: 'roleId' });
+User.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
+Plantilla.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
+Role.hasMany(Plantilla, { foreignKey: 'roleId' });
 
 module.exports = {
   sequelize,
-  Item
+  Item,
+  User,
+  Role,
+  Plantilla
 };
