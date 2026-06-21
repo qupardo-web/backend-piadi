@@ -24,7 +24,7 @@ const ResultadosPrograma = sequelize.define('ResultadosPrograma', {
     allowNull: false
   },
   tasaAprobacion: {
-    type: DataTypes.DECIMAL(5, 2),
+    type: DataTypes.STRING,
     allowNull: false
   },
   estado: {
@@ -32,7 +32,7 @@ const ResultadosPrograma = sequelize.define('ResultadosPrograma', {
     allowNull: false
   },
   ejecutado: {
-    type: DataTypes.BOOLEAN,
+    type: DataTypes.STRING,
     allowNull: false
   }
 }, {
