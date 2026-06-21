@@ -16,7 +16,7 @@ const EstadoMatricula = sequelize.define('EstadoMatricula', {
         allowNull: false
     },
     aprobo: {
-        type: DataTypes.ENUM('Si', 'No'),
+        type: DataTypes.ENUM('Sí', 'No'),
         allowNull: false
     },
     estadoAcademico: {
@@ -24,7 +24,7 @@ const EstadoMatricula = sequelize.define('EstadoMatricula', {
         allowNull: false,
     },
     asistencia: {
-        type: DataTypes.DECIMAL(5, 2),
+        type: DataTypes.STRING,
         allowNull: false
     }
 }, {

@@ -66,7 +66,7 @@ const procesarCarga = async (workbook, campos) => {
         }
 
         // Construir registros para esta tabla en este orden
-        const registrosAInsertar = [];
+        let registrosAInsertar = [];
 
         for (const fila of filasProcesadas) {
           const datosTabla = fila.datos[tabla];
@@ -108,12 +108,42 @@ const procesarCarga = async (workbook, campos) => {
               }
             }
 
+            // Normalizar fechas
+            const attrType = Model.rawAttributes[colDest];
+            if (attrType) {
+              const typeKey = attrType.type && (attrType.type.key || (attrType.type.constructor && attrType.type.constructor.name));
+              if (typeKey === 'DATEONLY' || typeKey === 'DATE') {
+                // DD-MM-YYYY o DD/MM/YYYY → YYYY-MM-DD
+                if (typeof valor === 'string') {
+                  const matchDMY = valor.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
+                  if (matchDMY) {
+                    valor = `${matchDMY[3]}-${matchDMY[2]}-${matchDMY[1]}`;
+                  }
+                }
+                // Número serial de Excel → YYYY-MM-DD
+                if (typeof valor === 'number' && valor > 40000 && valor < 60000) {
+                  const fecha = new Date((valor - 25569) * 86400 * 1000);
+                  valor = fecha.toISOString().split('T')[0];
+                }
+              }
+            }
+
             registro[colDest] = valor;
           }
 
           if (Object.keys(registro).length > 0) {
             registrosAInsertar.push(registro);
           }
+        }
+
+        const pkAttrs = Model.primaryKeyAttributes;
+        if (pkAttrs && pkAttrs.length > 0 && registrosAInsertar.some(r => pkAttrs.some(a => r[a] !== undefined))) {
+          const map = new Map();
+          for (const reg of registrosAInsertar) {
+            const key = pkAttrs.map(a => reg[a]).join('::');
+            if (!map.has(key)) map.set(key, reg);
+          }
+          registrosAInsertar = [...map.values()];
         }
 
         // Insertar y guardar IDs para futuros lookups

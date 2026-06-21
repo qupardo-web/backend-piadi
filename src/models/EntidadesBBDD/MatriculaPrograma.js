@@ -23,7 +23,7 @@ const MatriculaPrograma = sequelize.define('MatriculaPrograma', {
     }
   },
   anio: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
     allowNull: false
   },
   semestre: {
@@ -42,13 +42,33 @@ const MatriculaPrograma = sequelize.define('MatriculaPrograma', {
     type: DataTypes.STRING,
     allowNull: false
   },
-  estadoAcademico: {
-    type: DataTypes.STRING,
-    allowNull: false
-  },
   fechaMatricula: {
     type: DataTypes.DATEONLY,
     allowNull: false
+  },
+  nombreCompleto: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  nCursos: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  tieneMasCursos: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  valorListaCLP: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  descuentoAplicado: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  montoPagadoCLP: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   tableName: 'matriculas_programa',

@@ -74,7 +74,7 @@ const AlumnoExterno = sequelize.define('AlumnoExterno', {
   carreraCursada: {
     type: DataTypes.STRING,
     allowNull: false
-  }
+  },
 }, {
   tableName: 'alumnos_externos',
   timestamps: true
