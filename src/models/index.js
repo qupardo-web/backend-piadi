@@ -3,7 +3,7 @@ const Item = require('./Item');
 const User = require('./User');
 const Role = require('./Role');
 const Plantilla = require('./Plantilla');
-
+const CampoPlantilla = require('./CampoPlantilla');
 // --- Entidades BBDD Académicas ---
 const Alumno = require('./EntidadesBBDD/Alumno');
 const Asignatura = require('./EntidadesBBDD/Asignatura');
@@ -22,6 +22,8 @@ Role.hasMany(User, { foreignKey: 'roleId' });
 User.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 Plantilla.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 Role.hasMany(Plantilla, { foreignKey: 'roleId' });
+Plantilla.hasMany(CampoPlantilla, { foreignKey: 'plantillaId' });
+CampoPlantilla.belongsTo(Plantilla, { foreignKey: 'plantillaId', as: 'plantilla' });
 
 // --- Asociaciones Académicas (Relación N:M entre Alumno y Asignatura) ---
 Alumno.belongsToMany(Asignatura, { 
@@ -69,6 +71,7 @@ module.exports = {
   User,
   Role,
   Plantilla,
+  CampoPlantilla,
   Alumno,
   Asignatura,
   MatriculaPorAsignatura,

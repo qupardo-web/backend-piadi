@@ -1,4 +1,6 @@
 const plantillaService = require('../services/plantillaService');
+const { validarArchivo } = require('../services/carga/validacionService');
+const { procesarCarga } = require('../services/carga/cargaService');
 
 const getPlantillas = async (req, res) => {
   try {
@@ -52,10 +54,36 @@ const deletePlantilla = async (req, res) => {
   }
 }
 
+const cargarArchivo = async (req, res) => {
+  const { id } = req.params;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'Debe enviar un archivo Excel' });
+  }
+
+  try {
+    const { valido, errores, campos, workbook } = await validarArchivo(req.file.path, id);
+
+    if (!valido) {
+      return res.status(400).json({
+        success: false,
+        message: `La plantilla contiene ${errores.length} error(es)`,
+        errores
+      });
+    }
+
+    const resultado = await procesarCarga(workbook, campos);
+    res.json(resultado);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al procesar el archivo', details: err.message });
+  }
+}
+
 module.exports = {
   getPlantillas,
   getPlantilla,
   createPlantilla,
   updatePlantilla,
-  deletePlantilla
+  deletePlantilla,
+  cargarArchivo
 }
