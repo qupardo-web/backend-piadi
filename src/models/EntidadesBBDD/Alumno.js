@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../../config/database');
+const { validate } = require('rut.js');
 
 const Alumno = sequelize.define('Alumno', {
     codCli: {
@@ -23,22 +24,9 @@ const Alumno = sequelize.define('Alumno', {
             is: /^[0-9Kk]$/i,
             matchesRut(value) {
                 if (!this.rut) return;
-                let rutStr = String(this.rut);
-                let suma = 0;
-                let multiplicador = 2;
-                for (let i = rutStr.length - 1; i >= 0; i--) {
-                    suma += parseInt(rutStr.charAt(i)) * multiplicador;
-                    multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
-                }
-                const resto = suma % 11;
-                const dvCalculado = 11 - resto;
-                let dvEsperado = '';
-                if (dvCalculado === 11) dvEsperado = '0';
-                else if (dvCalculado === 10) dvEsperado = 'K';
-                else dvEsperado = String(dvCalculado);
-
-                if (String(value).toUpperCase() !== dvEsperado) {
-                    throw new Error(`El dígito verificador "${value}" no corresponde al RUT ${this.rut}.`);
+                const rutCompleto = `${this.rut}-${value}`;
+                if (!validate(rutCompleto)) {
+                    throw new Error(`El dígito verificador ${value} no corresponde al RUT ${this.rut}`);
                 }
             }
         }
