@@ -20,15 +20,24 @@ const Programa = sequelize.define('Programa', {
     },
     anio: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1900
+        }
     },
     cuposProgramados: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1
+        }
     },
     horas: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1
+        }
     },
     mesInicio: {
         type: DataTypes.STRING,

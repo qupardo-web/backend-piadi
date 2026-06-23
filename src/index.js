@@ -6,6 +6,7 @@ const itemRoutes = require('./routes/itemRoutes');
 const authRoutes = require('./routes/authRoutes');
 const plantillaRoutes = require('./routes/plantillaRoutes');
 const plantillaCargaRoutes = require('./routes/plantillaCargaRoutes');
+const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -21,6 +22,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api', itemRoutes);
 app.use('/api/plantillas', plantillaRoutes);
 app.use('/api/plantillas', plantillaCargaRoutes);
+
+// Registar Middleware Centralizado de Errores (Siempre después de las rutas)
+app.use(errorHandler);
 
 // Database initialization helper with retry logic for connection & syncing
 async function initDb(retries = 5, delay = 2000) {

@@ -1,81 +1,99 @@
 const plantillaService = require('../services/plantillaService');
 const { validarArchivo } = require('../services/carga/validacionService');
 const { procesarCarga } = require('../services/carga/cargaService');
+const { NotFoundError, ValidationError, ConflictError } = require('../utils/errors');
 
-const getPlantillas = async (req, res) => {
+const getPlantillas = async (req, res, next) => {
   try {
     const plantillas = await plantillaService.getAllPlantillas();
     res.json(plantillas);
   } catch (err) {
-    res.status(500).json({ error: 'Error al obtener las plantillas', details: err.message });
+    next(err);
   }
 }
 
-const getPlantilla = async (req, res) => {
+const getPlantilla = async (req, res, next) => {
   const { id } = req.params;
   try {
     const plantilla = await plantillaService.getPlantillaById(id);
     res.json(plantilla);
   } catch (err) {
-    const status = err.message === 'Plantilla no encontrada' ? 404 : 500;
-    res.status(status).json({ error: err.message });
+    if (err.message === 'Plantilla no encontrada') {
+      next(new NotFoundError('Plantilla no encontrada'));
+    } else {
+      next(err);
+    }
   }
 }
 
-const createPlantilla = async (req, res) => {
+const createPlantilla = async (req, res, next) => {
   try {
     const newPlantilla = await plantillaService.createNewPlantilla(req.body);
     res.status(201).json(newPlantilla);
   } catch (err) {
-    const status = err.message.includes('requeridos') || err.message.includes('Ya existe') ? 400 : 500;
-    res.status(status).json({ error: err.message });
+    if (err.message.includes('requeridos')) {
+      next(new ValidationError(err.message));
+    } else if (err.message.includes('Ya existe')) {
+      next(new ConflictError(err.message));
+    } else {
+      next(err);
+    }
   }
 }
 
-const updatePlantilla = async (req, res) => {
+const updatePlantilla = async (req, res, next) => {
   const { id } = req.params;
   try {
     const plantilla = await plantillaService.updatePlantillaById(id, req.body);
     res.json(plantilla);
   } catch (err) {
-    const status = err.message === 'Plantilla no encontrada' ? 404 : err.message.includes('Ya existe') ? 400 : 500;
-    res.status(status).json({ error: err.message });
+    if (err.message === 'Plantilla no encontrada') {
+      next(new NotFoundError('Plantilla no encontrada'));
+    } else if (err.message.includes('Ya existe')) {
+      next(new ConflictError(err.message));
+    } else {
+      next(err);
+    }
   }
 }
 
-const deletePlantilla = async (req, res) => {
+const deletePlantilla = async (req, res, next) => {
   const { id } = req.params;
   try {
     await plantillaService.deletePlantillaById(id);
     res.json({ message: 'Plantilla eliminada correctamente' });
   } catch (err) {
-    const status = err.message === 'Plantilla no encontrada' ? 404 : 500;
-    res.status(status).json({ error: err.message });
+    if (err.message === 'Plantilla no encontrada') {
+      next(new NotFoundError('Plantilla no encontrada'));
+    } else {
+      next(err);
+    }
   }
 }
 
-const cargarArchivo = async (req, res) => {
+const cargarArchivo = async (req, res, next) => {
   const { id } = req.params;
 
-  if (!req.file) {
-    return res.status(400).json({ error: 'Debe enviar un archivo Excel' });
-  }
-
   try {
+    if (!req.file) {
+      throw new ValidationError('Debe enviar un archivo Excel');
+    }
+
     const { valido, errores, campos, workbook } = await validarArchivo(req.file.path, id);
 
     if (!valido) {
+      const errorMsg = `Error de validación en carga: ${errores.map(e => e.mensaje).join('. ')}`;
       return res.status(400).json({
+        error: errorMsg,
         success: false,
-        message: `La plantilla contiene ${errores.length} error(es)`,
-        errores
+        errorType: 'ExcelValidationError'
       });
     }
 
     const resultado = await procesarCarga(workbook, campos);
     res.json(resultado);
   } catch (err) {
-    res.status(500).json({ error: 'Error al procesar el archivo', details: err.message });
+    next(err);
   }
 }
 

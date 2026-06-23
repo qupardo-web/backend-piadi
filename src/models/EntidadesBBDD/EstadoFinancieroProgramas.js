@@ -12,20 +12,33 @@ const EstadoFinancieroPrograma = sequelize.define('EstadoFinancieroPrograma', {
         }
     },
     descuentoPromedio: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: DataTypes.DECIMAL(5, 2),
+        allowNull: false,
+        validate: {
+            min: 0.0,
+            max: 100.0
+        }
     },
     ingresosNetosCLP: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     ingresosBrutosCLP: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     valorListaCLP: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     }
 }, {
     tableName: 'estados_financieros_programa',

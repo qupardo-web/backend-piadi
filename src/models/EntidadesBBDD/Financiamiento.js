@@ -17,18 +17,24 @@ const Financiamiento = sequelize.define('Financiamiento', {
     },
     montoAdjudicado: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     montoEjecutadoEstimado: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     estadoFinanciero: {
-        type: DataTypes.ENUM('En Ejecución', 'Cerrado', 'No aplica'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     financiamientoExterno: {
-        type: DataTypes.ENUM('Sí', 'No'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     fuenteFinanciamiento: {

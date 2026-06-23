@@ -25,7 +25,7 @@ const MatriculaPorAsignatura = sequelize.define('MatriculaPorAsignatura', {
         onUpdate: 'CASCADE'
     },
     estadoCad: {
-        type: DataTypes.ENUM('Titulado', 'Egresado', 'Vigente'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     seccion: {
