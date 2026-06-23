@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../../config/database');
+const { validate } = require('rut.js');
 
 const AlumnoExterno = sequelize.define('AlumnoExterno', {
   idParticipante: {
@@ -38,26 +39,8 @@ const AlumnoExterno = sequelize.define('AlumnoExterno', {
     validate: {
       is: /^\d{1,2}\.?\d{3}\.?\d{3}-?[0-9Kk]$/i,
       isValidRut(value) {
-        if (!value) return;
-        const cleanRut = value.replace(/\./g, '').replace(/-/g, '');
-        const cuerpo = cleanRut.slice(0, -1);
-        const dvIngresado = cleanRut.slice(-1).toUpperCase();
-
-        let suma = 0;
-        let multiplicador = 2;
-        for (let i = cuerpo.length - 1; i >= 0; i--) {
-          suma += parseInt(cuerpo.charAt(i)) * multiplicador;
-          multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
-        }
-        const resto = suma % 11;
-        const dvCalculado = 11 - resto;
-        let dvEsperado = '';
-        if (dvCalculado === 11) dvEsperado = '0';
-        else if (dvCalculado === 10) dvEsperado = 'K';
-        else dvEsperado = String(dvCalculado);
-
-        if (dvIngresado !== dvEsperado) {
-          throw new Error(`El RUT "${value}" no es válido matemáticamente.`);
+        if (value && !validate(value)) {
+          throw new Error(`El RUT ${value} no es válido matemáticamente`);
         }
       }
     }
