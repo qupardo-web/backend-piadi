@@ -6,6 +6,9 @@ const itemRoutes = require('./routes/itemRoutes');
 const authRoutes = require('./routes/authRoutes');
 const plantillaRoutes = require('./routes/plantillaRoutes');
 const plantillaCargaRoutes = require('./routes/plantillaCargaRoutes');
+const indicatorRoutes = require('./routes/indicatorRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -22,6 +25,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api', itemRoutes);
 app.use('/api/plantillas', plantillaRoutes);
 app.use('/api/plantillas', plantillaCargaRoutes);
+app.use('/api', indicatorRoutes);
+app.use('/api', dashboardRoutes);
+app.use('/api', auditRoutes);
 
 // Registar Middleware Centralizado de Errores (Siempre después de las rutas)
 app.use(errorHandler);
