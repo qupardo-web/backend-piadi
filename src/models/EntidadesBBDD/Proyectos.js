@@ -19,7 +19,7 @@ const Proyecto = sequelize.define('Proyecto', {
     allowNull: false
   },
   estado: {
-    type: DataTypes.ENUM('En Curso', 'Finalizado'),
+    type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'En Curso'
   },
@@ -29,7 +29,11 @@ const Proyecto = sequelize.define('Proyecto', {
   },
   responsableDocente: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      is: /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'\-]+$/i
+    }
   },
   socioContraparte: {
     type: DataTypes.STRING,
@@ -37,14 +41,24 @@ const Proyecto = sequelize.define('Proyecto', {
   },
   anioInicio: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 1900
+    }
   },
   anioTermino: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      isAfterOrEqualInicio(value) {
+        if (value < this.anioInicio) {
+          throw new Error('El año de término debe ser mayor o igual al año de inicio.');
+        }
+      }
+    }
   },
   semestreInicio: {
-    type: DataTypes.ENUM('Otoño', 'Primavera'),
+    type: DataTypes.STRING,
     allowNull: false
   },
   fechaInicio: {
@@ -53,10 +67,17 @@ const Proyecto = sequelize.define('Proyecto', {
   },
   fechaCierreEstimada: {
     type: DataTypes.DATEONLY,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      isAfterInicio(value) {
+        if (new Date(value) <= new Date(this.fechaInicio)) {
+          throw new Error('La fecha de cierre estimada debe ser posterior a la fecha de inicio.');
+        }
+      }
+    }
   },
   tipoProyecto: {
-    type: DataTypes.ENUM('Estudiantil','Institucional'),
+    type: DataTypes.STRING,
     allowNull: false
   },
   resultadoPrincipal: {
@@ -65,15 +86,24 @@ const Proyecto = sequelize.define('Proyecto', {
   },
   nEstudiantes: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 0
+    }
   },
   nFuncionarios: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 0
+    }
   },
   nDocentes: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 0
+    }
   },
   evidenciaPrincipal: {
     type: DataTypes.STRING,

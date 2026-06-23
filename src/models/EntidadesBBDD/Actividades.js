@@ -15,7 +15,7 @@ const Actividad = sequelize.define('Actividad', {
         }
     },
     modalidad: {
-        type: DataTypes.ENUM('Presencial', 'Online sincrónica', 'Híbrida'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     nombreActividad: {
@@ -35,7 +35,7 @@ const Actividad = sequelize.define('Actividad', {
         allowNull: false
     },
     responsable: {
-        type: DataTypes.ENUM('Admisión','Coordinación TP','Escuela de Auditoria','Educación Continua','Dirección de VcM'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     lineaVcM: {
@@ -43,7 +43,7 @@ const Actividad = sequelize.define('Actividad', {
         allowNull: false
     },
     sector: {
-        type: DataTypes.ENUM('Público', 'Privado', 'ONG/Fundación', 'Academia', 'Educación TP'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     institucionContraparte: {
@@ -52,15 +52,24 @@ const Actividad = sequelize.define('Actividad', {
     },
     totalParticipantes: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     participantesExternos: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     participantesInternos: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     publicoObjetivo: {
         type: DataTypes.STRING,
@@ -68,7 +77,10 @@ const Actividad = sequelize.define('Actividad', {
     },
     horas: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1
+        }
     },
     fecha: {
         type: DataTypes.DATEONLY,
@@ -80,15 +92,25 @@ const Actividad = sequelize.define('Actividad', {
     },
     anio: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1900
+        }
     },
     reportaVcM: {
-        type: DataTypes.ENUM('Sí', 'No'),
+        type: DataTypes.STRING,
         allowNull: false
     }
 }, {
     tableName: 'actividades',
-    timestamps: true
+    timestamps: true,
+    validate: {
+        validateTotalParticipantes() {
+            if (this.totalParticipantes !== ((this.participantesExternos || 0) + (this.participantesInternos || 0))) {
+                throw new Error('El total de participantes debe ser la suma de los participantes externos e internos.');
+            }
+        }
+    }
 });
 
 module.exports = Actividad;

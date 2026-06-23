@@ -16,12 +16,15 @@ const ArticulacionTP = sequelize.define('ArticulacionTP', {
         }
     },
     colegioLiceoTP: {
-        type: DataTypes.BOOLEAN,
+        type: DataTypes.STRING,
         allowNull: false
     },
     anio: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1900
+        }
     },
     fecha: {
         type: DataTypes.DATEONLY,
@@ -40,11 +43,11 @@ const ArticulacionTP = sequelize.define('ArticulacionTP', {
         allowNull: false
     },
     plataformaFoco: {
-        type: DataTypes.ENUM('Defontana', 'SAP', 'Contabilidad tributaria', 'Auditoría básica', 'Excel aplicado', 'Power BI'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     responsableEcas: {
-        type: DataTypes.ENUM('Docente ECAS', 'Relator Educación Continua', 'Coordinador TP'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     nivel: {
@@ -53,11 +56,17 @@ const ArticulacionTP = sequelize.define('ArticulacionTP', {
     },
     docentesTP: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     estudiantesTP: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 0
+        }
     },
     tipoArticulacion: {
         type: DataTypes.STRING,
@@ -68,7 +77,7 @@ const ArticulacionTP = sequelize.define('ArticulacionTP', {
         allowNull: false    
     },
     estado: {
-        type: DataTypes.ENUM('En seguimiento', 'Cerrada', 'Ejecutada'),
+        type: DataTypes.STRING,
         allowNull: false
     },
 }, {

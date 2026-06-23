@@ -54,7 +54,8 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING(255),
     allowNull: false,
     validate: {
-      notEmpty: true
+      notEmpty: true,
+      is: /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'\-]+$/i
     }
   },
   password: {

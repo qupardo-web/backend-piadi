@@ -32,11 +32,19 @@ const MatriculaPrograma = sequelize.define('MatriculaPrograma', {
   },
   mesInicio: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 1,
+      max: 12
+    }
   },
   edadAlumno: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 15,
+      max: 100
+    }
   },
   rangoEdadAlumno: {
     type: DataTypes.STRING,
@@ -48,11 +56,17 @@ const MatriculaPrograma = sequelize.define('MatriculaPrograma', {
   },
   nombreCompleto: {
     type: DataTypes.STRING,
-    allowNull: true
+    allowNull: true,
+    validate: {
+      is: /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'\-]+$/i
+    }
   },
   nCursos: {
     type: DataTypes.INTEGER,
-    allowNull: true
+    allowNull: true,
+    validate: {
+      min: 0
+    }
   },
   tieneMasCursos: {
     type: DataTypes.STRING,

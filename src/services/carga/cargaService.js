@@ -148,10 +148,37 @@ const procesarCarga = async (workbook, campos) => {
 
         // Insertar y guardar IDs para futuros lookups
         if (registrosAInsertar.length > 0) {
-          const insertados = await Model.bulkCreate(registrosAInsertar, {
-            transaction,
-            returning: true
-          });
+          let insertados;
+          try {
+            insertados = await Model.bulkCreate(registrosAInsertar, {
+              transaction,
+              returning: true,
+              validate: true
+            });
+          } catch (err) {
+            // Mapear nombres de campos técnicos de BD a nombres de columnas de Excel correspondientes
+            const mapErrorPaths = (e) => {
+              if (!e) return;
+              if (e.path) {
+                const campoConfig = campos.find(c => c.columna_destino === e.path && c.tabla_destino === tabla);
+                if (campoConfig) {
+                  if (e.message) {
+                    e.message = e.message.replace(e.path, campoConfig.columna_excel);
+                  }
+                  e.path = campoConfig.columna_excel;
+                }
+              }
+              if (e.errors) {
+                if (Array.isArray(e.errors)) {
+                  e.errors.forEach(mapErrorPaths);
+                } else {
+                  mapErrorPaths(e.errors);
+                }
+              }
+            };
+            mapErrorPaths(err);
+            throw err;
+          }
           resumenFinal[tabla] = (resumenFinal[tabla] || 0) + insertados.length;
 
           // Construir mapas de lookup: tabla → columna → valor → registro

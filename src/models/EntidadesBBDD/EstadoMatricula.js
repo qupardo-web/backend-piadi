@@ -13,19 +13,27 @@ const EstadoMatricula = sequelize.define('EstadoMatricula', {
     },
     notaFinal: {
         type: DataTypes.DECIMAL(3, 1),
-        allowNull: false
+        allowNull: false,
+        validate: {
+            min: 1.0,
+            max: 7.0
+        }
     },
     aprobo: {
-        type: DataTypes.ENUM('Sí', 'No'),
+        type: DataTypes.STRING,
         allowNull: false
     },
     estadoAcademico: {
-        type: DataTypes.ENUM('Aprobado', 'Reprobado', 'Desertor'),
+        type: DataTypes.STRING,
         allowNull: false,
     },
     asistencia: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: DataTypes.DECIMAL(5, 2),
+        allowNull: false,
+        validate: {
+            min: 0.0,
+            max: 100.0
+        }
     }
 }, {
     tableName: 'estados_matricula',

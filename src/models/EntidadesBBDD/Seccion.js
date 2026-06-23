@@ -8,10 +8,13 @@ const Seccion = sequelize.define('Seccion', {
   },
   anio: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 1900
+    }
   },
   semestre: {
-    type: DataTypes.ENUM('Otoño', 'Primavera'),
+    type: DataTypes.STRING,
     allowNull: false,
   },
   curso: {
@@ -19,7 +22,7 @@ const Seccion = sequelize.define('Seccion', {
     allowNull: false
   },
   modalidad: {
-    type: DataTypes.ENUM('Presencial', 'Online sincrónica', 'Híbrida'),
+    type: DataTypes.STRING,
     allowNull: false
   },
   carreraPrograma: {
@@ -27,20 +30,30 @@ const Seccion = sequelize.define('Seccion', {
     allowNull: false
   },
   jornada: {
-    type: DataTypes.ENUM('Vespertina', 'Diurna'),
+    type: DataTypes.STRING,
     allowNull: false
   },
   nProyectos: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 0
+    }
   },
   nEstudiantes: {
     type: DataTypes.INTEGER,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      min: 0
+    }
   },
   docente: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      notEmpty: true,
+      is: /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'\-]+$/i
+    }
   },
   observacion: {
     type: DataTypes.TEXT,

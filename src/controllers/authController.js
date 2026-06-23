@@ -1,28 +1,25 @@
 const jwt = require('jsonwebtoken');
 const { User, Role } = require('../models');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
+const { ValidationError, UnauthorizedError } = require('../utils/errors');
 
 /**
  * Controller to handle user login authentication.
  */
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
     const { username, password } = req.body;
 
     // Validate presence of username and password
     if (!username || !password) {
-      return res.status(400).json({
-        error: 'El formato del correo es inválido o faltan campos obligatorios'
-      });
+      throw new ValidationError('El formato del correo es inválido o faltan campos obligatorios');
     }
 
     // Validate email format (allowing 'admin' as a special dev username case)
     if (username !== 'admin') {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(username)) {
-        return res.status(400).json({
-          error: 'El formato del correo es inválido o faltan campos obligatorios'
-        });
+        throw new ValidationError('El formato del correo es inválido o faltan campos obligatorios');
       }
     }
 
@@ -39,17 +36,13 @@ const login = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json({
-        error: 'Usuario o contraseña incorrectos'
-      });
+      throw new UnauthorizedError('Usuario o contraseña incorrectos');
     }
 
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({
-        error: 'Usuario o contraseña incorrectos'
-      });
+      throw new UnauthorizedError('Usuario o contraseña incorrectos');
     }
 
     // Generate JWT token
@@ -66,8 +59,7 @@ const login = async (req, res) => {
 
     return res.status(200).json({ token });
   } catch (error) {
-    console.error('Error during login:', error);
-    return res.status(500).json({ error: 'Error interno del servidor' });
+    next(error);
   }
 };
 
