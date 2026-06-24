@@ -115,7 +115,13 @@ const Proyecto = sequelize.define('Proyecto', {
   }
 }, {
   tableName: 'proyectos',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      name: 'idx_proyectos_anio_inicio',
+      fields: ['anioInicio']
+    }
+  ]
 });
 
 module.exports = Proyecto;

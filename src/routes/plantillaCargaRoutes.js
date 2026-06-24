@@ -72,4 +72,36 @@ router.post('/:id/cargar', upload.single('archivo'), auditLogger({ type: 'carga'
  */
 router.post('/:id/template', uploadMemoria.single('archivo'), plantillaController.subirTemplate);
 
+/**
+ * @openapi
+ * /api/plantillas/{id}/template:
+ *   post:
+ *     tags: [Plantillas]
+ *     summary: Sube y guarda el archivo Excel de la plantilla directamente en la base de datos
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               archivo:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Archivo guardado con éxito.
+ *       400:
+ *         description: Petición inválida.
+ *       404:
+ *         description: Plantilla no encontrada.
+ */
+router.post('/:id/template', uploadMemoria.single('archivo'), plantillaController.subirTemplate);
+
 module.exports = router;
