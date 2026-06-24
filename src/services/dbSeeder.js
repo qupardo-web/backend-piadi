@@ -82,8 +82,26 @@ async function seedDatabase() {
     if (plantillaCount === 0) {
       console.log('No plantillas found. Seeding default plantillas...');
 
+      const fs = require('fs');
+      const path = require('path');
+
+      let fileBuffer = null;
+      const filePath = path.join(__dirname, '../../uploads/templates/educacion_continua.xlsx');
+      if (fs.existsSync(filePath)) {
+        fileBuffer = fs.readFileSync(filePath);
+        console.log('Template file educacion_continua.xlsx found and read successfully.');
+      } else {
+        console.log('Warning: educacion_continua.xlsx not found in uploads/templates/ for seeding.');
+      }
+
       const plantillasToSeed = [
-        { name: 'Educación Continua', description: 'Plantilla para carga de programas de educación continua', roleId: roleMap['Director Académico'] }
+        { 
+          name: 'Educación Continua', 
+          description: 'Plantilla para carga de programas de educación continua', 
+          roleId: roleMap['Director Académico'],
+          archivoData: fileBuffer,
+          archivoNombre: fileBuffer ? 'educacion_continua.xlsx' : null
+        }
       ];
 
       for (const data of plantillasToSeed) {
