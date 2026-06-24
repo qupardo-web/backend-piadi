@@ -6,6 +6,8 @@ const User = require('./User');
 const Role = require('./Role');
 const Plantilla = require('./Plantilla');
 const CampoPlantilla = require('./CampoPlantilla');
+const AuditCarga = require('./EntidadesAudit/AuditCarga');
+const AuditSesion = require('./EntidadesAudit/AuditSesion');
 
 // --- Entidades BBDD Académicas ---
 const Alumno = require('./EntidadesBBDD/Alumno');
@@ -36,6 +38,13 @@ Plantilla.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 Role.hasMany(Plantilla, { foreignKey: 'roleId' });
 Plantilla.hasMany(CampoPlantilla, { foreignKey: 'plantillaId' });
 CampoPlantilla.belongsTo(Plantilla, { foreignKey: 'plantillaId', as: 'plantilla' });
+
+// --- Asociaciones de Auditoría (en español) ---
+User.hasMany(AuditCarga, { foreignKey: 'usuarioId', onDelete: 'SET NULL', onUpdate: 'CASCADE' });
+AuditCarga.belongsTo(User, { foreignKey: 'usuarioId', as: 'usuario' });
+
+User.hasMany(AuditSesion, { foreignKey: 'usuarioId', onDelete: 'SET NULL', onUpdate: 'CASCADE' });
+AuditSesion.belongsTo(User, { foreignKey: 'usuarioId', as: 'usuario' });
 
 // --- Asociaciones Académicas (Relación N:M entre Alumno y Asignatura) ---
 Alumno.belongsToMany(Asignatura, { 
@@ -111,5 +120,7 @@ module.exports = {
   Financiamiento,
   Participacion,
   Proyecto,
-  Seccion
+  Seccion,
+  AuditCarga,
+  AuditSesion
 };
