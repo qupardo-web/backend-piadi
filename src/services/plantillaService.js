@@ -63,11 +63,24 @@ const getPlantillaWithArchivo = async (id) => {
   return plantilla;
 }
 
+const guardarArchivoTemplate = async (id, buffer, originalname) => {
+  const plantilla = await Plantilla.unscoped().findByPk(id);
+  if (!plantilla) {
+    throw new Error('Plantilla no encontrada');
+  }
+  await plantilla.update({
+    archivoData: buffer,
+    archivoNombre: originalname
+  });
+  return plantilla;
+}
+
 module.exports = {
   getAllPlantillas,
   getPlantillaById,
   createNewPlantilla,
   updatePlantillaById,
   deletePlantillaById,
-  getPlantillaWithArchivo
+  getPlantillaWithArchivo,
+  guardarArchivoTemplate
 }

@@ -113,6 +113,28 @@ const descargarExcel = async (req, res, next) => {
   }
 }
 
+const subirTemplate = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    if (!req.file) {
+      throw new ValidationError('Debe enviar un archivo Excel');
+    }
+
+    const plantilla = await plantillaService.guardarArchivoTemplate(id, req.file.buffer, req.file.originalname);
+    res.json({
+      success: true,
+      message: 'Archivo de plantilla guardado exitosamente en base de datos',
+      plantilla: {
+        id: plantilla.id,
+        name: plantilla.name,
+        archivoNombre: plantilla.archivoNombre
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getPlantillas,
   getPlantilla,
@@ -120,5 +142,6 @@ module.exports = {
   updatePlantilla,
   deletePlantilla,
   cargarArchivo,
-  descargarExcel
+  descargarExcel,
+  subirTemplate
 }
