@@ -53,7 +53,13 @@ const MatriculaPorAsignatura = sequelize.define('MatriculaPorAsignatura', {
     }
 }, {
     tableName: 'matriculas_por_asignatura',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+        {
+            name: 'idx_mat_asignatura_anio',
+            fields: ['anio']
+        }
+    ]
 });
 
 module.exports = MatriculaPorAsignatura;

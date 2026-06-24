@@ -61,7 +61,13 @@ const Seccion = sequelize.define('Seccion', {
   }
 }, {
   tableName: 'secciones',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      name: 'idx_secciones_periodo',
+      fields: ['anio', 'semestre']
+    }
+  ]
 });
 
 module.exports = Seccion;
