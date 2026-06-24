@@ -13,9 +13,9 @@ const sendError = (res, err) => {
   });
 };
 
-const getAuditLogs = (req, res) => {
+const getAuditLogs = async (req, res) => {
   try {
-    const result = auditService.query(req.query);
+    const result = await auditService.query(req.query);
     res.status(200).json({ success: true, data: result.data });
   } catch (err) {
     sendError(res, err);

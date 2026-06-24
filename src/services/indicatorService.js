@@ -1,4 +1,5 @@
-const dataProvider = require('./indicatorDataProvider');
+const provider = require('./indicatorProvider');
+const formulaService = require('./indicatorFormulaService');
 
 class ServiceError extends Error {
   constructor(statusCode, code, message, details = {}) {
@@ -8,65 +9,6 @@ class ServiceError extends Error {
     this.details = details;
   }
 }
-
-const DEPARTMENTS = [
-  {
-    id: 'admision',
-    name: 'Admisión',
-    description: 'Gestión de procesos de admisión y matrícula de nuevos estudiantes.',
-    enabled: false
-  },
-  {
-    id: 'relaciones_estudiantiles',
-    name: 'Relaciones Estudiantiles',
-    description: 'Apoyo y seguimiento a la experiencia y el bienestar de los estudiantes.',
-    enabled: false
-  },
-  {
-    id: 'desarrollo_curricular',
-    name: 'Desarrollo Curricular',
-    description: 'Diseño, actualización y aseguramiento de la calidad de los planes de estudio.',
-    enabled: false
-  },
-  {
-    id: 'innovacion',
-    name: 'Innovación',
-    description: 'Iniciativas de innovación académica y transformación educativa.',
-    enabled: false
-  },
-  {
-    id: 'educacion_continua',
-    name: 'Educación Continua',
-    description: 'Gestión de programas de formación continua, postgrados y educación permanente para profesionales.',
-    enabled: true
-  },
-  {
-    id: 'vinculacion_medio',
-    name: 'Vinculación con el Medio',
-    description: 'Vinculación con el medio, convenios y proyectos con el entorno.',
-    enabled: false
-  }
-];
-
-const KPI_DEFINITIONS = {
-  educacion_continua: [
-    { key: 'cursos_dictados', name: 'Cursos efectivamente dictados', unit: 'cursos', format: 'number' },
-    { key: 'tasa_ejecucion', name: 'Tasa de ejecución', unit: '%', format: 'percentage' },
-    { key: 'matricula_por_programa', name: 'Matrícula en programas', unit: 'personas', format: 'number' },
-    { key: 'ingresos_generados', name: 'Ingresos generados', unit: 'CLP', format: 'currency' }
-  ]
-};
-
-const findDepartment = (id) => DEPARTMENTS.find((dept) => dept.id === id) || null;
-
-const getDepartmentCatalog = () => DEPARTMENTS.map((dept) => ({ ...dept }));
-
-const getKpiDefinitions = (departmentId) => (KPI_DEFINITIONS[departmentId] || []).map((kpi) => ({ ...kpi }));
-
-const findKpiDefinition = (departmentId, key) =>
-  getKpiDefinitions(departmentId).find((kpi) => kpi.key === key) || null;
-
-const isSourceConnected = () => dataProvider.isConnected() === true;
 
 const ensureDepartment = (department) => {
   if (department === undefined || department === null || String(department).trim() === '') {
@@ -82,14 +24,19 @@ const ensureIndicatorKey = (indicatorKey) => {
   return String(indicatorKey).trim();
 };
 
+const ensureField = (value, field) => {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    throw new ServiceError(400, 'VALIDATION_ERROR', `El campo "${field}" es obligatorio`, { field });
+  }
+  return String(value).trim();
+};
+
 const parseYear = (rawYear) => {
   if (rawYear === undefined || rawYear === null || rawYear === '') {
     return null;
   }
   if (!/^\d{4}$/.test(String(rawYear))) {
-    throw new ServiceError(400, 'INVALID_YEAR', 'El parámetro "year" debe ser un año numérico de 4 dígitos', {
-      year: rawYear
-    });
+    throw new ServiceError(400, 'INVALID_YEAR', 'El parámetro "year" debe ser un año numérico de 4 dígitos', { year: rawYear });
   }
   return Number(rawYear);
 };
@@ -110,126 +57,214 @@ const formatValue = (value, format) => {
   return String(value);
 };
 
-const listDepartments = () => {
-  const connected = isSourceConnected();
-  const data = DEPARTMENTS.map((dept) => {
-    const meta = connected && dept.enabled ? dataProvider.getDepartmentMeta(dept.id) : null;
-    return {
-      id: dept.id,
-      name: dept.name,
-      description: dept.description,
-      hasData: Boolean(meta && meta.hasData),
-      enabled: dept.enabled,
-      lastUpdated: meta && meta.lastUpdated ? meta.lastUpdated : null
-    };
+const isSourceConnected = () => provider.isConnected();
+
+const requireDepartment = async (key) => {
+  const dept = await provider.getDepartmentByKey(key);
+  if (!dept) {
+    throw new ServiceError(404, 'DEPARTMENT_NOT_FOUND', 'El departamento solicitado no existe', { departmentId: key });
+  }
+  return dept;
+};
+
+const requireKpi = async (departmentKey, indicatorKey) => {
+  const kpi = await provider.getKpi(departmentKey, indicatorKey);
+  if (!kpi) {
+    throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe para este departamento', {
+      departmentId: departmentKey,
+      indicatorKey
+    });
+  }
+  return kpi;
+};
+
+const listDepartments = async () => ({ data: await provider.getDepartments() });
+
+const createDepartment = async (body = {}) => {
+  const key = ensureField(body.key, 'key');
+  const name = ensureField(body.name, 'name');
+  const existing = await provider.getDepartmentByKey(key);
+  if (existing) {
+    throw new ServiceError(409, 'DEPARTMENT_EXISTS', 'Ya existe un departamento con esa clave', { departmentId: key });
+  }
+  const data = await provider.createDepartment({
+    key,
+    name,
+    description: body.description ?? null,
+    enabled: body.enabled !== undefined ? Boolean(body.enabled) : true,
+    hasData: body.hasData !== undefined ? Boolean(body.hasData) : false,
+    order: body.order !== undefined ? Number(body.order) : 0
   });
   return { data };
 };
 
-const getDepartmentKpis = (departmentId) => {
-  const id = ensureDepartment(departmentId);
-  const department = findDepartment(id);
-  const kpis = getKpiDefinitions(id);
-  if (!department || kpis.length === 0) {
-    return {
-      data: {
-        departmentId: id,
-        kpis: [],
-        hasIndicators: false,
-        message: 'No hay indicadores definidos para este departamento.'
-      }
-    };
-  }
-  return {
-    data: {
-      departmentId: id,
-      kpis,
-      hasIndicators: true
-    }
-  };
+const updateDepartment = async (departmentId, body = {}) => {
+  const key = ensureDepartment(departmentId);
+  await requireDepartment(key);
+  const updatable = {};
+  if (body.name !== undefined) updatable.name = String(body.name).trim();
+  if (body.description !== undefined) updatable.description = body.description;
+  if (body.enabled !== undefined) updatable.enabled = Boolean(body.enabled);
+  if (body.hasData !== undefined) updatable.hasData = Boolean(body.hasData);
+  if (body.order !== undefined) updatable.order = Number(body.order);
+  const data = await provider.updateDepartment(key, updatable);
+  return { data };
 };
 
-const getIndicatorValue = (indicatorKey, query = {}) => {
+const deleteDepartment = async (departmentId) => {
+  const key = ensureDepartment(departmentId);
+  const ok = await provider.deleteDepartment(key);
+  if (!ok) {
+    throw new ServiceError(404, 'DEPARTMENT_NOT_FOUND', 'El departamento solicitado no existe', { departmentId: key });
+  }
+  return { data: { departmentId: key, deleted: true } };
+};
+
+const getDepartmentKpis = async (departmentId) => {
+  const key = ensureDepartment(departmentId);
+  await requireDepartment(key);
+  const kpis = await provider.getKpisByDepartment(key);
+  return { data: { departmentId: key, kpis, hasIndicators: kpis.length > 0 } };
+};
+
+const createKpi = async (departmentId, body = {}) => {
+  const key = ensureDepartment(departmentId);
+  await requireDepartment(key);
+  const indicatorKey = ensureField(body.key, 'key');
+  const name = ensureField(body.name, 'name');
+  const existing = await provider.getKpi(key, indicatorKey);
+  if (existing) {
+    throw new ServiceError(409, 'KPI_EXISTS', 'Ya existe un indicador con esa clave en el departamento', {
+      departmentId: key,
+      indicatorKey
+    });
+  }
+  const data = await provider.createKpi(key, {
+    key: indicatorKey,
+    name,
+    description: body.description ?? null,
+    unit: body.unit ?? null,
+    format: body.format ?? null,
+    formulaKey: body.formulaKey ?? null,
+    enabled: body.enabled !== undefined ? Boolean(body.enabled) : true
+  });
+  return { data };
+};
+
+const updateKpi = async (departmentId, indicatorKey, body = {}) => {
+  const key = ensureDepartment(departmentId);
+  await requireDepartment(key);
+  const ind = ensureIndicatorKey(indicatorKey);
+  await requireKpi(key, ind);
+  const updatable = {};
+  if (body.name !== undefined) updatable.name = String(body.name).trim();
+  if (body.description !== undefined) updatable.description = body.description;
+  if (body.unit !== undefined) updatable.unit = body.unit;
+  if (body.format !== undefined) updatable.format = body.format;
+  if (body.formulaKey !== undefined) updatable.formulaKey = body.formulaKey;
+  if (body.enabled !== undefined) updatable.enabled = Boolean(body.enabled);
+  const data = await provider.updateKpi(key, ind, updatable);
+  return { data };
+};
+
+const deleteKpi = async (departmentId, indicatorKey) => {
+  const key = ensureDepartment(departmentId);
+  await requireDepartment(key);
+  const ind = ensureIndicatorKey(indicatorKey);
+  const ok = await provider.deleteKpi(key, ind);
+  if (!ok) {
+    throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe para este departamento', {
+      departmentId: key,
+      indicatorKey: ind
+    });
+  }
+  return { data: { departmentId: key, indicatorKey: ind, deleted: true } };
+};
+
+const getEnabledKpis = async (departmentKey) => {
+  const kpis = await provider.getKpisByDepartment(departmentKey);
+  return kpis.filter((kpi) => kpi.enabled !== false);
+};
+
+const computeIndicator = async (definition, departmentId, year) => {
+  const input = await provider.getIndicatorInputData({
+    department: departmentId,
+    indicatorKey: definition.key,
+    formulaKey: definition.formulaKey,
+    year
+  });
+  const result = formulaService.apply(definition.formulaKey, input || {});
+  const hasData = result.hasData && result.value !== null && result.value !== undefined;
+  return { value: hasData ? result.value : null, hasData };
+};
+
+const getIndicatorValue = async (indicatorKey, query = {}) => {
   const key = ensureIndicatorKey(indicatorKey);
   const departmentId = ensureDepartment(query.department);
   const year = parseYear(query.year);
   const resolvedYear = year !== null ? year : new Date().getFullYear();
-  const definition = findKpiDefinition(departmentId, key);
-  const unit = definition ? definition.unit : null;
-  const format = definition ? definition.format : null;
 
-  const providerValue = isSourceConnected()
-    ? dataProvider.getIndicatorValue(departmentId, key, resolvedYear)
-    : null;
+  await requireDepartment(departmentId);
+  const definition = await requireKpi(departmentId, key);
+  const { value, hasData } = await computeIndicator(definition, departmentId, resolvedYear);
 
-  if (providerValue && providerValue.value !== null && providerValue.value !== undefined) {
-    return {
-      data: {
-        departmentId,
-        indicatorKey: key,
-        year: resolvedYear,
-        value: providerValue.value,
-        formattedValue: formatValue(providerValue.value, format),
-        unit,
-        format,
-        hasData: true,
-        source: providerValue.source || 'Carga de datos'
-      }
-    };
-  }
-
-  return {
-    data: {
-      departmentId,
-      indicatorKey: key,
-      year: resolvedYear,
-      value: null,
-      formattedValue: null,
-      unit,
-      format,
-      hasData: false,
-      message: 'Indicador sin datos disponibles porque aún no existe conexión con la carga/base de datos.'
-    }
+  const data = {
+    departmentId,
+    indicatorKey: key,
+    year: resolvedYear,
+    value,
+    formattedValue: hasData ? formatValue(value, definition.format) : null,
+    unit: definition.unit,
+    format: definition.format,
+    hasData
   };
+  if (!hasData) {
+    data.message = 'No existen datos suficientes para calcular este indicador.';
+  }
+  return { data };
 };
 
-const getIndicatorSeries = (indicatorKey, query = {}) => {
+const getIndicatorSeries = async (indicatorKey, query = {}) => {
   const key = ensureIndicatorKey(indicatorKey);
   const departmentId = ensureDepartment(query.department);
-  const points = isSourceConnected() ? dataProvider.getIndicatorSeries(departmentId, key) : [];
 
-  if (Array.isArray(points) && points.length > 0) {
-    return {
-      data: {
-        departmentId,
-        indicatorKey: key,
-        points,
-        hasData: true
-      }
-    };
+  await requireDepartment(departmentId);
+  const definition = await requireKpi(departmentId, key);
+  const years = await provider.getAvailableYears({
+    department: departmentId,
+    indicatorKey: key,
+    formulaKey: definition.formulaKey
+  });
+
+  const points = [];
+  for (const year of years) {
+    const { value, hasData } = await computeIndicator(definition, departmentId, year);
+    if (hasData) {
+      points.push({ year, value, formattedValue: formatValue(value, definition.format) });
+    }
   }
 
-  return {
-    data: {
-      departmentId,
-      indicatorKey: key,
-      points: [],
-      hasData: false,
-      message: 'Serie histórica no disponible porque aún no existe conexión con la carga/base de datos.'
-    }
-  };
+  const data = { departmentId, indicatorKey: key, points, hasData: points.length > 0 };
+  if (points.length === 0) {
+    data.message = 'No existen datos suficientes para construir la serie histórica.';
+  }
+  return { data };
 };
 
 module.exports = {
   ServiceError,
   parseYear,
   formatValue,
-  getDepartmentCatalog,
-  getKpiDefinitions,
-  findKpiDefinition,
   isSourceConnected,
   listDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
   getDepartmentKpis,
+  createKpi,
+  updateKpi,
+  deleteKpi,
+  getEnabledKpis,
   getIndicatorValue,
   getIndicatorSeries
 };
