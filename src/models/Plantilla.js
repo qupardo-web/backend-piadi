@@ -23,6 +23,9 @@ const sequelize = require('../config/database');
  *         roleId:
  *           type: integer
  *           description: ID del rol/area asociado a la plantilla.
+ *         archivoNombre:
+ *           type: string
+ *           description: Nombre del archivo de plantilla.
  *         createdAt:
  *           type: string
  *           format: date-time
@@ -56,10 +59,21 @@ const Plantilla = sequelize.define('Plantilla', {
       model: 'roles',
       key: 'id'
     }
+  },
+  archivoData: {
+    type: DataTypes.BLOB('long'),
+    allowNull: true
+  },
+  archivoNombre: {
+    type: DataTypes.STRING(255),
+    allowNull: true
   }
 }, {
   tableName: 'plantillas',
-  timestamps: true
+  timestamps: true,
+  defaultScope: {
+    attributes: { exclude: ['archivoData'] }
+  }
 });
 
 module.exports = Plantilla;

@@ -55,10 +55,19 @@ const deletePlantillaById = async (id) => {
   return true;
 }
 
+const getPlantillaWithArchivo = async (id) => {
+  const plantilla = await Plantilla.unscoped().findByPk(id);
+  if (!plantilla) {
+    throw new Error('Plantilla no encontrada');
+  }
+  return plantilla;
+}
+
 module.exports = {
   getAllPlantillas,
   getPlantillaById,
   createNewPlantilla,
   updatePlantillaById,
-  deletePlantillaById
+  deletePlantillaById,
+  getPlantillaWithArchivo
 }

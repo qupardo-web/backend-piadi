@@ -17,6 +17,9 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Servir plantillas Excel estáticamente para descarga
+app.use('/templates', express.static('uploads/templates'));
+
 // Setup Swagger Endpoint
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
