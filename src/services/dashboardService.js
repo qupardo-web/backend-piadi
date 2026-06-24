@@ -16,9 +16,7 @@ const parseYear = (rawYear) => {
     return null;
   }
   if (!/^\d{4}$/.test(String(rawYear))) {
-    throw new ServiceError(400, 'INVALID_YEAR', 'El parámetro "year" debe ser un año numérico de 4 dígitos', {
-      year: rawYear
-    });
+    throw new ServiceError(400, 'INVALID_YEAR', 'El parámetro "year" debe ser un año numérico de 4 dígitos', { year: rawYear });
   }
   return Number(rawYear);
 };
@@ -46,49 +44,61 @@ const validateOrder = (order) => {
   return order;
 };
 
-const buildCards = (departmentId, year) => {
-  const definitions = indicatorService.getKpiDefinitions(departmentId);
-  return definitions.map((definition) => {
-    const { data } = indicatorService.getIndicatorValue(definition.key, {
-      department: departmentId,
+const emptySummary = (year, sourceConnected) => ({
+  data: {
+    year,
+    departments: [],
+    meta: { totalDepartments: 0, departmentsWithIndicators: 0, totalCards: 0, sourceConnected }
+  }
+});
+
+const buildCards = async (departmentKey, year) => {
+  const kpis = await indicatorService.getEnabledKpis(departmentKey);
+  const cards = [];
+  for (const kpi of kpis) {
+    const { data } = await indicatorService.getIndicatorValue(kpi.key, {
+      department: departmentKey,
       year: String(year)
     });
-    return {
-      indicatorKey: definition.key,
-      title: definition.name,
+    cards.push({
+      indicatorKey: kpi.key,
+      title: kpi.name,
       value: data.value,
       formattedValue: data.formattedValue,
-      unit: definition.unit,
-      format: definition.format,
+      unit: kpi.unit,
+      format: kpi.format,
       hasData: data.hasData
-    };
-  });
-};
-
-const resolveTargets = (departmentParam) => {
-  const catalog = indicatorService.getDepartmentCatalog();
-  if (departmentParam !== undefined && String(departmentParam).trim() !== '') {
-    const id = String(departmentParam).trim();
-    return catalog.filter((dept) => dept.id === id);
+    });
   }
-  return catalog.filter((dept) => indicatorService.getKpiDefinitions(dept.id).length > 0);
+  return cards;
 };
 
-const getSummary = (query = {}) => {
+const getSummary = async (query = {}) => {
   const year = parseYear(query.year);
   const sortBy = validateSortBy(query.sortBy);
   const order = validateOrder(query.order);
   const resolvedYear = year !== null ? year : new Date().getFullYear();
 
-  let departments = resolveTargets(query.department).map((dept) => {
-    const cards = buildCards(dept.id, resolvedYear);
-    return {
-      departmentId: dept.id,
+  const sourceConnected = await indicatorService.isSourceConnected();
+  if (!sourceConnected) {
+    return emptySummary(resolvedYear, false);
+  }
+
+  const { data: catalog } = await indicatorService.listDepartments();
+  const filtered = query.department
+    ? catalog.filter((dept) => dept.key === String(query.department).trim())
+    : catalog;
+
+  let departments = [];
+  for (const dept of filtered) {
+    const cards = await buildCards(dept.key, resolvedYear);
+    departments.push({
+      departmentId: dept.key,
       name: dept.name,
       hasIndicators: cards.length > 0,
       cards
-    };
-  });
+    });
+  }
 
   if (sortBy === 'name' || sortBy === 'department') {
     departments = departments.sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -108,7 +118,7 @@ const getSummary = (query = {}) => {
         totalDepartments: departments.length,
         departmentsWithIndicators,
         totalCards,
-        sourceConnected: indicatorService.isSourceConnected()
+        sourceConnected: true
       }
     }
   };

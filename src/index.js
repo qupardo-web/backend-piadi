@@ -48,7 +48,10 @@ async function initDb(retries = 5, delay = 2000) {
       
       const { seedDatabase } = require('./services/dbSeeder');
       await seedDatabase();
-      
+
+      const { seedIndicators } = require('./services/indicatorSeeder');
+      await seedIndicators();
+
       return true;
     } catch (err) {
       console.error(`Database connection failed. Retries remaining: ${retries - 1}`, err.message);

@@ -6,54 +6,129 @@ const indicatorController = require('../controllers/indicatorController');
  * @openapi
  * /api/departments:
  *   get:
- *     summary: Lista el catálogo de departamentos y su disponibilidad de datos
+ *     summary: Lista los departamentos desde base de datos
  *     responses:
  *       200:
- *         description: Departamentos para la central de dashboards (enabled y hasData por departamento).
+ *         description: Departamentos disponibles.
+ *   post:
+ *     summary: Crea un departamento
+ *     responses:
+ *       201:
+ *         description: Departamento creado.
  */
 router.get('/departments', indicatorController.listDepartments);
+router.post('/departments', indicatorController.createDepartment);
+
+/**
+ * @openapi
+ * /api/departments/{departmentId}:
+ *   put:
+ *     summary: Actualiza un departamento por su key
+ *     parameters:
+ *       - in: path
+ *         name: departmentId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Departamento actualizado.
+ *   delete:
+ *     summary: Elimina un departamento por su key
+ *     parameters:
+ *       - in: path
+ *         name: departmentId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Departamento eliminado.
+ */
+router.put('/departments/:departmentId', indicatorController.updateDepartment);
+router.delete('/departments/:departmentId', indicatorController.deleteDepartment);
 
 /**
  * @openapi
  * /api/departments/{departmentId}/kpis:
  *   get:
- *     summary: Lista las definiciones de KPI asociadas a un departamento
+ *     summary: Lista las definiciones de KPI de un departamento (desde base de datos)
  *     parameters:
  *       - in: path
  *         name: departmentId
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *     responses:
  *       200:
- *         description: KPIs del departamento (lista vacía con mensaje si no tiene indicadores).
+ *         description: KPIs del departamento.
+ *   post:
+ *     summary: Crea una definición de KPI para un departamento
+ *     parameters:
+ *       - in: path
+ *         name: departmentId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       201:
+ *         description: KPI creado.
  */
 router.get('/departments/:departmentId/kpis', indicatorController.listDepartmentKpis);
+router.post('/departments/:departmentId/kpis', indicatorController.createKpi);
+
+/**
+ * @openapi
+ * /api/departments/{departmentId}/kpis/{indicatorKey}:
+ *   put:
+ *     summary: Actualiza una definición de KPI
+ *     parameters:
+ *       - in: path
+ *         name: departmentId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: indicatorKey
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: KPI actualizado.
+ *   delete:
+ *     summary: Elimina una definición de KPI
+ *     parameters:
+ *       - in: path
+ *         name: departmentId
+ *         required: true
+ *         schema: { type: string }
+ *       - in: path
+ *         name: indicatorKey
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: KPI eliminado.
+ */
+router.put('/departments/:departmentId/kpis/:indicatorKey', indicatorController.updateKpi);
+router.delete('/departments/:departmentId/kpis/:indicatorKey', indicatorController.deleteKpi);
 
 /**
  * @openapi
  * /api/indicators/{indicatorKey}/values:
  *   get:
- *     summary: Valor de un indicador para un departamento (hasData false si no hay fuente conectada)
+ *     summary: Valor calculado bajo demanda de un indicador para un departamento y año
  *     parameters:
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *       - in: query
  *         name: department
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *       - in: query
  *         name: year
  *         required: false
- *         schema:
- *           type: integer
+ *         schema: { type: integer }
  *     responses:
  *       200:
- *         description: Valor del indicador.
+ *         description: Valor del indicador (hasData false si faltan datos).
  */
 router.get('/indicators/:indicatorKey/values', indicatorController.getIndicatorValue);
 
@@ -61,21 +136,19 @@ router.get('/indicators/:indicatorKey/values', indicatorController.getIndicatorV
  * @openapi
  * /api/indicators/{indicatorKey}/series:
  *   get:
- *     summary: Serie histórica de un indicador (si existe información por año)
+ *     summary: Serie histórica calculada para los años disponibles en la carga real
  *     parameters:
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *       - in: query
  *         name: department
  *         required: true
- *         schema:
- *           type: string
+ *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Serie histórica o hasData false si no existe por año.
+ *         description: Serie histórica del indicador.
  */
 router.get('/indicators/:indicatorKey/series', indicatorController.getIndicatorSeries);
 

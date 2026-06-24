@@ -9,6 +9,10 @@ const CampoPlantilla = require('./CampoPlantilla');
 const AuditCarga = require('./EntidadesAudit/AuditCarga');
 const AuditSesion = require('./EntidadesAudit/AuditSesion');
 
+// --- Entidades de Indicadores (PIADI-150 / PIADI-153) ---
+const Department = require('./Department');
+const IndicatorDefinition = require('./IndicatorDefinition');
+
 // --- Entidades BBDD Académicas ---
 const Alumno = require('./EntidadesBBDD/Alumno');
 const Asignatura = require('./EntidadesBBDD/Asignatura');
@@ -98,6 +102,10 @@ Participacion.belongsTo(Actividad, { foreignKey: 'idActividad', as: 'actividad' 
 Proyecto.hasOne(Financiamiento, { foreignKey: 'idProyecto', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 Financiamiento.belongsTo(Proyecto, { foreignKey: 'idProyecto', as: 'proyecto' });
 
+// --- Asociaciones de Indicadores ---
+Department.hasMany(IndicatorDefinition, { foreignKey: 'departmentId', sourceKey: 'key', as: 'indicators', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+IndicatorDefinition.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
+
 module.exports = {
   sequelize,
   Item,
@@ -122,5 +130,7 @@ module.exports = {
   Proyecto,
   Seccion,
   AuditCarga,
-  AuditSesion
+  AuditSesion,
+  Department,
+  IndicatorDefinition
 };
