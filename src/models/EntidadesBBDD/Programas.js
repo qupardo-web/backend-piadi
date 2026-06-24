@@ -63,9 +63,15 @@ const Programa = sequelize.define('Programa', {
         type: DataTypes.STRING,
         allowNull: false
     },
-},  {
+}, {
     tableName: 'programas',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+        {
+            name: 'idx_programas_periodo',
+            fields: ['anio', 'semestre']
+        }
+    ]
 });
 
 module.exports = Programa;

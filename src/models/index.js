@@ -6,6 +6,12 @@ const User = require('./User');
 const Role = require('./Role');
 const Plantilla = require('./Plantilla');
 const CampoPlantilla = require('./CampoPlantilla');
+const AuditCarga = require('./EntidadesAudit/AuditCarga');
+const AuditSesion = require('./EntidadesAudit/AuditSesion');
+
+// --- Entidades de Indicadores (PIADI-150 / PIADI-153) ---
+const Department = require('./Department');
+const IndicatorDefinition = require('./IndicatorDefinition');
 
 // --- Entidades BBDD Académicas ---
 const Alumno = require('./EntidadesBBDD/Alumno');
@@ -36,6 +42,13 @@ Plantilla.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 Role.hasMany(Plantilla, { foreignKey: 'roleId' });
 Plantilla.hasMany(CampoPlantilla, { foreignKey: 'plantillaId' });
 CampoPlantilla.belongsTo(Plantilla, { foreignKey: 'plantillaId', as: 'plantilla' });
+
+// --- Asociaciones de Auditoría (en español) ---
+User.hasMany(AuditCarga, { foreignKey: 'usuarioId', onDelete: 'SET NULL', onUpdate: 'CASCADE' });
+AuditCarga.belongsTo(User, { foreignKey: 'usuarioId', as: 'usuario' });
+
+User.hasMany(AuditSesion, { foreignKey: 'usuarioId', onDelete: 'SET NULL', onUpdate: 'CASCADE' });
+AuditSesion.belongsTo(User, { foreignKey: 'usuarioId', as: 'usuario' });
 
 // --- Asociaciones Académicas (Relación N:M entre Alumno y Asignatura) ---
 Alumno.belongsToMany(Asignatura, { 
@@ -89,6 +102,10 @@ Participacion.belongsTo(Actividad, { foreignKey: 'idActividad', as: 'actividad' 
 Proyecto.hasOne(Financiamiento, { foreignKey: 'idProyecto', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 Financiamiento.belongsTo(Proyecto, { foreignKey: 'idProyecto', as: 'proyecto' });
 
+// --- Asociaciones de Indicadores ---
+Department.hasMany(IndicatorDefinition, { foreignKey: 'departmentId', sourceKey: 'key', as: 'indicators', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+IndicatorDefinition.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
+
 module.exports = {
   sequelize,
   Item,
@@ -111,5 +128,9 @@ module.exports = {
   Financiamiento,
   Participacion,
   Proyecto,
-  Seccion
+  Seccion,
+  AuditCarga,
+  AuditSesion,
+  Department,
+  IndicatorDefinition
 };

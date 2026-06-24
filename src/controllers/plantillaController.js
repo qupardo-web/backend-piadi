@@ -97,11 +97,51 @@ const cargarArchivo = async (req, res, next) => {
   }
 }
 
+const descargarExcel = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    const plantilla = await plantillaService.getPlantillaWithArchivo(id);
+    if (!plantilla.archivoData) {
+      throw new NotFoundError('El archivo Excel de plantilla no está registrado en la base de datos');
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${plantilla.archivoNombre}`);
+    return res.send(plantilla.archivoData);
+  } catch (err) {
+    next(err);
+  }
+}
+
+const subirTemplate = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    if (!req.file) {
+      throw new ValidationError('Debe enviar un archivo Excel');
+    }
+
+    const plantilla = await plantillaService.guardarArchivoTemplate(id, req.file.buffer, req.file.originalname);
+    res.json({
+      success: true,
+      message: 'Archivo de plantilla guardado exitosamente en base de datos',
+      plantilla: {
+        id: plantilla.id,
+        name: plantilla.name,
+        archivoNombre: plantilla.archivoNombre
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getPlantillas,
   getPlantilla,
   createPlantilla,
   updatePlantilla,
   deletePlantilla,
-  cargarArchivo
+  cargarArchivo,
+  descargarExcel,
+  subirTemplate
 }

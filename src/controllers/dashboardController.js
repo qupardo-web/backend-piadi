@@ -13,9 +13,9 @@ const sendError = (res, err) => {
   });
 };
 
-const getSummary = (req, res) => {
+const getSummary = async (req, res) => {
   try {
-    const result = dashboardService.getSummary(req.query);
+    const result = await dashboardService.getSummary(req.query);
     res.status(200).json({ success: true, data: result.data });
   } catch (err) {
     sendError(res, err);

@@ -110,7 +110,13 @@ const Actividad = sequelize.define('Actividad', {
                 throw new Error('El total de participantes debe ser la suma de los participantes externos e internos.');
             }
         }
-    }
+    },
+    indexes: [
+        {
+            name: 'idx_actividades_anio',
+            fields: ['anio']
+        }
+    ]
 });
 
 module.exports = Actividad;

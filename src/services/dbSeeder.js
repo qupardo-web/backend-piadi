@@ -83,7 +83,13 @@ async function seedDatabase() {
       console.log('No plantillas found. Seeding default plantillas...');
 
       const plantillasToSeed = [
-        { name: 'Educación Continua', description: 'Plantilla para carga de programas de educación continua', roleId: roleMap['Director Académico'] }
+        { 
+          name: 'Educación Continua', 
+          description: 'Plantilla para carga de programas de educación continua', 
+          roleId: roleMap['Director Académico'],
+          archivoData: null,
+          archivoNombre: null
+        }
       ];
 
       for (const data of plantillasToSeed) {

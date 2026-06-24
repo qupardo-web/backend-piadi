@@ -86,7 +86,13 @@ const MatriculaPrograma = sequelize.define('MatriculaPrograma', {
   }
 }, {
   tableName: 'matriculas_programa',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      name: 'idx_matriculas_prog_periodo',
+      fields: ['anio', 'semestre']
+    }
+  ]
 });
 
 module.exports = MatriculaPrograma;

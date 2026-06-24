@@ -135,4 +135,29 @@ router.put('/:id', plantillaController.updatePlantilla);
  */
 router.delete('/:id', plantillaController.deletePlantilla);
 
+/**
+ * @openapi
+ * /api/plantillas/{id}/descargar:
+ *   get:
+ *     tags: [Plantillas]
+ *     summary: Descarga el archivo Excel de la plantilla directamente en formato binario
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Archivo Excel (.xlsx) devuelto con éxito.
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Plantilla o archivo no encontrado.
+ */
+router.get('/:id/descargar', plantillaController.descargarExcel);
+
 module.exports = router;
