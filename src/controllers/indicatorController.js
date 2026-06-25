@@ -95,6 +95,22 @@ const getIndicatorSeries = async (req, res) => {
   }
 };
 
+const getIndicatorBreakdown = async (req, res) => {
+  try {
+    sendSuccess(res, await indicatorService.getIndicatorBreakdown(req.params.indicatorKey, req.query));
+  } catch (err) {
+    sendError(res, err);
+  }
+};
+
+const getDepartmentFilters = async (req, res) => {
+  try {
+    sendSuccess(res, await indicatorService.getDepartmentFilters(req.params.departmentId, req.query));
+  } catch (err) {
+    sendError(res, err);
+  }
+};
+
 module.exports = {
   listDepartments,
   createDepartment,
@@ -104,6 +120,8 @@ module.exports = {
   createKpi,
   updateKpi,
   deleteKpi,
+  getDepartmentFilters,
   getIndicatorValue,
-  getIndicatorSeries
+  getIndicatorSeries,
+  getIndicatorBreakdown
 };
