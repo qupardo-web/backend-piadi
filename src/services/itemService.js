@@ -11,7 +11,7 @@ const getAllItems = async () => {
 const createNewItem = async (itemData) => {
   const { name, description } = itemData;
   if (!name) {
-    throw new Error('El nombre es obligatorio');
+    throw new Error('Name is required');
   }
   return await Item.create({ name, description });
 };
@@ -22,7 +22,7 @@ const deleteItemById = async (id) => {
     where: { id }
   });
   if (deletedCount === 0) {
-    throw new Error('Elemento no encontrado');
+    throw new Error('Item not found');
   }
   return true;
 };
