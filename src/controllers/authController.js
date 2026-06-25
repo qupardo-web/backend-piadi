@@ -65,9 +65,21 @@ const login = async (req, res, next) => {
       entity: 'Sesión',
       module: 'Autenticación',
       method: req.method,
-      path: req.originalUrl
+      path: req.originalUrl,
+      details: `Inicio de sesión exitoso de ${user.name || user.email} con rol ${user.role ? user.role.name : 'sin rol'}.`
     }).catch(() => {});
 
+    auditService.recordSession({
+      userId: user ? user.id : null,
+      role: user?.role?.name || null,
+      action: 'LOGIN_FAILED',
+      entity: 'Sesión',
+      module: 'Autenticación',
+      method: req.method,
+      path: req.originalUrl,
+      details: `Intento de inicio de sesión fallido para ${username}.`
+    }).catch(() => {});
+    
     return res.status(200).json({ token });
   } catch (error) {
     next(error);
