@@ -1,5 +1,6 @@
 const XLSX = require('xlsx');
 const { sequelize } = require('../../models');
+const { Op } = require('sequelize');
 
 const procesarCarga = async (workbook, campos) => {
   const transaction = await sequelize.transaction();
@@ -65,6 +66,54 @@ const procesarCarga = async (workbook, campos) => {
           throw new Error(`El modelo "${tabla}" no está registrado en Sequelize`);
         }
 
+        // --- PRE-CARGAR VALORES LOOKUP DE FORMA MASIVA (EVITA CONSULTAS N+1) ---
+        const camposLookupDef = campos.filter(c => c.tabla_destino === tabla && c.campo_lookup_tabla);
+        for (const cLookup of camposLookupDef) {
+          const lookupTabla = cLookup.campo_lookup_tabla;
+          const lookupCol = cLookup.campo_lookup_columna_db;
+          
+          const valoresUnicosExcel = new Set();
+          for (const fila of filasProcesadas) {
+            const datosTabla = fila.datos[tabla];
+            if (datosTabla && datosTabla[cLookup.columna_destino]) {
+              const val = datosTabla[cLookup.columna_destino].valor;
+              if (val !== null && val !== undefined && String(val).trim() !== '') {
+                valoresUnicosExcel.add(String(val).trim());
+              }
+            }
+          }
+
+          if (valoresUnicosExcel.size > 0) {
+            const lookupModel = sequelize.models[lookupTabla];
+            if (lookupModel) {
+              if (!lookupMaps[lookupTabla]) lookupMaps[lookupTabla] = {};
+              if (!lookupMaps[lookupTabla][lookupCol]) lookupMaps[lookupTabla][lookupCol] = {};
+
+              const valoresAQuery = [...valoresUnicosExcel].filter(
+                val => lookupMaps[lookupTabla][lookupCol][val] === undefined
+              );
+
+              if (valoresAQuery.length > 0) {
+                const registrosBD = await lookupModel.findAll({
+                  where: {
+                    [lookupCol]: {
+                      [Op.in]: valoresAQuery
+                    }
+                  },
+                  transaction
+                });
+
+                for (const reg of registrosBD) {
+                  const valClave = reg[lookupCol];
+                  if (valClave !== null && valClave !== undefined) {
+                    lookupMaps[lookupTabla][lookupCol][String(valClave)] = reg.dataValues;
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Construir registros para esta tabla en este orden
         let registrosAInsertar = [];
 
@@ -82,29 +131,23 @@ const procesarCarga = async (workbook, campos) => {
             if (campo.campo_lookup_tabla && valor !== null && valor !== undefined) {
               const lookupCol = campo.campo_lookup_columna_db;
               const lookupRet = campo.campo_lookup_retorno;
+              const lookupKey = String(valor).trim();
 
-              // Buscar primero en el mapa en memoria
+              // Buscar en el mapa en memoria (que ahora tiene cargados todos los valores del Excel)
               if (lookupMaps[campo.campo_lookup_tabla] &&
                   lookupMaps[campo.campo_lookup_tabla][lookupCol] &&
-                  lookupMaps[campo.campo_lookup_tabla][lookupCol][valor] !== undefined) {
-                valor = lookupMaps[campo.campo_lookup_tabla][lookupCol][valor][lookupRet];
+                  (lookupMaps[campo.campo_lookup_tabla][lookupCol][valor] !== undefined ||
+                   lookupMaps[campo.campo_lookup_tabla][lookupCol][lookupKey] !== undefined)) {
+                const cacheData = lookupMaps[campo.campo_lookup_tabla][lookupCol][valor] !== undefined
+                  ? lookupMaps[campo.campo_lookup_tabla][lookupCol][valor]
+                  : lookupMaps[campo.campo_lookup_tabla][lookupCol][lookupKey];
+                valor = cacheData[lookupRet];
               } else {
-                // Fallback: buscar en BD
-                const lookupModel = sequelize.models[campo.campo_lookup_tabla];
-                if (lookupModel) {
-                  const registroBD = await lookupModel.findOne({
-                    where: { [lookupCol]: valor },
-                    transaction
-                  });
-                  if (registroBD) {
-                    valor = registroBD[lookupRet];
-                  } else {
-                    throw new Error(
-                      `Valor "${valor}" no encontrado en ${campo.campo_lookup_tabla} ` +
-                      `(columna: ${campo.columna_excel})`
-                    );
-                  }
-                }
+                // Si llegamos aquí, el valor no existe en la BD (error relacional de consistencia)
+                throw new Error(
+                  `Valor "${valor}" no encontrado en ${campo.campo_lookup_tabla} ` +
+                  `(columna: ${campo.columna_excel})`
+                );
               }
             }
 

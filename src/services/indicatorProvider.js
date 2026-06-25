@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const {
   sequelize,
   Department,
@@ -5,17 +6,26 @@ const {
   Programa,
   ResultadosPrograma,
   EstadoFinancieroPrograma,
-  MatriculaPrograma
+  MatriculaPrograma,
+  AlumnoExterno
 } = require('../models');
 
 const SUPPORTED_DATA_DEPARTMENT = 'educacion_continua';
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
+const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
 
 const isDictado = (ejecutado) => {
   if (ejecutado === null || ejecutado === undefined) {
     return false;
   }
   return DICTATED_VALUES.includes(String(ejecutado).trim().toLowerCase());
+};
+
+const isTruthyFlag = (value) => {
+  if (value === null || value === undefined) {
+    return false;
+  }
+  return TRUTHY_VALUES.includes(String(value).trim().toLowerCase());
 };
 
 const isConnected = async () => {
@@ -25,6 +35,186 @@ const isConnected = async () => {
   } catch {
     return false;
   }
+};
+
+const yearRange = (from, to) => {
+  const list = [];
+  for (let y = from; y <= to; y += 1) {
+    list.push(y);
+  }
+  return list;
+};
+
+const buildProgramaWhere = (filters = {}) => {
+  const where = {};
+  if (filters.year !== null && filters.year !== undefined) {
+    where.anio = filters.year;
+  } else if (filters.fromYear !== null || filters.toYear !== null) {
+    const from = filters.fromYear !== null ? filters.fromYear : filters.toYear;
+    const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
+    where.anio = { [Op.between]: [from, to] };
+  }
+  if (filters.semesters && filters.semesters.length) where.semestre = { [Op.in]: filters.semesters };
+  if (filters.months && filters.months.length) where.mesInicio = { [Op.in]: filters.months.map(String) };
+  if (filters.area && filters.area.length) where.area = { [Op.in]: filters.area };
+  if (filters.tipo && filters.tipo.length) where.tipo = { [Op.in]: filters.tipo };
+  if (filters.modalidad && filters.modalidad.length) where.modalidad = { [Op.in]: filters.modalidad };
+  return where;
+};
+
+const buildProgramaSubWhere = (filters = {}) => {
+  const where = {};
+  if (filters.area && filters.area.length) where.area = { [Op.in]: filters.area };
+  if (filters.tipo && filters.tipo.length) where.tipo = { [Op.in]: filters.tipo };
+  if (filters.modalidad && filters.modalidad.length) where.modalidad = { [Op.in]: filters.modalidad };
+  return where;
+};
+
+const buildMatriculaWhere = (filters = {}) => {
+  const where = {};
+  if (filters.year !== null && filters.year !== undefined) {
+    where.anio = String(filters.year);
+  } else if (filters.fromYear !== null || filters.toYear !== null) {
+    const from = filters.fromYear !== null ? filters.fromYear : filters.toYear;
+    const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
+    where.anio = { [Op.in]: yearRange(from, to).map(String) };
+  }
+  if (filters.semesters && filters.semesters.length) where.semestre = { [Op.in]: filters.semesters };
+  if (filters.months && filters.months.length) where.mesInicio = { [Op.in]: filters.months.map(Number) };
+  if (filters.rangoEdad && filters.rangoEdad.length) where.rangoEdadAlumno = { [Op.in]: filters.rangoEdad };
+  if (filters.minAge !== null && filters.minAge !== undefined) {
+    where.edadAlumno = { ...(where.edadAlumno || {}), [Op.gte]: filters.minAge };
+  }
+  if (filters.maxAge !== null && filters.maxAge !== undefined) {
+    where.edadAlumno = { ...(where.edadAlumno || {}), [Op.lte]: filters.maxAge };
+  }
+  return where;
+};
+
+const buildAlumnoWhere = (filters = {}) => {
+  const where = {};
+  if (filters.sexo && filters.sexo.length) where.sexo = { [Op.in]: filters.sexo };
+  return where;
+};
+
+const getProgramRows = async (filters = {}) => {
+  if (filters.department !== SUPPORTED_DATA_DEPARTMENT) {
+    return [];
+  }
+  const programas = await Programa.findAll({
+    where: buildProgramaWhere(filters),
+    attributes: ['idPrograma', 'anio', 'area', 'tipo', 'modalidad', 'programa'],
+    include: [
+      { model: ResultadosPrograma, attributes: ['ejecutado', 'matricula', 'aprobados'], required: false },
+      { model: EstadoFinancieroPrograma, attributes: ['ingresosNetosCLP'], required: false }
+    ]
+  });
+
+  return programas.map((p) => {
+    const r = p.ResultadosPrograma || null;
+    const f = p.EstadoFinancieroPrograma || null;
+    return {
+      idPrograma: p.idPrograma,
+      anio: Number(p.anio),
+      area: p.area,
+      tipo: p.tipo,
+      modalidad: p.modalidad,
+      programa: p.programa,
+      dictado: r ? isDictado(r.ejecutado) : false,
+      matricula: r && r.matricula != null ? Number(r.matricula) : 0,
+      aprobados: r && r.aprobados != null ? Number(r.aprobados) : 0,
+      ingresosNetos: f && f.ingresosNetosCLP != null ? Number(f.ingresosNetosCLP) : 0
+    };
+  });
+};
+
+const getParticipantRows = async (filters = {}) => {
+  if (filters.department !== SUPPORTED_DATA_DEPARTMENT) {
+    return [];
+  }
+  const programaSub = buildProgramaSubWhere(filters);
+  const alumnoWhere = buildAlumnoWhere(filters);
+  const programaHasFilter = Object.keys(programaSub).length > 0;
+  const alumnoHasFilter = Object.keys(alumnoWhere).length > 0;
+
+  const matriculas = await MatriculaPrograma.findAll({
+    where: buildMatriculaWhere(filters),
+    attributes: ['idInscripcion', 'idParticipante', 'anio', 'semestre', 'rangoEdadAlumno', 'nCursos', 'tieneMasCursos'],
+    include: [
+      {
+        model: Programa,
+        as: 'programa',
+        attributes: ['area', 'tipo', 'modalidad', 'programa'],
+        required: programaHasFilter,
+        where: programaHasFilter ? programaSub : undefined
+      },
+      {
+        model: AlumnoExterno,
+        as: 'participante',
+        attributes: ['sexo', 'region', 'nivelDeEstudio', 'tipoParticipante', 'sectorEconomico'],
+        required: alumnoHasFilter,
+        where: alumnoHasFilter ? alumnoWhere : undefined
+      }
+    ]
+  });
+
+  return matriculas.map((m) => {
+    const prog = m.programa || {};
+    const al = m.participante || {};
+    return {
+      idParticipante: m.idParticipante,
+      anio: Number(m.anio),
+      rangoEdad: m.rangoEdadAlumno,
+      recurrente: (m.nCursos != null && Number(m.nCursos) > 1) || isTruthyFlag(m.tieneMasCursos),
+      area: prog.area,
+      tipo: prog.tipo,
+      modalidad: prog.modalidad,
+      programa: prog.programa,
+      sexo: al.sexo,
+      region: al.region,
+      nivelDeEstudio: al.nivelDeEstudio,
+      tipoParticipante: al.tipoParticipante,
+      sectorEconomico: al.sectorEconomico
+    };
+  });
+};
+
+const distinctValues = (rows, key) => {
+  const set = new Set();
+  rows.forEach((r) => {
+    if (r[key] !== null && r[key] !== undefined && r[key] !== '') {
+      set.add(r[key]);
+    }
+  });
+  return [...set];
+};
+
+const toMonthValue = (v) => (/^\d+$/.test(String(v)) ? Number(v) : v);
+
+const getFilterOptions = async (department, filters = {}) => {
+  const empty = { years: [], semesters: [], startMonths: [], areas: [], tipos: [], modalidades: [], sexos: [], rangosEdad: [] };
+  if (department !== SUPPORTED_DATA_DEPARTMENT) {
+    return empty;
+  }
+
+  const programas = await Programa.findAll({
+    where: buildProgramaWhere(filters),
+    attributes: ['anio', 'semestre', 'mesInicio', 'area', 'tipo', 'modalidad'],
+    raw: true
+  });
+
+  const participantRows = await getParticipantRows(filters);
+
+  return {
+    years: distinctValues(programas, 'anio').map(Number).sort((a, b) => a - b),
+    semesters: distinctValues(programas, 'semestre').sort(),
+    startMonths: distinctValues(programas, 'mesInicio').map(toMonthValue).sort((a, b) => (Number(a) || 0) - (Number(b) || 0)),
+    areas: distinctValues(programas, 'area').sort(),
+    tipos: distinctValues(programas, 'tipo').sort(),
+    modalidades: distinctValues(programas, 'modalidad').sort(),
+    sexos: distinctValues(participantRows, 'sexo').sort(),
+    rangosEdad: distinctValues(participantRows, 'rangoEdad').sort()
+  };
 };
 
 const getDepartments = async () => {
@@ -94,49 +284,11 @@ const deleteKpi = async (departmentId, indicatorKey) => {
   return true;
 };
 
-const getIndicatorInputData = async ({ department, year } = {}) => {
-  if (department !== SUPPORTED_DATA_DEPARTMENT) {
-    return null;
-  }
-
-  const cursosProgramados = await Programa.count({ where: { anio: Number(year) } });
-
-  const resultados = await ResultadosPrograma.findAll({
-    include: [{ model: Programa, required: true, where: { anio: Number(year) }, attributes: [] }],
-    attributes: ['ejecutado']
-  });
-  const cursosDictados = resultados.length === 0 ? null : resultados.filter((r) => isDictado(r.ejecutado)).length;
-
-  const matriculaCount = await MatriculaPrograma.count({ where: { anio: String(year) } });
-  const matriculas = matriculaCount === 0 ? null : matriculaCount;
-
-  const financieros = await EstadoFinancieroPrograma.findAll({
-    include: [{ model: Programa, required: true, where: { anio: Number(year) }, attributes: [] }],
-    attributes: ['ingresosNetosCLP']
-  });
-  const ingresosNetosCLP = financieros.length === 0
-    ? null
-    : financieros.reduce((acc, r) => acc + (Number(r.ingresosNetosCLP) || 0), 0);
-
-  return { cursosProgramados, cursosDictados, matriculas, ingresosNetosCLP };
-};
-
-const getAvailableYears = async ({ department } = {}) => {
-  if (department !== SUPPORTED_DATA_DEPARTMENT) {
-    return [];
-  }
-  const rows = await Programa.findAll({
-    attributes: [[sequelize.fn('DISTINCT', sequelize.col('anio')), 'anio']],
-    raw: true
-  });
-  return rows
-    .map((r) => Number(r.anio))
-    .filter((n) => !Number.isNaN(n))
-    .sort((a, b) => a - b);
-};
-
 module.exports = {
   isConnected,
+  getProgramRows,
+  getParticipantRows,
+  getFilterOptions,
   getDepartments,
   getDepartmentByKey,
   createDepartment,
@@ -146,7 +298,5 @@ module.exports = {
   getKpi,
   createKpi,
   updateKpi,
-  deleteKpi,
-  getIndicatorInputData,
-  getAvailableYears
+  deleteKpi
 };
