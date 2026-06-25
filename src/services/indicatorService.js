@@ -1,5 +1,7 @@
 const provider = require('./indicatorProvider');
 const formulaService = require('./indicatorFormulaService');
+const { parseIndicatorFilters, buildFilterMeta } = require('./indicatorFilters');
+const { getIndicatorConfig } = require('./indicatorCatalog');
 
 class ServiceError extends Error {
   constructor(statusCode, code, message, details = {}) {
@@ -76,6 +78,212 @@ const requireKpi = async (departmentKey, indicatorKey) => {
     });
   }
   return kpi;
+};
+
+const aggregateProgram = (rows) => ({
+  ofertaProgramada: rows.length,
+  cursosDictados: rows.filter((r) => r.dictado).length,
+  matriculaSum: rows.reduce((s, r) => s + (r.matricula || 0), 0),
+  aprobadosSum: rows.reduce((s, r) => s + (r.aprobados || 0), 0),
+  ingresosNetosSum: rows.reduce((s, r) => s + (r.ingresosNetos || 0), 0)
+});
+
+const aggregateParticipant = (rows) => {
+  const unicos = new Set(rows.map((r) => r.idParticipante));
+  const recurrentes = new Set(rows.filter((r) => r.recurrente).map((r) => r.idParticipante));
+  return { participantesUnicos: unicos.size, participantesRecurrentes: recurrentes.size };
+};
+
+const aggregate = (config, rows) => (config.kind === 'participant' ? aggregateParticipant(rows) : aggregateProgram(rows));
+
+const getRows = (config, filters) =>
+  (config.kind === 'participant' ? provider.getParticipantRows(filters) : provider.getProgramRows(filters));
+
+const computeFromRows = (config, definition, rows) => {
+  if (!rows || rows.length === 0) {
+    return { value: null, hasData: false };
+  }
+  const metrics = aggregate(config, rows);
+  const result = formulaService.apply(definition.formulaKey, metrics);
+  const hasData = result.hasData && result.value !== null && result.value !== undefined;
+  return { value: hasData ? result.value : null, hasData };
+};
+
+const groupRowsBy = (rows, dimension) => {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const raw = dimension === 'year' ? row.anio : row[dimension];
+    const label = raw === null || raw === undefined || raw === '' ? 'Sin dato' : raw;
+    if (!groups.has(label)) {
+      groups.set(label, []);
+    }
+    groups.get(label).push(row);
+  });
+  return groups;
+};
+
+const validateGroupBy = (config, groupBy) => {
+  if (!groupBy) {
+    return null;
+  }
+  if (!config.allowedGroupBy.includes(groupBy)) {
+    throw new ServiceError(400, 'INVALID_GROUP_BY', 'El groupBy solicitado no aplica para este indicador.', {
+      groupBy,
+      allowed: config.allowedGroupBy
+    });
+  }
+  return groupBy;
+};
+
+const resolveConfig = async (departmentId, indicatorKey) => {
+  const definition = await requireKpi(departmentId, indicatorKey);
+  const config = getIndicatorConfig(indicatorKey, definition);
+  if (!config) {
+    throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no tiene configuración de cálculo', {
+      departmentId,
+      indicatorKey
+    });
+  }
+  return { definition, config };
+};
+
+const getIndicatorValue = async (indicatorKey, query = {}) => {
+  const key = ensureIndicatorKey(indicatorKey);
+  const filters = parseIndicatorFilters(query);
+  const departmentId = ensureDepartment(filters.department);
+  await requireDepartment(departmentId);
+  const { definition, config } = await resolveConfig(departmentId, key);
+
+  const rows = await getRows(config, filters);
+  const { value, hasData } = computeFromRows(config, definition, rows);
+
+  const data = {
+    indicatorKey: key,
+    department: departmentId,
+    value,
+    formattedValue: hasData ? formatValue(value, definition.format) : null,
+    unit: definition.unit,
+    format: definition.format,
+    hasData,
+    filters: buildFilterMeta(filters),
+    meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+  };
+  if (!hasData) {
+    data.message = 'No existen datos suficientes para calcular este indicador.';
+  }
+  return { data };
+};
+
+const getIndicatorSeries = async (indicatorKey, query = {}) => {
+  const key = ensureIndicatorKey(indicatorKey);
+  const filters = parseIndicatorFilters(query);
+  const departmentId = ensureDepartment(filters.department);
+  await requireDepartment(departmentId);
+  const { definition, config } = await resolveConfig(departmentId, key);
+  const groupBy = validateGroupBy(config, filters.groupBy);
+
+  const rows = await getRows(config, filters);
+
+  if (!groupBy || groupBy === 'year') {
+    const byYear = groupRowsBy(rows, 'year');
+    const points = [];
+    [...byYear.keys()]
+      .sort((a, b) => Number(a) - Number(b))
+      .forEach((year) => {
+        const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
+        if (hasData) {
+          points.push({ year: Number(year), value });
+        }
+      });
+    return {
+      data: {
+        indicatorKey: key,
+        department: departmentId,
+        groupBy: null,
+        points,
+        hasData: points.length > 0,
+        filters: buildFilterMeta(filters),
+        meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+      }
+    };
+  }
+
+  const bySegment = groupRowsBy(rows, groupBy);
+  const series = [];
+  [...bySegment.keys()].sort().forEach((label) => {
+    const segmentRows = bySegment.get(label);
+    const byYear = groupRowsBy(segmentRows, 'year');
+    const points = [];
+    [...byYear.keys()]
+      .sort((a, b) => Number(a) - Number(b))
+      .forEach((year) => {
+        const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
+        if (hasData) {
+          points.push({ year: Number(year), value });
+        }
+      });
+    if (points.length > 0) {
+      series.push({ label: String(label), points });
+    }
+  });
+
+  return {
+    data: {
+      indicatorKey: key,
+      department: departmentId,
+      groupBy,
+      series,
+      hasData: series.length > 0,
+      filters: buildFilterMeta(filters),
+      meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+    }
+  };
+};
+
+const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
+  const key = ensureIndicatorKey(indicatorKey);
+  const filters = parseIndicatorFilters(query);
+  const departmentId = ensureDepartment(filters.department);
+  await requireDepartment(departmentId);
+  const { definition, config } = await resolveConfig(departmentId, key);
+
+  if (!filters.groupBy) {
+    throw new ServiceError(400, 'INVALID_GROUP_BY', 'El parámetro "groupBy" es obligatorio para breakdown.', {
+      allowed: config.allowedGroupBy
+    });
+  }
+  const groupBy = validateGroupBy(config, filters.groupBy);
+
+  const rows = await getRows(config, filters);
+  const groups = groupRowsBy(rows, groupBy);
+  const items = [];
+  [...groups.keys()].forEach((label) => {
+    const { value, hasData } = computeFromRows(config, definition, groups.get(label));
+    if (hasData) {
+      items.push({ label: String(label), value });
+    }
+  });
+  items.sort((a, b) => b.value - a.value);
+
+  return {
+    data: {
+      indicatorKey: key,
+      department: departmentId,
+      groupBy,
+      items,
+      hasData: items.length > 0,
+      filters: buildFilterMeta(filters),
+      meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+    }
+  };
+};
+
+const getDepartmentFilters = async (departmentId, query = {}) => {
+  const key = ensureDepartment(departmentId);
+  await requireDepartment(key);
+  const filters = parseIndicatorFilters({ ...query, department: key });
+  const options = await provider.getFilterOptions(key, filters);
+  return { data: { department: key, filters: options } };
 };
 
 const listDepartments = async () => ({ data: await provider.getDepartments() });
@@ -186,71 +394,6 @@ const getEnabledKpis = async (departmentKey) => {
   return kpis.filter((kpi) => kpi.enabled !== false);
 };
 
-const computeIndicator = async (definition, departmentId, year) => {
-  const input = await provider.getIndicatorInputData({
-    department: departmentId,
-    indicatorKey: definition.key,
-    formulaKey: definition.formulaKey,
-    year
-  });
-  const result = formulaService.apply(definition.formulaKey, input || {});
-  const hasData = result.hasData && result.value !== null && result.value !== undefined;
-  return { value: hasData ? result.value : null, hasData };
-};
-
-const getIndicatorValue = async (indicatorKey, query = {}) => {
-  const key = ensureIndicatorKey(indicatorKey);
-  const departmentId = ensureDepartment(query.department);
-  const year = parseYear(query.year);
-  const resolvedYear = year !== null ? year : new Date().getFullYear();
-
-  await requireDepartment(departmentId);
-  const definition = await requireKpi(departmentId, key);
-  const { value, hasData } = await computeIndicator(definition, departmentId, resolvedYear);
-
-  const data = {
-    departmentId,
-    indicatorKey: key,
-    year: resolvedYear,
-    value,
-    formattedValue: hasData ? formatValue(value, definition.format) : null,
-    unit: definition.unit,
-    format: definition.format,
-    hasData
-  };
-  if (!hasData) {
-    data.message = 'No existen datos suficientes para calcular este indicador.';
-  }
-  return { data };
-};
-
-const getIndicatorSeries = async (indicatorKey, query = {}) => {
-  const key = ensureIndicatorKey(indicatorKey);
-  const departmentId = ensureDepartment(query.department);
-
-  await requireDepartment(departmentId);
-  const definition = await requireKpi(departmentId, key);
-  const years = await provider.getAvailableYears({
-    department: departmentId,
-    indicatorKey: key,
-    formulaKey: definition.formulaKey
-  });
-
-  const points = [];
-  for (const year of years) {
-    const { value, hasData } = await computeIndicator(definition, departmentId, year);
-    if (hasData) {
-      points.push({ year, value, formattedValue: formatValue(value, definition.format) });
-    }
-  }
-
-  const data = { departmentId, indicatorKey: key, points, hasData: points.length > 0 };
-  if (points.length === 0) {
-    data.message = 'No existen datos suficientes para construir la serie histórica.';
-  }
-  return { data };
-};
-
 module.exports = {
   ServiceError,
   parseYear,
@@ -265,6 +408,8 @@ module.exports = {
   updateKpi,
   deleteKpi,
   getEnabledKpis,
+  getDepartmentFilters,
   getIndicatorValue,
-  getIndicatorSeries
+  getIndicatorSeries,
+  getIndicatorBreakdown
 };

@@ -1,4 +1,5 @@
 const indicatorService = require('./indicatorService');
+const { parseIndicatorFilters, buildFilterMeta } = require('./indicatorFilters');
 
 const ALLOWED_SORT = ['name', 'department', 'value'];
 
@@ -10,16 +11,6 @@ class ServiceError extends Error {
     this.details = details;
   }
 }
-
-const parseYear = (rawYear) => {
-  if (rawYear === undefined || rawYear === null || rawYear === '') {
-    return null;
-  }
-  if (!/^\d{4}$/.test(String(rawYear))) {
-    throw new ServiceError(400, 'INVALID_YEAR', 'El parámetro "year" debe ser un año numérico de 4 dígitos', { year: rawYear });
-  }
-  return Number(rawYear);
-};
 
 const validateSortBy = (sortBy) => {
   if (sortBy === undefined || sortBy === '') {
@@ -44,22 +35,27 @@ const validateOrder = (order) => {
   return order;
 };
 
-const emptySummary = (year, sourceConnected) => ({
+const resolveYearLabel = (filters) => {
+  if (filters.year !== null) return filters.year;
+  if (filters.toYear !== null) return filters.toYear;
+  if (filters.fromYear !== null) return filters.fromYear;
+  return new Date().getFullYear();
+};
+
+const emptySummary = (yearLabel, filterMeta, sourceConnected) => ({
   data: {
-    year,
+    year: yearLabel,
     departments: [],
-    meta: { totalDepartments: 0, departmentsWithIndicators: 0, totalCards: 0, sourceConnected }
+    meta: { totalDepartments: 0, departmentsWithIndicators: 0, totalCards: 0, sourceConnected },
+    filters: filterMeta
   }
 });
 
-const buildCards = async (departmentKey, year) => {
+const buildCards = async (departmentKey, query) => {
   const kpis = await indicatorService.getEnabledKpis(departmentKey);
   const cards = [];
   for (const kpi of kpis) {
-    const { data } = await indicatorService.getIndicatorValue(kpi.key, {
-      department: departmentKey,
-      year: String(year)
-    });
+    const { data } = await indicatorService.getIndicatorValue(kpi.key, { ...query, department: departmentKey });
     cards.push({
       indicatorKey: kpi.key,
       title: kpi.name,
@@ -74,24 +70,25 @@ const buildCards = async (departmentKey, year) => {
 };
 
 const getSummary = async (query = {}) => {
-  const year = parseYear(query.year);
+  const filters = parseIndicatorFilters(query);
   const sortBy = validateSortBy(query.sortBy);
   const order = validateOrder(query.order);
-  const resolvedYear = year !== null ? year : new Date().getFullYear();
+  const yearLabel = resolveYearLabel(filters);
+  const filterMeta = buildFilterMeta(filters);
 
   const sourceConnected = await indicatorService.isSourceConnected();
   if (!sourceConnected) {
-    return emptySummary(resolvedYear, false);
+    return emptySummary(yearLabel, filterMeta, false);
   }
 
   const { data: catalog } = await indicatorService.listDepartments();
-  const filtered = query.department
-    ? catalog.filter((dept) => dept.key === String(query.department).trim())
-    : catalog;
+  const targets = filters.department
+    ? catalog.filter((dept) => dept.key === filters.department)
+    : catalog.filter((dept) => dept.enabled !== false);
 
   let departments = [];
-  for (const dept of filtered) {
-    const cards = await buildCards(dept.key, resolvedYear);
+  for (const dept of targets) {
+    const cards = await buildCards(dept.key, query);
     departments.push({
       departmentId: dept.key,
       name: dept.name,
@@ -112,14 +109,15 @@ const getSummary = async (query = {}) => {
 
   return {
     data: {
-      year: resolvedYear,
+      year: yearLabel,
       departments,
       meta: {
         totalDepartments: departments.length,
         departmentsWithIndicators,
         totalCards,
         sourceConnected: true
-      }
+      },
+      filters: filterMeta
     }
   };
 };
