@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { User, Role } = require('../models');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
 const { ValidationError, UnauthorizedError } = require('../utils/errors');
+const auditService = require('../services/auditService');
 
 /**
  * Controller to handle user login authentication.
@@ -56,6 +57,16 @@ const login = async (req, res, next) => {
 
     // Sign the token with an expiration of 2 hours
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' });
+
+    auditService.recordSession({
+      userId: user.id,
+      role: user.role ? user.role.name : null,
+      action: 'LOGIN_SUCCESS',
+      entity: 'Sesión',
+      module: 'Autenticación',
+      method: req.method,
+      path: req.originalUrl
+    }).catch(() => {});
 
     return res.status(200).json({ token });
   } catch (error) {
