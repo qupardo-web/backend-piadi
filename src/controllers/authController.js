@@ -45,7 +45,7 @@ const login = async (req, res, next) => {
         module: 'Autenticación',
         method: req.method,
         path: req.originalUrl,
-        details: `Intento de inicio de sesión fallido para ${username}.`
+        detalles: `Intento de inicio de sesión fallido para ${username}.`
       }).catch(() => {});
       throw new UnauthorizedError('Usuario o contraseña incorrectos');
     }
@@ -61,7 +61,7 @@ const login = async (req, res, next) => {
         module: 'Autenticación',
         method: req.method,
         path: req.originalUrl,
-        details: `Intento de inicio de sesión fallido para ${username}.`
+        detalles: `Intento de inicio de sesión fallido para ${username}.`
       }).catch(() => {});
       throw new UnauthorizedError('Usuario o contraseña incorrectos');
     }
@@ -86,7 +86,7 @@ const login = async (req, res, next) => {
       module: 'Autenticación',
       method: req.method,
       path: req.originalUrl,
-      details: `Inicio de sesión exitoso de ${user.name || user.email} con rol ${user.role ? user.role.name : 'sin rol'}.`
+      detalles: `Inicio de sesión exitoso de ${user.name || user.email} con rol ${user.role ? user.role.name : 'sin rol'}.`
     }).catch(() => {});
 
     return res.status(200).json({ token });

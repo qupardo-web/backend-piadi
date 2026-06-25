@@ -1,7 +1,7 @@
 const auditService = require('../services/auditService');
 
 const auditLogger = (meta = {}) => (req, res, next) => {
-  res.on('finish', () => {
+  res.on('finish', async () => {
     if (res.statusCode >= 400) {
       return;
     }
@@ -20,7 +20,16 @@ const auditLogger = (meta = {}) => (req, res, next) => {
     };
 
     if (type === 'carga') {
-      payload.plantilla = req.params && req.params.id ? String(req.params.id) : null;
+      const plantillaId = req.params && req.params.id ? req.params.id : null;
+      let plantillaNombre = plantillaId ? String(plantillaId) : null;
+      if (plantillaId) {
+        try {
+          const { Plantilla } = require('../models');
+          const tmpl = await Plantilla.findByPk(plantillaId, { attributes: ['name'] });
+          if (tmpl && tmpl.name) plantillaNombre = tmpl.name;
+        } catch (e) { /* usa el ID como fallback */ }
+      }
+      payload.plantilla = plantillaNombre;
       payload.archivo = req.file && req.file.originalname ? req.file.originalname : null;
     } else {
       payload.detalles = JSON.stringify({
