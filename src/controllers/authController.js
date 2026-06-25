@@ -95,6 +95,25 @@ const login = async (req, res, next) => {
   }
 };
 
+const logout = async (req, res, next) => {
+  try {
+    auditService.recordSession({
+      userId: req.user.id,
+      role: req.user.role || null,
+      action: 'LOGOUT_SUCCESS',
+      entity: 'Sesión',
+      module: 'Autenticación',
+      method: req.method,
+      path: req.originalUrl,
+      detalles: `Cierre de sesión de ${req.user.name || req.user.email} con rol ${req.user.role || 'sin rol'}.`
+    }).catch(() => {});
+    return res.status(200).json({ message: 'Sesión cerrada' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
-  login
+  login,
+  logout
 };
