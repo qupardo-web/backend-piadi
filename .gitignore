@@ -2,3 +2,9 @@ node_modules/
 *.log
 .env
 .DS_Store
+proyecto.md
+arquitectura-carga-plantillas.md
+sugerencias_arquitectura_plantillas.md
+uploads/
+test-plantilla-educacion-continua.xlsx
+.gitignore
