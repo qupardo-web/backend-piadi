@@ -168,6 +168,8 @@ const normalizeRow = (model, row, type) => {
     action: actionAttr ? plain[actionAttr] : null,
     module: moduleAttr ? plain[moduleAttr] : null,
     createdAt: dateAttr ? plain[dateAttr] : null,
+    usuarioNombre: plain.usuario?.name || null,
+    usuarioEmail: plain.usuario?.email || null,
     detail: plain
   };
 };
@@ -202,9 +204,17 @@ const query = async (params = {}) => {
     };
   }
 
+  const userModel = sequelize.models['User'] || null;
+  const userInclude = userModel
+    ? [{ model: userModel, as: 'usuario', attributes: ['name', 'email'], required: false }]
+    : [];
+
   let rows = [];
   for (const entry of active) {
-    const found = await entry.model.findAll({ where: buildWhere(entry.model, filters, range) });
+    const found = await entry.model.findAll({
+      where: buildWhere(entry.model, filters, range),
+      include: userInclude
+    });
     rows = rows.concat(found.map((r) => normalizeRow(entry.model, r, entry.type)));
   }
 
