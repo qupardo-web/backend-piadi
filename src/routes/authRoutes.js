@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
+const { authenticateToken } = require('../middleware/authMiddleware');
 
 /**
  * @openapi
@@ -58,5 +59,6 @@ const authController = require('../controllers/authController');
  *                   example: Usuario o contraseña incorrectos
  */
 router.post('/login', authController.login);
+router.post('/logout', authenticateToken, authController.logout);
 
 module.exports = router;
