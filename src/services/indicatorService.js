@@ -135,12 +135,12 @@ const validateGroupBy = (config, groupBy) => {
   return groupBy;
 };
 
-const resolveConfig = async (departmentId, indicatorKey) => {
-  const definition = await requireKpi(departmentId, indicatorKey);
+const resolveConfig = async (departmentKey, indicatorKey) => {
+  const definition = await requireKpi(departmentKey, indicatorKey);
   const config = getIndicatorConfig(indicatorKey, definition);
   if (!config) {
     throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no tiene configuración de cálculo', {
-      departmentId,
+      departmentKey,
       indicatorKey
     });
   }
@@ -278,8 +278,8 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   };
 };
 
-const getDepartmentFilters = async (departmentId, query = {}) => {
-  const key = ensureDepartment(departmentId);
+const getDepartmentFilters = async (departmentKey, query = {}) => {
+  const key = ensureDepartment(departmentKey);
   await requireDepartment(key);
   const filters = parseIndicatorFilters({ ...query, department: key });
   const options = await provider.getFilterOptions(key, filters);
@@ -293,7 +293,7 @@ const createDepartment = async (body = {}) => {
   const name = ensureField(body.name, 'name');
   const existing = await provider.getDepartmentByKey(key);
   if (existing) {
-    throw new ServiceError(409, 'DEPARTMENT_EXISTS', 'Ya existe un departamento con esa clave', { departmentId: key });
+    throw new ServiceError(409, 'DEPARTMENT_EXISTS', 'Ya existe un departamento con esa clave', { departmentKey: key });
   }
   const data = await provider.createDepartment({
     key,
@@ -306,8 +306,8 @@ const createDepartment = async (body = {}) => {
   return { data };
 };
 
-const updateDepartment = async (departmentId, body = {}) => {
-  const key = ensureDepartment(departmentId);
+const updateDepartment = async (departmentKey, body = {}) => {
+  const key = ensureDepartment(departmentKey);
   await requireDepartment(key);
   const updatable = {};
   if (body.name !== undefined) updatable.name = String(body.name).trim();
@@ -319,31 +319,31 @@ const updateDepartment = async (departmentId, body = {}) => {
   return { data };
 };
 
-const deleteDepartment = async (departmentId) => {
-  const key = ensureDepartment(departmentId);
+const deleteDepartment = async (departmentKey) => {
+  const key = ensureDepartment(departmentKey);
   const ok = await provider.deleteDepartment(key);
   if (!ok) {
-    throw new ServiceError(404, 'DEPARTMENT_NOT_FOUND', 'El departamento solicitado no existe', { departmentId: key });
+    throw new ServiceError(404, 'DEPARTMENT_NOT_FOUND', 'El departamento solicitado no existe', { departmentKey: key });
   }
-  return { data: { departmentId: key, deleted: true } };
+  return { data: { departmentKey: key, deleted: true } };
 };
 
-const getDepartmentKpis = async (departmentId) => {
-  const key = ensureDepartment(departmentId);
+const getDepartmentKpis = async (departmentKey) => {
+  const key = ensureDepartment(departmentKey);
   await requireDepartment(key);
   const kpis = await provider.getKpisByDepartment(key);
-  return { data: { departmentId: key, kpis, hasIndicators: kpis.length > 0 } };
+  return { data: { departmentKey: key, kpis, hasIndicators: kpis.length > 0 } };
 };
 
-const createKpi = async (departmentId, body = {}) => {
-  const key = ensureDepartment(departmentId);
+const createKpi = async (departmentKey, body = {}) => {
+  const key = ensureDepartment(departmentKey);
   await requireDepartment(key);
   const indicatorKey = ensureField(body.key, 'key');
   const name = ensureField(body.name, 'name');
   const existing = await provider.getKpi(key, indicatorKey);
   if (existing) {
     throw new ServiceError(409, 'KPI_EXISTS', 'Ya existe un indicador con esa clave en el departamento', {
-      departmentId: key,
+      departmentKey: key,
       indicatorKey
     });
   }
@@ -359,8 +359,8 @@ const createKpi = async (departmentId, body = {}) => {
   return { data };
 };
 
-const updateKpi = async (departmentId, indicatorKey, body = {}) => {
-  const key = ensureDepartment(departmentId);
+const updateKpi = async (departmentKey, indicatorKey, body = {}) => {
+  const key = ensureDepartment(departmentKey);
   await requireDepartment(key);
   const ind = ensureIndicatorKey(indicatorKey);
   await requireKpi(key, ind);
@@ -375,18 +375,18 @@ const updateKpi = async (departmentId, indicatorKey, body = {}) => {
   return { data };
 };
 
-const deleteKpi = async (departmentId, indicatorKey) => {
-  const key = ensureDepartment(departmentId);
+const deleteKpi = async (departmentKey, indicatorKey) => {
+  const key = ensureDepartment(departmentKey);
   await requireDepartment(key);
   const ind = ensureIndicatorKey(indicatorKey);
   const ok = await provider.deleteKpi(key, ind);
   if (!ok) {
     throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe para este departamento', {
-      departmentId: key,
+      departmentKey: key,
       indicatorKey: ind
     });
   }
-  return { data: { departmentId: key, indicatorKey: ind, deleted: true } };
+  return { data: { departmentKey: key, indicatorKey: ind, deleted: true } };
 };
 
 const getEnabledKpis = async (departmentKey) => {
