@@ -21,12 +21,12 @@ router.post('/departments', indicatorController.createDepartment);
 
 /**
  * @openapi
- * /api/departments/{departmentId}:
+ * /api/departments/{departmentKey}:
  *   put:
  *     summary: Actualiza un departamento por su key
  *     parameters:
  *       - in: path
- *         name: departmentId
+ *         name: departmentKey
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -36,24 +36,24 @@ router.post('/departments', indicatorController.createDepartment);
  *     summary: Elimina un departamento por su key
  *     parameters:
  *       - in: path
- *         name: departmentId
+ *         name: departmentKey
  *         required: true
  *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Departamento eliminado.
  */
-router.put('/departments/:departmentId', indicatorController.updateDepartment);
-router.delete('/departments/:departmentId', indicatorController.deleteDepartment);
+router.put('/departments/:departmentKey', indicatorController.updateDepartment);
+router.delete('/departments/:departmentKey', indicatorController.deleteDepartment);
 
 /**
  * @openapi
- * /api/departments/{departmentId}/filters:
+ * /api/departments/{departmentKey}/filters:
  *   get:
  *     summary: Valores disponibles de filtros del dashboard (DISTINCT desde PostgreSQL)
  *     parameters:
  *       - in: path
- *         name: departmentId
+ *         name: departmentKey
  *         required: true
  *         schema: { type: string }
  *       - in: query
@@ -75,16 +75,16 @@ router.delete('/departments/:departmentId', indicatorController.deleteDepartment
  *       200:
  *         description: Listas de valores para poblar los selects del frontend.
  */
-router.get('/departments/:departmentId/filters', indicatorController.getDepartmentFilters);
+router.get('/departments/:departmentKey/filters', indicatorController.getDepartmentFilters);
 
 /**
  * @openapi
- * /api/departments/{departmentId}/kpis:
+ * /api/departments/{departmentKey}/kpis:
  *   get:
  *     summary: Lista las definiciones de KPI de un departamento (desde base de datos)
  *     parameters:
  *       - in: path
- *         name: departmentId
+ *         name: departmentKey
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -94,24 +94,24 @@ router.get('/departments/:departmentId/filters', indicatorController.getDepartme
  *     summary: Crea una definición de KPI para un departamento
  *     parameters:
  *       - in: path
- *         name: departmentId
+ *         name: departmentKey
  *         required: true
  *         schema: { type: string }
  *     responses:
  *       201:
  *         description: KPI creado.
  */
-router.get('/departments/:departmentId/kpis', indicatorController.listDepartmentKpis);
-router.post('/departments/:departmentId/kpis', indicatorController.createKpi);
+router.get('/departments/:departmentKey/kpis', indicatorController.listDepartmentKpis);
+router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
 
 /**
  * @openapi
- * /api/departments/{departmentId}/kpis/{indicatorKey}:
+ * /api/departments/{departmentKey}/kpis/{indicatorKey}:
  *   put:
  *     summary: Actualiza una definición de KPI
  *     parameters:
  *       - in: path
- *         name: departmentId
+ *         name: departmentKey
  *         required: true
  *         schema: { type: string }
  *       - in: path
@@ -125,7 +125,7 @@ router.post('/departments/:departmentId/kpis', indicatorController.createKpi);
  *     summary: Elimina una definición de KPI
  *     parameters:
  *       - in: path
- *         name: departmentId
+ *         name: departmentKey
  *         required: true
  *         schema: { type: string }
  *       - in: path
@@ -136,8 +136,8 @@ router.post('/departments/:departmentId/kpis', indicatorController.createKpi);
  *       200:
  *         description: KPI eliminado.
  */
-router.put('/departments/:departmentId/kpis/:indicatorKey', indicatorController.updateKpi);
-router.delete('/departments/:departmentId/kpis/:indicatorKey', indicatorController.deleteKpi);
+router.put('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.updateKpi);
+router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.deleteKpi);
 
 /**
  * @openapi

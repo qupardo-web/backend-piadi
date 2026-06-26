@@ -14,6 +14,28 @@ const SUPPORTED_DATA_DEPARTMENT = 'educacion_continua';
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
 const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
 
+/**
+ * Construye condición case-insensitive para un único valor
+ * @param {string} value Valor a comparar
+ * @returns {Object} Condición Sequelize con Op.iLike
+ */
+const buildCaseInsensitiveEquals = (value) => ({
+  [Op.iLike]: value
+});
+
+/**
+ * Construye condición case-insensitive para múltiples valores
+ * @param {Array} values Array de valores
+ * @returns {Object} Condición Sequelize con Op.or de Op.iLike
+ */
+const buildCaseInsensitiveIn = (values) => {
+  if (!values || values.length === 0) return null;
+  if (values.length === 1) return buildCaseInsensitiveEquals(values[0]);
+  return {
+    [Op.or]: values.map((v) => buildCaseInsensitiveEquals(v))
+  };
+};
+
 const isDictado = (ejecutado) => {
   if (ejecutado === null || ejecutado === undefined) {
     return false;
@@ -54,19 +76,19 @@ const buildProgramaWhere = (filters = {}) => {
     const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
     where.anio = { [Op.between]: [from, to] };
   }
-  if (filters.semesters && filters.semesters.length) where.semestre = { [Op.in]: filters.semesters };
+  if (filters.semesters && filters.semesters.length) where.semestre = buildCaseInsensitiveIn(filters.semesters);
   if (filters.months && filters.months.length) where.mesInicio = { [Op.in]: filters.months.map(String) };
-  if (filters.area && filters.area.length) where.area = { [Op.in]: filters.area };
-  if (filters.tipo && filters.tipo.length) where.tipo = { [Op.in]: filters.tipo };
-  if (filters.modalidad && filters.modalidad.length) where.modalidad = { [Op.in]: filters.modalidad };
+  if (filters.area && filters.area.length) where.area = buildCaseInsensitiveIn(filters.area);
+  if (filters.tipo && filters.tipo.length) where.tipo = buildCaseInsensitiveIn(filters.tipo);
+  if (filters.modalidad && filters.modalidad.length) where.modalidad = buildCaseInsensitiveIn(filters.modalidad);
   return where;
 };
 
 const buildProgramaSubWhere = (filters = {}) => {
   const where = {};
-  if (filters.area && filters.area.length) where.area = { [Op.in]: filters.area };
-  if (filters.tipo && filters.tipo.length) where.tipo = { [Op.in]: filters.tipo };
-  if (filters.modalidad && filters.modalidad.length) where.modalidad = { [Op.in]: filters.modalidad };
+  if (filters.area && filters.area.length) where.area = buildCaseInsensitiveIn(filters.area);
+  if (filters.tipo && filters.tipo.length) where.tipo = buildCaseInsensitiveIn(filters.tipo);
+  if (filters.modalidad && filters.modalidad.length) where.modalidad = buildCaseInsensitiveIn(filters.modalidad);
   return where;
 };
 
@@ -79,9 +101,9 @@ const buildMatriculaWhere = (filters = {}) => {
     const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
     where.anio = { [Op.in]: yearRange(from, to).map(String) };
   }
-  if (filters.semesters && filters.semesters.length) where.semestre = { [Op.in]: filters.semesters };
+  if (filters.semesters && filters.semesters.length) where.semestre = buildCaseInsensitiveIn(filters.semesters);
   if (filters.months && filters.months.length) where.mesInicio = { [Op.in]: filters.months.map(Number) };
-  if (filters.rangoEdad && filters.rangoEdad.length) where.rangoEdadAlumno = { [Op.in]: filters.rangoEdad };
+  if (filters.rangoEdad && filters.rangoEdad.length) where.rangoEdadAlumno = buildCaseInsensitiveIn(filters.rangoEdad);
   if (filters.minAge !== null && filters.minAge !== undefined) {
     where.edadAlumno = { ...(where.edadAlumno || {}), [Op.gte]: filters.minAge };
   }
@@ -93,12 +115,12 @@ const buildMatriculaWhere = (filters = {}) => {
 
 const buildAlumnoWhere = (filters = {}) => {
   const where = {};
-  if (filters.sexo && filters.sexo.length) where.sexo = { [Op.in]: filters.sexo };
+  if (filters.sexo && filters.sexo.length) where.sexo = buildCaseInsensitiveIn(filters.sexo);
   return where;
 };
 
 const getProgramRows = async (filters = {}) => {
-  if (filters.department !== SUPPORTED_DATA_DEPARTMENT) {
+  if (String(filters.department || '').toLowerCase() !== SUPPORTED_DATA_DEPARTMENT) {
     return [];
   }
   const programas = await Programa.findAll({
@@ -129,7 +151,7 @@ const getProgramRows = async (filters = {}) => {
 };
 
 const getParticipantRows = async (filters = {}) => {
-  if (filters.department !== SUPPORTED_DATA_DEPARTMENT) {
+  if (String(filters.department || '').toLowerCase() !== SUPPORTED_DATA_DEPARTMENT) {
     return [];
   }
   const programaSub = buildProgramaSubWhere(filters);
@@ -193,7 +215,7 @@ const toMonthValue = (v) => (/^\d+$/.test(String(v)) ? Number(v) : v);
 
 const getFilterOptions = async (department, filters = {}) => {
   const empty = { years: [], semesters: [], startMonths: [], areas: [], tipos: [], modalidades: [], sexos: [], rangosEdad: [] };
-  if (department !== SUPPORTED_DATA_DEPARTMENT) {
+  if (String(department || '').toLowerCase() !== SUPPORTED_DATA_DEPARTMENT) {
     return empty;
   }
 
