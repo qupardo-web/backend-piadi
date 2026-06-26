@@ -3,31 +3,36 @@ const { User, Role, Plantilla, CampoPlantilla } = require('../models');
 async function seedDatabase() {
   try {
     // 1. Seed Roles first
-    const roleCount = await Role.count();
     let roleMap = {};
 
-    if (roleCount === 0) {
-      console.log('No roles found in database. Seeding default roles...');
-      
-      const rolesToSeed = [
-        { name: 'Director Académico', group: 'Direccion', description: 'Dirección académica general' },
-        { name: 'Director de Administración', group: 'Direccion', description: 'Dirección de administración y finanzas' },
-        { name: 'Rector', group: 'Rectoria', description: 'Máxima autoridad institucional' },
-        { name: 'Analista de Calidad', group: 'Calidad', description: 'Aseguramiento interno de calidad' }
-      ];
+    const rolesToSeed = [
+      //MAXIMO ROL: ACCESO TOTAL
+      { name: 'Rector', group: 'Rectoria', description: 'Máxima autoridad institucional y administrador general.' },
 
-      for (const roleData of rolesToSeed) {
-        const createdRole = await Role.create(roleData);
-        roleMap[roleData.name] = createdRole.id;
-      }
-      console.log('Roles seeded successfully.');
-    } else {
-      console.log('Roles table already contains data. Fetching roles map...');
-      const existingRoles = await Role.findAll();
-      existingRoles.forEach(r => {
-        roleMap[r.name] = r.id;
+      //ACCESO TOTAL PERO NO PUEDE CARGAR NI MODIFICAR DATOS.
+      { name: 'Vicerrectoria de Calidad', group: 'Calidad', description: 'Aseguramiento interno de calidad' },
+      
+      { name: 'Vicerrectoria Académica', group: 'Direccion', description: 'Dirección académica general' },
+      { name: 'Admisión', group: 'Direccion', description: 'Dirección de admisión y registro.' },
+      { name: 'Relaciones Estudiantiles', group: 'Direccion', description: 'Dirección de relaciones estudiantiles.' },
+      { name: 'Desarrollo Curricular', group: 'Direccion', description: 'Dirección de desarrollo curricular.' },
+      
+      { name: 'Vicerrectoria de Desarrollo Institucional', group: 'Direccion', description: 'Vicerrectoría de desarrollo institucional' },
+      { name: 'Innovación', group: 'Direccion', description: 'Dirección de innovación y desarrollo' },
+      { name: 'Educación Continua', group: 'Direccion', description: 'Dirección de educación continua' },
+      { name: 'Vinculación Con El Medio', group: 'Direccion', description: 'Dirección de vinculación con el medio' },
+      { name: 'Director Académico', group: 'Direccion', description: 'Dirección académica' },
+      { name: 'Director de Administración', group: 'Direccion', description: 'Dirección de administración' }
+    ];
+
+    for (const roleData of rolesToSeed) {
+      const [role] = await Role.findOrCreate({
+        where: { name: roleData.name },
+        defaults: roleData
       });
+      roleMap[roleData.name] = role.id;
     }
+    console.log('Roles ensured in database.');
 
     // 2. Seed Users
     const userCount = await User.count();
@@ -36,18 +41,18 @@ async function seedDatabase() {
 
       // Seed 1: Ezequiel Araya (Director Académico - group: Direccion)
       await User.create({
-        email: 'director.educacion@ecas.cl',
-        username: 'director.educacion@ecas.cl',
-        name: 'Ezequiel Araya',
+        email: 'educacioncontinua@ecas.cl',
+        username: 'educacioncontinua@ecas.cl',
+        name: 'Paola Sanchez',
         password: 'admin123',
-        roleId: roleMap['Director Académico']
+        roleId: roleMap['Educación Continua']
       });
 
       // Seed 2: Rector (group: Rectoria)
       await User.create({
         email: 'rectoria@ecas.cl',
         username: 'rectoria@ecas.cl',
-        name: 'Rectoría ECAS',
+        name: 'Pablo Marquez',
         password: 'admin123',
         roleId: roleMap['Rector']
       });
@@ -56,18 +61,9 @@ async function seedDatabase() {
       await User.create({
         email: 'calidad@ecas.cl',
         username: 'calidad@ecas.cl',
-        name: 'Aseguramiento de Calidad',
+        name: 'Vicerrectoria de Calidad',
         password: 'admin123',
-        roleId: roleMap['Analista de Calidad']
-      });
-
-      // Seed 4: Admin (generic username fallback for testing - mapping to Director de Administración)
-      await User.create({
-        email: 'admin@ecas.cl',
-        username: 'admin',
-        name: 'Administrador Demo',
-        password: 'admin123',
-        roleId: roleMap['Director de Administración']
+        roleId: roleMap['Vicerrectoria de Calidad']
       });
 
       console.log('Default users seeded successfully.');
@@ -86,7 +82,7 @@ async function seedDatabase() {
         { 
           name: 'Educación Continua', 
           description: 'Plantilla para carga de programas de educación continua', 
-          roleId: roleMap['Director Académico'],
+          roleId: roleMap['Educación Continua'],
           archivoData: null,
           archivoNombre: null
         }
