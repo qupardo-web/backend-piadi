@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auditController = require('../controllers/auditController');
+const { authenticateToken, authorizeRoles } = require('../middleware/authMiddleware');
 
 /**
  * @openapi
@@ -52,10 +53,16 @@ const auditController = require('../controllers/auditController');
  *         schema:
  *           type: string
  *           enum: [asc, desc]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Página de registros de auditoría normalizados.
+ *       401:
+ *         description: Token JWT no proporcionado o inválido.
+ *       403:
+ *         description: El usuario no pertenece al grupo Rectoria ni Calidad.
  */
-router.get('/audit-logs', auditController.getAuditLogs);
+router.get('/audit-logs', authenticateToken, authorizeRoles('Rectoria', 'Calidad'), auditController.getAuditLogs);
 
 module.exports = router;

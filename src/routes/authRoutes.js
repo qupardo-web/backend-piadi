@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const auditLogger = require('../middleware/auditLogger');
+const { authenticateToken } = require('../middleware/authMiddleware');
 
 /**
  * @openapi
@@ -58,6 +58,7 @@ const auditLogger = require('../middleware/auditLogger');
  *                   type: string
  *                   example: Usuario o contraseña incorrectos
  */
-router.post('/login', auditLogger({ type: 'session', action: 'LOGIN_SUCCESS', module: 'Autenticación', entity: 'Sesión' }), authController.login);
+router.post('/login', authController.login);
+router.post('/logout', authenticateToken, authController.logout);
 
 module.exports = router;

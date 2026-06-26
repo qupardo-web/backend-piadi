@@ -9,6 +9,7 @@ const uploadMemoria = multer({ storage: storageMemoria });
 
 const plantillaController = require('../controllers/plantillaController');
 const auditLogger = require('../middleware/auditLogger');
+const { authenticateToken } = require('../middleware/authMiddleware');
 
 /**
  * @openapi
@@ -38,7 +39,7 @@ const auditLogger = require('../middleware/auditLogger');
  *       400:
  *         description: Error de validación del archivo.
  */
-router.post('/:id/cargar', upload.single('archivo'), auditLogger({ type: 'carga', action: 'UPLOAD_TEMPLATE', module: 'Carga de Datos', entity: 'Plantilla' }), plantillaController.cargarArchivo);
+router.post('/:id/cargar', authenticateToken, upload.single('archivo'), auditLogger({ type: 'carga', action: 'UPLOAD_TEMPLATE', module: 'Carga de Datos', entity: 'Plantilla' }), plantillaController.cargarArchivo);
 
 /**
  * @openapi
