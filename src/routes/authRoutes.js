@@ -7,6 +7,7 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  * @openapi
  * /api/auth/login:
  *   post:
+ *     tags: [Autenticación]
  *     summary: Iniciar sesión y obtener token JWT
  *     requestBody:
  *       required: true

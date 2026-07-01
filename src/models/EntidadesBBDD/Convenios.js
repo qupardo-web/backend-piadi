@@ -90,7 +90,13 @@ const Convenio = sequelize.define('Convenio', {
     }
 }, {
     tableName: 'convenios',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+        {
+            name: 'idx_convenios_rut_contraparte',
+            fields: ['rutContraparte']
+        }
+    ]
 });
 
 module.exports = Convenio;

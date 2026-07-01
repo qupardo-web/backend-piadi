@@ -7,6 +7,7 @@ const { authenticateToken, authorizeRoles } = require('../middleware/authMiddlew
  * @openapi
  * /api/audit-logs:
  *   get:
+ *     tags: [Auditoria]
  *     summary: Historial de auditoría paginado por tipo (session, carga, all)
  *     parameters:
  *       - in: query

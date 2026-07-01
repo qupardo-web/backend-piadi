@@ -4,6 +4,7 @@ const { sequelize } = require('./models');
 const { swaggerUi, swaggerDocs } = require('./config/swagger');
 const itemRoutes = require('./routes/itemRoutes');
 const authRoutes = require('./routes/authRoutes');
+const roleRoutes = require('./routes/roleRoutes');
 const plantillaRoutes = require('./routes/plantillaRoutes');
 const plantillaCargaRoutes = require('./routes/plantillaCargaRoutes');
 const indicatorRoutes = require('./routes/indicatorRoutes');
@@ -25,6 +26,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Setup API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/roles', roleRoutes);
 app.use('/api', itemRoutes);
 app.use('/api/plantillas', plantillaRoutes);
 app.use('/api/plantillas', plantillaCargaRoutes);

@@ -98,7 +98,13 @@ const AlumnoExterno = sequelize.define('AlumnoExterno', {
   },
 }, {
   tableName: 'alumnos_externos',
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    {
+      name: 'idx_alumnos_ext_carrera',
+      fields: ['carreraCursada']
+    }
+  ]
 });
 
 module.exports = AlumnoExterno;

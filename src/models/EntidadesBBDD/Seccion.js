@@ -66,6 +66,10 @@ const Seccion = sequelize.define('Seccion', {
     {
       name: 'idx_secciones_periodo',
       fields: ['anio', 'semestre']
+    },
+    {
+      name: 'idx_secciones_carrera',
+      fields: ['carreraPrograma']
     }
   ]
 });
