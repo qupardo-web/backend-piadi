@@ -6,11 +6,13 @@ const indicatorController = require('../controllers/indicatorController');
  * @openapi
  * /api/departments:
  *   get:
+ *     tags: [Departamentos]
  *     summary: Lista los departamentos desde base de datos
  *     responses:
  *       200:
  *         description: Departamentos disponibles.
  *   post:
+ *     tags: [Departamentos]
  *     summary: Crea un departamento
  *     responses:
  *       201:
@@ -23,6 +25,7 @@ router.post('/departments', indicatorController.createDepartment);
  * @openapi
  * /api/departments/{departmentKey}:
  *   put:
+ *     tags: [Departamentos]
  *     summary: Actualiza un departamento por su key
  *     parameters:
  *       - in: path
@@ -33,6 +36,7 @@ router.post('/departments', indicatorController.createDepartment);
  *       200:
  *         description: Departamento actualizado.
  *   delete:
+ *     tags: [Departamentos]
  *     summary: Elimina un departamento por su key
  *     parameters:
  *       - in: path
@@ -50,6 +54,7 @@ router.delete('/departments/:departmentKey', indicatorController.deleteDepartmen
  * @openapi
  * /api/departments/{departmentKey}/filters:
  *   get:
+ *     tags: [Departamentos]
  *     summary: Valores disponibles de filtros del dashboard (DISTINCT desde PostgreSQL)
  *     parameters:
  *       - in: path
@@ -81,6 +86,7 @@ router.get('/departments/:departmentKey/filters', indicatorController.getDepartm
  * @openapi
  * /api/departments/{departmentKey}/kpis:
  *   get:
+ *     tags: [Departamentos]
  *     summary: Lista las definiciones de KPI de un departamento (desde base de datos)
  *     parameters:
  *       - in: path
@@ -91,6 +97,7 @@ router.get('/departments/:departmentKey/filters', indicatorController.getDepartm
  *       200:
  *         description: KPIs del departamento.
  *   post:
+ *     tags: [Departamentos]
  *     summary: Crea una definición de KPI para un departamento
  *     parameters:
  *       - in: path
@@ -108,6 +115,7 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  * @openapi
  * /api/departments/{departmentKey}/kpis/{indicatorKey}:
  *   put:
+ *     tags: [Departamentos]
  *     summary: Actualiza una definición de KPI
  *     parameters:
  *       - in: path
@@ -122,6 +130,7 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *       200:
  *         description: KPI actualizado.
  *   delete:
+ *     tags: [Departamentos]
  *     summary: Elimina una definición de KPI
  *     parameters:
  *       - in: path
@@ -143,6 +152,7 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  * @openapi
  * /api/indicators/{indicatorKey}/values:
  *   get:
+ *     tags: [Indicadores]
  *     summary: Valor calculado bajo demanda de un indicador, con filtros globales
  *     parameters:
  *       - in: path
@@ -202,6 +212,7 @@ router.get('/indicators/:indicatorKey/values', indicatorController.getIndicatorV
  * @openapi
  * /api/indicators/{indicatorKey}/series:
  *   get:
+ *     tags: [Indicadores]
  *     summary: Serie por año o segmentada por groupBy, con filtros globales
  *     parameters:
  *       - in: path
@@ -248,6 +259,7 @@ router.get('/indicators/:indicatorKey/series', indicatorController.getIndicatorS
  * @openapi
  * /api/indicators/{indicatorKey}/breakdown:
  *   get:
+ *     tags: [Indicadores]
  *     summary: Distribución del indicador por una dimensión (groupBy)
  *     parameters:
  *       - in: path

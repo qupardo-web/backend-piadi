@@ -6,6 +6,7 @@ const dashboardController = require('../controllers/dashboardController');
  * @openapi
  * /api/dashboard/summary:
  *   get:
+ *     tags: [Indicadores]
  *     summary: Resumen de indicadores agrupados por departamento para la Landing Page
  *     parameters:
  *       - in: query
