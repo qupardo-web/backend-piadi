@@ -33,7 +33,7 @@ const createDepartment = async (req, res) => {
 
 const updateDepartment = async (req, res) => {
   try {
-    sendSuccess(res, await indicatorService.updateDepartment(req.params.departmentId, req.body));
+    sendSuccess(res, await indicatorService.updateDepartment(req.params.departmentKey, req.body));
   } catch (err) {
     sendError(res, err);
   }
@@ -41,7 +41,7 @@ const updateDepartment = async (req, res) => {
 
 const deleteDepartment = async (req, res) => {
   try {
-    sendSuccess(res, await indicatorService.deleteDepartment(req.params.departmentId));
+    sendSuccess(res, await indicatorService.deleteDepartment(req.params.departmentKey));
   } catch (err) {
     sendError(res, err);
   }
@@ -49,7 +49,7 @@ const deleteDepartment = async (req, res) => {
 
 const listDepartmentKpis = async (req, res) => {
   try {
-    sendSuccess(res, await indicatorService.getDepartmentKpis(req.params.departmentId));
+    sendSuccess(res, await indicatorService.getDepartmentKpis(req.params.departmentKey));
   } catch (err) {
     sendError(res, err);
   }
@@ -57,7 +57,7 @@ const listDepartmentKpis = async (req, res) => {
 
 const createKpi = async (req, res) => {
   try {
-    sendSuccess(res, await indicatorService.createKpi(req.params.departmentId, req.body), 201);
+    sendSuccess(res, await indicatorService.createKpi(req.params.departmentKey, req.body), 201);
   } catch (err) {
     sendError(res, err);
   }
@@ -65,7 +65,7 @@ const createKpi = async (req, res) => {
 
 const updateKpi = async (req, res) => {
   try {
-    sendSuccess(res, await indicatorService.updateKpi(req.params.departmentId, req.params.indicatorKey, req.body));
+    sendSuccess(res, await indicatorService.updateKpi(req.params.departmentKey, req.params.indicatorKey, req.body));
   } catch (err) {
     sendError(res, err);
   }
@@ -73,7 +73,7 @@ const updateKpi = async (req, res) => {
 
 const deleteKpi = async (req, res) => {
   try {
-    sendSuccess(res, await indicatorService.deleteKpi(req.params.departmentId, req.params.indicatorKey));
+    sendSuccess(res, await indicatorService.deleteKpi(req.params.departmentKey, req.params.indicatorKey));
   } catch (err) {
     sendError(res, err);
   }
@@ -105,7 +105,7 @@ const getIndicatorBreakdown = async (req, res) => {
 
 const getDepartmentFilters = async (req, res) => {
   try {
-    sendSuccess(res, await indicatorService.getDepartmentFilters(req.params.departmentId, req.query));
+    sendSuccess(res, await indicatorService.getDepartmentFilters(req.params.departmentKey, req.query));
   } catch (err) {
     sendError(res, err);
   }
