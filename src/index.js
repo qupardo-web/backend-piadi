@@ -48,6 +48,9 @@ async function initDb(retries = 5, delay = 2000) {
       await sequelize.sync();
       console.log('Database synced successfully. Models mapped to tables.');
       
+      const { initDbConstraints } = require('./services/dbConstraints');
+      await initDbConstraints();
+      
       const { seedDatabase } = require('./services/dbSeeder');
       await seedDatabase();
 
