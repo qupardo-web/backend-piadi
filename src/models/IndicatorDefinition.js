@@ -15,6 +15,7 @@ const IndicatorDefinition = sequelize.define('IndicatorDefinition', {
   key: {
     type: DataTypes.STRING,
     allowNull: false,
+    unique: true,
     validate: { notEmpty: true }
   },
   name: {
