@@ -12,6 +12,7 @@ const AuditSesion = require('./EntidadesAudit/AuditSesion');
 // --- Entidades de Indicadores (PIADI-150 / PIADI-153) ---
 const Department = require('./Department');
 const IndicatorDefinition = require('./IndicatorDefinition');
+const Meta = require('./EntidadesBBDD/Meta');
 
 // --- Entidades BBDD Académicas ---
 const Alumno = require('./EntidadesBBDD/Alumno');
@@ -106,6 +107,13 @@ Financiamiento.belongsTo(Proyecto, { foreignKey: 'idProyecto', as: 'proyecto' })
 Department.hasMany(IndicatorDefinition, { foreignKey: 'departmentId', sourceKey: 'key', as: 'indicators', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 IndicatorDefinition.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
 
+// --- Asociaciones de Metas (PIADI-197 / PIADI-215) ---
+Meta.belongsTo(IndicatorDefinition, { foreignKey: 'indicatorKey', as: 'indicador', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+IndicatorDefinition.hasMany(Meta, { foreignKey: 'indicatorKey', as: 'metas' });
+
+Meta.belongsTo(Department, { foreignKey: 'departmentId', as: 'departamento', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Department.hasMany(Meta, { foreignKey: 'departmentId', as: 'metas' });
+
 module.exports = {
   sequelize,
   Item,
@@ -132,5 +140,6 @@ module.exports = {
   AuditCarga,
   AuditSesion,
   Department,
-  IndicatorDefinition
+  IndicatorDefinition,
+  Meta
 };
