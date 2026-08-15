@@ -4,6 +4,26 @@ async function initDbConstraints() {
   try {
     console.log('Applying database-level constraints, triggers, and SQL documentation for VCM...');
 
+    // Compatibilidad PIADI-198: sequelize.sync() no agrega columnas a tablas existentes.
+    await sequelize.query(`
+      ALTER TABLE metas ADD COLUMN IF NOT EXISTS "creatorId" INTEGER;
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_metas_creator ON metas ("creatorId");
+    `);
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_metas_creator'
+        ) THEN
+          ALTER TABLE metas
+            ADD CONSTRAINT fk_metas_creator FOREIGN KEY ("creatorId")
+            REFERENCES users(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+        END IF;
+      END $$;
+    `);
+
     // 1. CHECK Constraints
     // Restricción: fechaDeTermino debe ser posterior a fechaDeFirma
     await sequelize.query(`

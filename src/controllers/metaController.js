@@ -1,0 +1,39 @@
+const metaService = require('../services/metaService');
+
+const create = async (req, res, next) => {
+  try {
+    const meta = await metaService.create(req.body, req.user.id);
+    res.status(201).json({ success: true, data: meta });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getById = async (req, res, next) => {
+  try {
+    const meta = await metaService.getById(req.params.id);
+    res.status(200).json({ success: true, data: meta });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const update = async (req, res, next) => {
+  try {
+    const meta = await metaService.update(req.params.id, req.body);
+    res.status(200).json({ success: true, data: meta });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const remove = async (req, res, next) => {
+  try {
+    await metaService.remove(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { create, getById, update, remove };
