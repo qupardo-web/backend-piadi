@@ -34,6 +34,14 @@ const Meta = sequelize.define('Meta', {
         type: DataTypes.DECIMAL(12, 2),
         allowNull: false
     },
+    creatorId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'users',
+            key: 'id'
+        }
+    },
     periodo: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -46,6 +54,10 @@ const Meta = sequelize.define('Meta', {
         {
             name: 'idx_metas_busqueda',
             fields: ['anio', 'indicatorKey', 'departmentId']
+        },
+        {
+            name: 'idx_metas_creator',
+            fields: ['creatorId']
         }
     ]
 });

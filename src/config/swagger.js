@@ -18,12 +18,22 @@ const swaggerOptions = {
         description: 'Servidor Local'
       }
     ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT'
+        }
+      }
+    },
     tags: [
       { name: 'Autenticación', description: 'Endpoints de acceso y cierre de sesión' },
       { name: 'Roles', description: 'Endpoints para consultar roles del sistema' },
       { name: 'Plantillas', description: 'Gestión y carga de plantillas Excel' },
       { name: 'Departamentos', description: 'Gestión de departamentos y KPIs relacionados' },
       { name: 'Indicadores', description: 'Cálculo de valores, series y breakdown de indicadores' },
+      { name: 'Metas', description: 'Gestión de metas y sus métricas asociadas' },
       { name: 'Auditoria', description: 'Visualización de bitácoras de auditoría' },
       { name: 'default', description: 'Endpoints generales' }
     ]

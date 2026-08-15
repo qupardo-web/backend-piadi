@@ -13,6 +13,7 @@ const AuditSesion = require('./EntidadesAudit/AuditSesion');
 const Department = require('./Department');
 const IndicatorDefinition = require('./IndicatorDefinition');
 const Meta = require('./EntidadesBBDD/Meta');
+const MetaMetric = require('./EntidadesBBDD/MetaMetric');
 
 // --- Entidades BBDD Académicas ---
 const Alumno = require('./EntidadesBBDD/Alumno');
@@ -108,11 +109,20 @@ Department.hasMany(IndicatorDefinition, { foreignKey: 'departmentId', sourceKey:
 IndicatorDefinition.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
 
 // --- Asociaciones de Metas (PIADI-197 / PIADI-215) ---
-Meta.belongsTo(IndicatorDefinition, { foreignKey: 'indicatorKey', as: 'indicador', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
-IndicatorDefinition.hasMany(Meta, { foreignKey: 'indicatorKey', as: 'metas' });
+Meta.belongsTo(IndicatorDefinition, { foreignKey: 'indicatorKey', targetKey: 'key', as: 'indicador', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+IndicatorDefinition.hasMany(Meta, { foreignKey: 'indicatorKey', sourceKey: 'key', as: 'metas' });
 
-Meta.belongsTo(Department, { foreignKey: 'departmentId', as: 'departamento', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
-Department.hasMany(Meta, { foreignKey: 'departmentId', as: 'metas' });
+Meta.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'departamento', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Department.hasMany(Meta, { foreignKey: 'departmentId', sourceKey: 'key', as: 'metas' });
+
+Meta.belongsTo(User, { foreignKey: 'creatorId', as: 'creator', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+User.hasMany(Meta, { foreignKey: 'creatorId', as: 'metasCreadas' });
+
+Meta.hasMany(MetaMetric, { foreignKey: 'metaId', as: 'metrics', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+MetaMetric.belongsTo(Meta, { foreignKey: 'metaId', as: 'meta', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+
+MetaMetric.belongsTo(IndicatorDefinition, { foreignKey: 'indicatorKey', targetKey: 'key', as: 'indicator', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+IndicatorDefinition.hasMany(MetaMetric, { foreignKey: 'indicatorKey', sourceKey: 'key', as: 'metaMetrics' });
 
 module.exports = {
   sequelize,
@@ -141,5 +151,6 @@ module.exports = {
   AuditSesion,
   Department,
   IndicatorDefinition,
-  Meta
+  Meta,
+  MetaMetric
 };
