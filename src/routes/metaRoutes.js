@@ -42,6 +42,30 @@ const router = express.Router();
  *             creatorId: { type: integer, example: 2 }
  *             createdAt: { type: string, format: date-time }
  *             updatedAt: { type: string, format: date-time }
+ *     MetaMetricProgress:
+ *       type: object
+ *       properties:
+ *         metricId: { type: integer }
+ *         indicatorKey: { type: string }
+ *         currentValue: { type: number, nullable: true }
+ *         targetValue: { type: number }
+ *         weight: { type: number, description: Ponderación en escala 0 a 100. }
+ *         behavior: { type: string }
+ *         valueType: { type: string }
+ *         progress: { type: number, description: Cumplimiento no ponderado de la métrica. }
+ *         weightedProgress: { type: number, description: Aporte ponderado al progreso total. }
+ *         hasData: { type: boolean }
+ *     MetaProgress:
+ *       type: object
+ *       properties:
+ *         totalProgress: { type: number, example: 64 }
+ *         elapsedProgress: { type: number, example: 50 }
+ *         status:
+ *           type: string
+ *           enum: [cumplida, en_progreso, en_riesgo, no_cumplida]
+ *         metrics:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/MetaMetricProgress' }
  */
 
 /**
@@ -71,6 +95,65 @@ const router = express.Router();
  *       404: { description: Departamento o indicador inexistente. }
  */
 router.post('/', authenticateToken, metaController.create);
+
+/**
+ * @openapi
+ * /api/metas:
+ *   get:
+ *     tags: [Metas]
+ *     summary: Lista metas enriquecidas con progreso ponderado y estado calculado
+ *     parameters:
+ *       - in: query
+ *         name: departmentId
+ *         schema: { type: string }
+ *         description: Filtra metas en base de datos por departamento.
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [cumplida, en_progreso, en_riesgo, no_cumplida]
+ *         description: Filtra después de calcular el estado dinámico.
+ *     responses:
+ *       200:
+ *         description: Listado de metas con progreso.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/MetaProgress' }
+ *       400: { description: Filtro status inválido o periodo de meta no reconocido. }
+ */
+router.get('/', metaController.listWithProgress);
+
+/**
+ * @openapi
+ * /api/metas/{id}/progress:
+ *   get:
+ *     tags: [Metas]
+ *     summary: Obtiene el detalle de progreso ponderado de una meta
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, minimum: 1 }
+ *     responses:
+ *       200:
+ *         description: Meta con progreso total, estado y breakdown por métrica.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/MetaProgress' }
+ *       400: { description: ID o periodo inválido. }
+ *       404: { description: Meta o indicador inexistente. }
+ */
+router.get('/:id/progress', metaController.getProgress);
 
 /**
  * @openapi
