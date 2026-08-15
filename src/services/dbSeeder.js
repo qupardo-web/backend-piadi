@@ -253,7 +253,9 @@ async function seedDatabase() {
         where: { 
           plantillaId: data.plantillaId, 
           nombre_campo: data.nombre_campo, 
-          hoja_origen: data.hoja_origen 
+          hoja_origen: data.hoja_origen,
+          tabla_destino: data.tabla_destino,
+          columna_destino: data.columna_destino
         },
         defaults: data
       });

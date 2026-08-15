@@ -114,6 +114,13 @@ const errorHandler = (err, req, res, next) => {
   }
 
   // E. Error de Carga Masiva / Validación Múltiple de Sequelize (BulkRecordError / AggregateError)
+  let errorsResponse = null;
+
+  if (err.name === 'SequelizeValidationError') {
+    const list = err.errors.map(translateValidationError);
+    errorsResponse = list.map(msg => ({ message: msg }));
+  }
+
   if (err.name === 'SequelizeBulkRecordError' || err.name === 'AggregateError') {
     statusCode = 400;
     const errorsList = [];
@@ -137,19 +144,27 @@ const errorHandler = (err, req, res, next) => {
 
     collectErrors(err);
 
-    if (errorsList.length > 0) {
-      errorMessage = `Error de validación en carga: ${[...new Set(errorsList)].join('. ')}`;
+    const uniqueErrors = [...new Set(errorsList)];
+    if (uniqueErrors.length > 0) {
+      errorMessage = `Error de validación en carga: ${uniqueErrors.join('. ')}`;
+      errorsResponse = uniqueErrors.map(msg => ({ message: msg }));
     } else {
       errorMessage = 'Error de validación en los registros de la carga.';
     }
   }
 
   // 3. Respuesta compatible con el Frontend (Retorna llave "error")
-  res.status(statusCode).json({
+  const jsonResponse = {
     error: errorMessage,
     success: false, // Extra para utilidades del frontend
     errorType: err.name || 'InternalServerError' // Extra informativo
-  });
+  };
+
+  if (errorsResponse) {
+    jsonResponse.errores = errorsResponse;
+  }
+
+  res.status(statusCode).json(jsonResponse);
 };
 
 module.exports = errorHandler;

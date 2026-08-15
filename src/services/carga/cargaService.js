@@ -189,8 +189,11 @@ const procesarCarga = async (workbook, campos) => {
           registrosAInsertar = [...map.values()];
         }
 
-        // Insertar y guardar IDs para futuros lookups
         if (registrosAInsertar.length > 0) {
+          if (tabla === 'ResultadosPrograma') {
+            console.log("ResultadosPrograma rows to insert (first 5):", registrosAInsertar.slice(0, 5));
+            console.log("Total rows to insert:", registrosAInsertar.length);
+          }
           let insertados;
           try {
             insertados = await Model.bulkCreate(registrosAInsertar, {
