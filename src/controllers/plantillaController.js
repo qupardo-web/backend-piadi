@@ -85,6 +85,7 @@ const cargarArchivo = async (req, res, next) => {
       const errorMsg = `Error de validación en carga: ${errores.map(e => e.mensaje).join('. ')}`;
       return res.status(400).json({
         error: errorMsg,
+        errores: errores,
         success: false,
         errorType: 'ExcelValidationError'
       });

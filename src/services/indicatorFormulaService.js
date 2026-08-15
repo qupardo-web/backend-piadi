@@ -1,7 +1,7 @@
 const round2 = (n) => Math.round(n * 100) / 100;
 
+// --- Fórmulas de Educación Continua ---
 const COUNT_PROGRAMMED_OFFER = (m = {}) => ({ value: m.ofertaProgramada || 0, hasData: true });
-
 const COUNT_COURSES_DICTATED = (m = {}) => ({ value: m.cursosDictados || 0, hasData: true });
 
 const EXECUTION_RATE = (m = {}) => {
@@ -30,10 +30,18 @@ const AVERAGE_TICKET = (m = {}) => {
 };
 
 const UNIQUE_PARTICIPANTS = (m = {}) => ({ value: m.participantesUnicos || 0, hasData: true });
-
 const PARTICIPANT_PROFILE = (m = {}) => ({ value: m.participantesUnicos || 0, hasData: true });
-
 const TRAINING_RECURRENCE = (m = {}) => ({ value: m.participantesRecurrentes || 0, hasData: true });
+
+// --- Fórmulas de Vinculación con el Medio (VCM) ---
+const COUNT_CONVENIOS = (m = {}) => ({ value: m.conveniosCount || 0, hasData: true });
+const CONVENIOS_BY_SECTOR = (m = {}) => ({ value: m.conveniosCount || 0, hasData: true });
+const COUNT_ACTIVE_CONVENIOS = (m = {}) => ({ value: m.conveniosActivosCount || 0, hasData: true });
+const COUNT_ACTIVITIES = (m = {}) => ({ value: m.actividadesCount || 0, hasData: true });
+const PARTICIPACIONES_SUM = (m = {}) => ({ value: m.participantesSum || 0, hasData: true });
+const COUNT_ARTICULACIONES = (m = {}) => ({ value: m.articulacionesCount || 0, hasData: true });
+const COUNT_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
+const FINANCING_SUM = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: true });
 
 const formulaRegistry = {
   COUNT_PROGRAMMED_OFFER,
@@ -45,7 +53,16 @@ const formulaRegistry = {
   AVERAGE_TICKET,
   UNIQUE_PARTICIPANTS,
   PARTICIPANT_PROFILE,
-  TRAINING_RECURRENCE
+  TRAINING_RECURRENCE,
+  // VCM
+  COUNT_CONVENIOS,
+  CONVENIOS_BY_SECTOR,
+  COUNT_ACTIVE_CONVENIOS,
+  COUNT_ACTIVITIES,
+  PARTICIPACIONES_SUM,
+  COUNT_ARTICULACIONES,
+  COUNT_PROJECTS,
+  FINANCING_SUM
 };
 
 const apply = (formulaKey, metrics) => {
