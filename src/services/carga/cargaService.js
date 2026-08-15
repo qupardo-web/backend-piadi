@@ -22,8 +22,8 @@ const procesarCarga = async (workbook, campos) => {
       const hoja = workbook.Sheets[nombreHoja];
       const filas = XLSX.utils.sheet_to_json(hoja, { defval: null });
 
-      for (const fila of filas) {
-        const filaObj = { _key: JSON.stringify(fila), _orden: Infinity, datos: {} };
+      for (const [index, fila] of filas.entries()) {
+        const filaObj = { _key: JSON.stringify(fila), _orden: Infinity, _hoja: nombreHoja, _fila: index + 2, datos: {} };
 
         for (const campo of camposHoja) {
           if (!filaObj.datos[campo.tabla_destino]) {
@@ -202,27 +202,63 @@ const procesarCarga = async (workbook, campos) => {
               validate: true
             });
           } catch (err) {
-            // Mapear nombres de campos técnicos de BD a nombres de columnas de Excel correspondientes
-            const mapErrorPaths = (e) => {
-              if (!e) return;
-              if (e.path) {
-                const campoConfig = campos.find(c => c.columna_destino === e.path && c.tabla_destino === tabla);
-                if (campoConfig) {
-                  if (e.message) {
-                    e.message = e.message.replace(e.path, campoConfig.columna_excel);
-                  }
-                  e.path = campoConfig.columna_excel;
-                }
-              }
-              if (e.errors) {
+            if (err.errors) {
+              const enrichValidationErrors = (e) => {
                 if (Array.isArray(e.errors)) {
-                  e.errors.forEach(mapErrorPaths);
-                } else {
-                  mapErrorPaths(e.errors);
+                  e.errors.forEach(enrichValidationErrors);
+                } else if (e.errors) {
+                  enrichValidationErrors(e.errors);
+                } else if (e.message) {
+                  // individual error item
+                  const recordValues = e.instance ? e.instance.dataValues : null;
+                  let matchedFila = null;
+                  if (recordValues) {
+                    matchedFila = filasProcesadas.find(f => {
+                      const datosTabla = f.datos[tabla];
+                      if (!datosTabla) return false;
+                      const pk = pkAttrs && pkAttrs[0];
+                      if (pk && datosTabla[pk] && String(datosTabla[pk].valor).trim() === String(recordValues[pk]).trim()) {
+                        return true;
+                      }
+                      return Object.entries(datosTabla).every(([col, info]) => {
+                        return String(info.valor) === String(recordValues[col]);
+                      });
+                    });
+                  }
+                  const campoConfig = campos.find(c => c.columna_destino === e.path && c.tabla_destino === tabla);
+                  const campoExcel = campoConfig ? campoConfig.columna_excel : e.path;
+                  
+                  let cleanMsg = e.message;
+                  if (cleanMsg.includes('cannot be null')) {
+                    cleanMsg = `El campo ${campoExcel} no puede ser nulo o estar vacío`;
+                  } else if (cleanMsg.includes('Validation notEmpty on') && cleanMsg.includes('failed')) {
+                    cleanMsg = `El campo ${campoExcel} no puede estar vacío`;
+                  } else if (cleanMsg.includes('Validation is on') && cleanMsg.includes('failed')) {
+                    cleanMsg = `El formato o valor del campo ${campoExcel} no es válido`;
+                  } else if (cleanMsg.includes('Validation isEmail on') && cleanMsg.includes('failed')) {
+                    cleanMsg = `El formato del correo electrónico ingresado no es válido`;
+                  } else if (cleanMsg.includes('Validation min on') && cleanMsg.includes('failed')) {
+                    const minVal = e.validatorArgs && e.validatorArgs[0] !== undefined ? e.validatorArgs[0] : '';
+                    cleanMsg = `El valor del campo ${campoExcel} debe ser mayor o igual a ${minVal}`;
+                  } else if (cleanMsg.includes('Validation max on') && cleanMsg.includes('failed')) {
+                    const maxVal = e.validatorArgs && e.validatorArgs[0] !== undefined ? e.validatorArgs[0] : '';
+                    cleanMsg = `El valor del campo ${campoExcel} debe ser menor o igual a ${maxVal}`;
+                  } else if (cleanMsg.toLowerCase().includes('failed') || cleanMsg.toLowerCase().includes('invalid') || cleanMsg.toLowerCase().includes('no es válido')) {
+                    cleanMsg = cleanMsg.replace(e.path || '', campoExcel);
+                  }
+
+                  const hojaName = matchedFila ? matchedFila._hoja : 'General';
+                  const filaNum = matchedFila ? matchedFila._fila : '';
+                  
+                  e.message = cleanMsg;
+                  e.hoja = hojaName;
+                  e.fila = filaNum;
+                  e.celda = filaNum ? `Fila ${filaNum}` : '';
+                  e.path = campoExcel;
                 }
-              }
-            };
-            mapErrorPaths(err);
+              };
+              enrichValidationErrors(err);
+            }
             throw err;
           }
           resumenFinal[tabla] = (resumenFinal[tabla] || 0) + insertados.length;
