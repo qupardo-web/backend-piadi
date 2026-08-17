@@ -301,19 +301,19 @@ const getVcmProyectoRows = async (filters = {}) => {
   if (String(filters.department || '').toLowerCase() !== 'vinculacion_medio') {
     return [];
   }
-  const where = buildVcmCommonWhere(filters, 'anio');
+  const where = buildVcmCommonWhere(filters, 'anioInicio');
 
   const proyectos = await Proyecto.findAll({
     where,
-    include: [{ model: Financiamiento, as: 'proyecto' }] // matches hasOne alias 'proyecto' in models/index.js
+    include: [{ model: Financiamiento }]
   });
 
   return proyectos.map(p => {
-    const f = p.proyecto || null; // Alia alias
+    const f = p.Financiamiento || null; // Access via model name association since no alias is defined
     return {
       idProyecto: p.idProyecto,
-      anio: p.anio,
-      montoFinanciado: f ? Number(f.montoFinanciado || 0) : 0
+      anio: p.anioInicio,
+      montoFinanciado: f ? Number(f.montoAdjudicado || 0) : 0
     };
   });
 };
