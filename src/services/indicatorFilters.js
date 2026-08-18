@@ -1,4 +1,5 @@
 const GROUP_BY_DIMENSIONS = [
+  // Campos de Educación Continua
   'year',
   'area',
   'tipo',
@@ -9,7 +10,25 @@ const GROUP_BY_DIMENSIONS = [
   'region',
   'nivelDeEstudio',
   'tipoParticipante',
-  'sectorEconomico'
+  'sectorEconomico',
+  'cohorte',
+  'jornada',
+  'periodo',
+
+  // Campos de Vinculación con el Medio (VcM)
+  'sector',
+  'tipoConvenio',
+  'areaVinculada',
+  'contraparte',
+  'responsableEcas',
+  'lineaVcM',
+  'tipoActividad',
+  'comuna',
+  'publicoObjetivo',
+  'plataformaFoco',
+  'tipoArticulacion',
+  'especialidadTP',
+  'colegioLiceoTP'
 ];
 
 class FilterError extends Error {
