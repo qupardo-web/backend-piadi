@@ -10,6 +10,21 @@ const Convenio = sequelize.define('Convenio', {
     rutContraparte: {
         type: DataTypes.STRING,
         allowNull: false,
+        set(val) {
+            if (val) {
+                // Remueve puntos, guiones y espacios, y convierte a mayúscula
+                const cleanRut = val.replace(/[\.\-\s]/g, '').toUpperCase();
+                if (cleanRut.length > 1) {
+                    const body = cleanRut.slice(0, -1);
+                    const dv = cleanRut.slice(-1);
+                    this.setDataValue('rutContraparte', `${body}-${dv}`);
+                } else {
+                    this.setDataValue('rutContraparte', cleanRut);
+                }
+            } else {
+                this.setDataValue('rutContraparte', val);
+            }
+        },
         validate: {
             is: /^\d{1,2}\.?\d{3}\.?\d{3}-?[0-9Kk]$/i,
             isValidRut(value) {
@@ -39,7 +54,15 @@ const Convenio = sequelize.define('Convenio', {
         type: DataTypes.INTEGER,
         allowNull: false,
         validate: {
-            min: 1900
+            min: 1900,
+            matchesFechaDeFirma(value) {
+                if (this.fechaDeFirma && typeof this.fechaDeFirma === 'string') {
+                    const yearFromDate = parseInt(this.fechaDeFirma.split('-')[0], 10);
+                    if (parseInt(value, 10) !== yearFromDate) {
+                        throw new Error(`El año de firma (${value}) debe coincidir con el año de la fecha de firma (${yearFromDate}).`);
+                    }
+                }
+            }
         }
     },
     fechaDeFirma: {
@@ -90,7 +113,13 @@ const Convenio = sequelize.define('Convenio', {
     }
 }, {
     tableName: 'convenios',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+        {
+            name: 'idx_convenios_rut_contraparte',
+            fields: ['rutContraparte']
+        }
+    ]
 });
 
 module.exports = Convenio;

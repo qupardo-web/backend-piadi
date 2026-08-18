@@ -7,27 +7,23 @@ const {
   ResultadosPrograma,
   EstadoFinancieroPrograma,
   MatriculaPrograma,
-  AlumnoExterno
+  AlumnoExterno,
+  Convenio,
+  Actividad,
+  Participacion,
+  ArticulacionTP,
+  Proyecto,
+  Financiamiento
 } = require('../models');
 
-const SUPPORTED_DATA_DEPARTMENT = 'educacion_continua';
+const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio'];
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
 const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
 
-/**
- * Construye condición case-insensitive para un único valor
- * @param {string} value Valor a comparar
- * @returns {Object} Condición Sequelize con Op.iLike
- */
 const buildCaseInsensitiveEquals = (value) => ({
   [Op.iLike]: value
 });
 
-/**
- * Construye condición case-insensitive para múltiples valores
- * @param {Array} values Array de valores
- * @returns {Object} Condición Sequelize con Op.or de Op.iLike
- */
 const buildCaseInsensitiveIn = (values) => {
   if (!values || values.length === 0) return null;
   if (values.length === 1) return buildCaseInsensitiveEquals(values[0]);
@@ -67,6 +63,7 @@ const yearRange = (from, to) => {
   return list;
 };
 
+// --- Filtros Educación Continua ---
 const buildProgramaWhere = (filters = {}) => {
   const where = {};
   if (filters.year !== null && filters.year !== undefined) {
@@ -119,8 +116,22 @@ const buildAlumnoWhere = (filters = {}) => {
   return where;
 };
 
+// --- Filtros Genéricos VCM ---
+const buildVcmCommonWhere = (filters = {}, yearField = 'anio') => {
+  const where = {};
+  if (filters.year !== null && filters.year !== undefined) {
+    where[yearField] = filters.year;
+  } else if (filters.fromYear !== null || filters.toYear !== null) {
+    const from = filters.fromYear !== null ? filters.fromYear : filters.toYear;
+    const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
+    where[yearField] = { [Op.between]: [from, to] };
+  }
+  return where;
+};
+
+// --- Providers Educación Continua ---
 const getProgramRows = async (filters = {}) => {
-  if (String(filters.department || '').toLowerCase() !== SUPPORTED_DATA_DEPARTMENT) {
+  if (String(filters.department || '').toLowerCase() !== 'educacion_continua') {
     return [];
   }
   const programas = await Programa.findAll({
@@ -151,7 +162,7 @@ const getProgramRows = async (filters = {}) => {
 };
 
 const getParticipantRows = async (filters = {}) => {
-  if (String(filters.department || '').toLowerCase() !== SUPPORTED_DATA_DEPARTMENT) {
+  if (String(filters.department || '').toLowerCase() !== 'educacion_continua') {
     return [];
   }
   const programaSub = buildProgramaSubWhere(filters);
@@ -201,6 +212,112 @@ const getParticipantRows = async (filters = {}) => {
   });
 };
 
+// --- Providers Vinculación con el Medio (VCM) ---
+const getVcmConvenioRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'vinculacion_medio') {
+    return [];
+  }
+  const where = buildVcmCommonWhere(filters, 'anioFirma');
+  if (filters.region && filters.region.length) where.region = buildCaseInsensitiveIn(filters.region);
+  if (filters.comuna && filters.comuna.length) where.comuna = buildCaseInsensitiveIn(filters.comuna);
+  if (filters.sector && filters.sector.length) where.sector = buildCaseInsensitiveIn(filters.sector);
+
+  const convenios = await Convenio.findAll({ where });
+  return convenios.map(c => ({
+    idConvenio: c.idConvenio,
+    anio: c.anioFirma,
+    sector: c.sector,
+    region: c.region,
+    comuna: c.comuna,
+    estado: c.estado,
+    activo: c.estado && (c.estado.toLowerCase() === 'activo' || c.estado.toLowerCase() === 'vigente')
+  }));
+};
+
+const getVcmActividadRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'vinculacion_medio') {
+    return [];
+  }
+  const where = buildVcmCommonWhere(filters, 'anio');
+  if (filters.modalidad && filters.modalidad.length) where.modalidad = buildCaseInsensitiveIn(filters.modalidad);
+  if (filters.region && filters.region.length) where.region = buildCaseInsensitiveIn(filters.region);
+  if (filters.comuna && filters.comuna.length) where.comuna = buildCaseInsensitiveIn(filters.comuna);
+  if (filters.sector && filters.sector.length) where.sector = buildCaseInsensitiveIn(filters.sector);
+
+  const actividades = await Actividad.findAll({ where });
+  return actividades.map(a => ({
+    idActividad: a.idActividad,
+    anio: a.anio,
+    modalidad: a.modalidad,
+    region: a.region,
+    comuna: a.comuna,
+    sector: a.sector,
+    lineaVcM: a.lineaVcM
+  }));
+};
+
+const getVcmParticipacionRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'vinculacion_medio') {
+    return [];
+  }
+  const where = buildVcmCommonWhere(filters, 'anio');
+  if (filters.region && filters.region.length) where.region = buildCaseInsensitiveIn(filters.region);
+  if (filters.comuna && filters.comuna.length) where.comuna = buildCaseInsensitiveIn(filters.comuna);
+
+  const participaciones = await Participacion.findAll({ where });
+  return participaciones.map(p => ({
+    idParticipacion: p.idParticipacion,
+    anio: p.anio,
+    region: p.region,
+    comuna: p.comuna,
+    totalPersonas: p.totalPersonas,
+    internosExternos: p.internosExternos,
+    tipoParticipante: p.tipoParticipante
+  }));
+};
+
+const getVcmArticulacionRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'vinculacion_medio') {
+    return [];
+  }
+  const where = buildVcmCommonWhere(filters, 'anio');
+  if (filters.region && filters.region.length) where.region = buildCaseInsensitiveIn(filters.region);
+  if (filters.comuna && filters.comuna.length) where.comuna = buildCaseInsensitiveIn(filters.comuna);
+
+  const articulaciones = await ArticulacionTP.findAll({ where });
+  return articulaciones.map(a => ({
+    idArticulacion: a.idArticulacion,
+    anio: a.anio,
+    region: a.region,
+    comuna: a.comuna,
+    especialidadTP: a.especialidadTP,
+    nivel: a.nivel,
+    tipoArticulacion: a.tipoArticulacion,
+    estado: a.estado
+  }));
+};
+
+const getVcmProyectoRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'vinculacion_medio') {
+    return [];
+  }
+  const where = buildVcmCommonWhere(filters, 'anioInicio');
+
+  const proyectos = await Proyecto.findAll({
+    where,
+    include: [{ model: Financiamiento }]
+  });
+
+  return proyectos.map(p => {
+    const f = p.Financiamiento || null; // Access via model name association since no alias is defined
+    return {
+      idProyecto: p.idProyecto,
+      anio: p.anioInicio,
+      montoFinanciado: f ? Number(f.montoAdjudicado || 0) : 0
+    };
+  });
+};
+
 const distinctValues = (rows, key) => {
   const set = new Set();
   rows.forEach((r) => {
@@ -215,28 +332,71 @@ const toMonthValue = (v) => (/^\d+$/.test(String(v)) ? Number(v) : v);
 
 const getFilterOptions = async (department, filters = {}) => {
   const empty = { years: [], semesters: [], startMonths: [], areas: [], tipos: [], modalidades: [], sexos: [], rangosEdad: [] };
-  if (String(department || '').toLowerCase() !== SUPPORTED_DATA_DEPARTMENT) {
+  const deptKey = String(department || '').toLowerCase();
+  
+  if (!SUPPORTED_DATA_DEPARTMENTS.includes(deptKey)) {
     return empty;
   }
 
-  const programas = await Programa.findAll({
-    where: buildProgramaWhere(filters),
-    attributes: ['anio', 'semestre', 'mesInicio', 'area', 'tipo', 'modalidad'],
-    raw: true
-  });
+  if (deptKey === 'educacion_continua') {
+    const programas = await Programa.findAll({
+      where: buildProgramaWhere(filters),
+      attributes: ['anio', 'semestre', 'mesInicio', 'area', 'tipo', 'modalidad'],
+      raw: true
+    });
+    const participantRows = await getParticipantRows(filters);
 
-  const participantRows = await getParticipantRows(filters);
+    return {
+      years: distinctValues(programas, 'anio').map(Number).sort((a, b) => a - b),
+      semesters: distinctValues(programas, 'semestre').sort(),
+      startMonths: distinctValues(programas, 'mesInicio').map(toMonthValue).sort((a, b) => (Number(a) || 0) - (Number(b) || 0)),
+      areas: distinctValues(programas, 'area').sort(),
+      tipos: distinctValues(programas, 'tipo').sort(),
+      modalidades: distinctValues(programas, 'modalidad').sort(),
+      sexos: distinctValues(participantRows, 'sexo').sort(),
+      rangosEdad: distinctValues(participantRows, 'rangoEdad').sort()
+    };
+  } else if (deptKey === 'vinculacion_medio') {
+    // VCM Options
+    const convenios = await getVcmConvenioRows(filters);
+    const actividades = await getVcmActividadRows(filters);
+    const participaciones = await getVcmParticipacionRows(filters);
+    const articulaciones = await getVcmArticulacionRows(filters);
 
-  return {
-    years: distinctValues(programas, 'anio').map(Number).sort((a, b) => a - b),
-    semesters: distinctValues(programas, 'semestre').sort(),
-    startMonths: distinctValues(programas, 'mesInicio').map(toMonthValue).sort((a, b) => (Number(a) || 0) - (Number(b) || 0)),
-    areas: distinctValues(programas, 'area').sort(),
-    tipos: distinctValues(programas, 'tipo').sort(),
-    modalidades: distinctValues(programas, 'modalidad').sort(),
-    sexos: distinctValues(participantRows, 'sexo').sort(),
-    rangosEdad: distinctValues(participantRows, 'rangoEdad').sort()
-  };
+    const years = new Set([
+      ...convenios.map(c => Number(c.anio)),
+      ...actividades.map(a => Number(a.anio)),
+      ...participaciones.map(p => Number(p.anio)),
+      ...articulaciones.map(ar => Number(ar.anio))
+    ]);
+
+    return {
+      years: [...years].sort((a, b) => a - b),
+      semesters: [],
+      startMonths: [],
+      areas: [],
+      tipos: [],
+      modalidades: distinctValues(actividades, 'modalidad').sort(),
+      sexos: [],
+      rangosEdad: [],
+      // Extra filters for VCM
+      regiones: new Set([
+        ...convenios.map(c => c.region),
+        ...actividades.map(a => a.region),
+        ...participaciones.map(p => p.region),
+        ...articulaciones.map(ar => ar.region)
+      ]),
+      comunas: new Set([
+        ...convenios.map(c => c.comuna),
+        ...actividades.map(a => a.comuna),
+        ...participaciones.map(p => p.comuna),
+        ...articulaciones.map(ar => ar.comuna)
+      ]),
+      sectores: distinctValues(convenios, 'sector').sort()
+    };
+  }
+
+  return empty;
 };
 
 const getDepartments = async () => {
@@ -310,6 +470,11 @@ module.exports = {
   isConnected,
   getProgramRows,
   getParticipantRows,
+  getVcmConvenioRows,
+  getVcmActividadRows,
+  getVcmParticipacionRows,
+  getVcmArticulacionRows,
+  getVcmProyectoRows,
   getFilterOptions,
   getDepartments,
   getDepartmentByKey,

@@ -9,7 +9,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secret-secreto-super-seguro';
  */
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const bearerMatch = typeof authHeader === 'string'
+    ? authHeader.match(/^Bearer\s+(\S+)$/i)
+    : null;
+  const token = bearerMatch && bearerMatch[1];
 
   if (!token) {
     return next(new UnauthorizedError('Token de autenticación no proporcionado'));
@@ -27,13 +30,15 @@ const authenticateToken = (req, res, next) => {
 };
 
 const authorizeRoles = (...allowedRolesOrGroups) => {
+  const allowed = new Set(allowedRolesOrGroups);
+
   return (req, res, next) => {
     if (!req.user) {
       return next(new UnauthorizedError('Usuario no autenticado'));
     }
 
-    const hasRole = allowedRolesOrGroups.includes(req.user.role);
-    const hasGroup = allowedRolesOrGroups.includes(req.user.roleGroup);
+    const hasRole = allowed.has(req.user.role);
+    const hasGroup = allowed.has(req.user.roleGroup);
 
     if (!hasRole && !hasGroup) {
       return next(new ForbiddenError('Acceso denegado: permisos insuficientes'));

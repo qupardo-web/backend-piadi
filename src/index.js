@@ -4,11 +4,13 @@ const { sequelize } = require('./models');
 const { swaggerUi, swaggerDocs } = require('./config/swagger');
 const itemRoutes = require('./routes/itemRoutes');
 const authRoutes = require('./routes/authRoutes');
+const roleRoutes = require('./routes/roleRoutes');
 const plantillaRoutes = require('./routes/plantillaRoutes');
 const plantillaCargaRoutes = require('./routes/plantillaCargaRoutes');
 const indicatorRoutes = require('./routes/indicatorRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const auditRoutes = require('./routes/auditRoutes');
+const metaRoutes = require('./routes/metaRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -25,12 +27,14 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Setup API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/roles', roleRoutes);
 app.use('/api', itemRoutes);
 app.use('/api/plantillas', plantillaRoutes);
 app.use('/api/plantillas', plantillaCargaRoutes);
 app.use('/api', indicatorRoutes);
 app.use('/api', dashboardRoutes);
 app.use('/api', auditRoutes);
+app.use('/api/metas', metaRoutes);
 
 // Registar Middleware Centralizado de Errores (Siempre después de las rutas)
 app.use(errorHandler);
@@ -45,6 +49,9 @@ async function initDb(retries = 5, delay = 2000) {
       
       await sequelize.sync();
       console.log('Database synced successfully. Models mapped to tables.');
+      
+      const { initDbConstraints } = require('./services/dbConstraints');
+      await initDbConstraints();
       
       const { seedDatabase } = require('./services/dbSeeder');
       await seedDatabase();

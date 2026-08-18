@@ -94,7 +94,15 @@ const Actividad = sequelize.define('Actividad', {
         type: DataTypes.INTEGER,
         allowNull: false,
         validate: {
-            min: 1900
+            min: 1900,
+            matchesFecha(value) {
+                if (this.fecha && typeof this.fecha === 'string') {
+                    const yearFromDate = parseInt(this.fecha.split('-')[0], 10);
+                    if (parseInt(value, 10) !== yearFromDate) {
+                        throw new Error(`El año (${value}) debe coincidir con el año de la fecha (${yearFromDate}).`);
+                    }
+                }
+            }
         }
     },
     reportaVcM: {
@@ -108,6 +116,9 @@ const Actividad = sequelize.define('Actividad', {
         validateTotalParticipantes() {
             if (this.totalParticipantes !== ((this.participantesExternos || 0) + (this.participantesInternos || 0))) {
                 throw new Error('El total de participantes debe ser la suma de los participantes externos e internos.');
+            }
+            if (this.totalParticipantes <= 0) {
+                throw new Error('La actividad debe registrar al menos un participante (interno o externo).');
             }
         }
     },

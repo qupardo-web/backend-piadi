@@ -114,6 +114,20 @@ const errorHandler = (err, req, res, next) => {
   }
 
   // E. Error de Carga Masiva / Validación Múltiple de Sequelize (BulkRecordError / AggregateError)
+  let errorsResponse = null;
+
+  if (err.name === 'SequelizeValidationError') {
+    errorsResponse = err.errors.map(errItem => {
+      const msg = translateValidationError(errItem);
+      return {
+        message: errItem.message || msg,
+        hoja: errItem.hoja || 'General',
+        fila: errItem.fila || '',
+        celda: errItem.celda || ''
+      };
+    });
+  }
+
   if (err.name === 'SequelizeBulkRecordError' || err.name === 'AggregateError') {
     statusCode = 400;
     const errorsList = [];
@@ -121,7 +135,15 @@ const errorHandler = (err, req, res, next) => {
     const collectErrors = (e) => {
       if (!e) return;
       if (e.name === 'SequelizeValidationError' && e.errors) {
-        e.errors.forEach(errItem => errorsList.push(translateValidationError(errItem)));
+        e.errors.forEach(errItem => {
+          const translatedMsg = translateValidationError(errItem);
+          errorsList.push({
+            message: errItem.message || translatedMsg,
+            hoja: errItem.hoja || 'General',
+            fila: errItem.fila || '',
+            celda: errItem.celda || ''
+          });
+        });
       } else if (e.errors) {
         if (Array.isArray(e.errors)) {
           e.errors.forEach(sub => collectErrors(sub));
@@ -129,27 +151,53 @@ const errorHandler = (err, req, res, next) => {
           collectErrors(e.errors);
         }
       } else if (e.message && e.message.includes('Validation error:')) {
-        errorsList.push(e.message.replace('Validation error:', '').trim());
+        errorsList.push({
+          message: e.message.replace('Validation error:', '').trim(),
+          hoja: e.hoja || 'General',
+          fila: e.fila || '',
+          celda: e.celda || ''
+        });
       } else if (e.message) {
-        errorsList.push(e.message);
+        errorsList.push({
+          message: e.message,
+          hoja: e.hoja || 'General',
+          fila: e.fila || '',
+          celda: e.celda || ''
+        });
       }
     };
 
     collectErrors(err);
 
-    if (errorsList.length > 0) {
-      errorMessage = `Error de validación en carga: ${[...new Set(errorsList)].join('. ')}`;
+    // Keep unique errors by message
+    const uniqueMap = new Map();
+    for (const item of errorsList) {
+      if (!uniqueMap.has(item.message)) {
+        uniqueMap.set(item.message, item);
+      }
+    }
+    const uniqueErrorsList = [...uniqueMap.values()];
+
+    if (uniqueErrorsList.length > 0) {
+      errorMessage = `Error de validación en carga: ${uniqueErrorsList.map(x => x.message).join('. ')}`;
+      errorsResponse = uniqueErrorsList;
     } else {
       errorMessage = 'Error de validación en los registros de la carga.';
     }
   }
 
   // 3. Respuesta compatible con el Frontend (Retorna llave "error")
-  res.status(statusCode).json({
+  const jsonResponse = {
     error: errorMessage,
     success: false, // Extra para utilidades del frontend
     errorType: err.name || 'InternalServerError' // Extra informativo
-  });
+  };
+
+  if (errorsResponse) {
+    jsonResponse.errores = errorsResponse;
+  }
+
+  res.status(statusCode).json(jsonResponse);
 };
 
 module.exports = errorHandler;

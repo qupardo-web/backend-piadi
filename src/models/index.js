@@ -12,6 +12,8 @@ const AuditSesion = require('./EntidadesAudit/AuditSesion');
 // --- Entidades de Indicadores (PIADI-150 / PIADI-153) ---
 const Department = require('./Department');
 const IndicatorDefinition = require('./IndicatorDefinition');
+const Meta = require('./EntidadesBBDD/Meta');
+const MetaMetric = require('./EntidadesBBDD/MetaMetric');
 
 // --- Entidades BBDD Académicas ---
 const Alumno = require('./EntidadesBBDD/Alumno');
@@ -106,6 +108,22 @@ Financiamiento.belongsTo(Proyecto, { foreignKey: 'idProyecto', as: 'proyecto' })
 Department.hasMany(IndicatorDefinition, { foreignKey: 'departmentId', sourceKey: 'key', as: 'indicators', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 IndicatorDefinition.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
 
+// --- Asociaciones de Metas (PIADI-197 / PIADI-215) ---
+Meta.belongsTo(IndicatorDefinition, { foreignKey: 'indicatorKey', targetKey: 'key', as: 'indicador', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+IndicatorDefinition.hasMany(Meta, { foreignKey: 'indicatorKey', sourceKey: 'key', as: 'metas' });
+
+Meta.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'departamento', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Department.hasMany(Meta, { foreignKey: 'departmentId', sourceKey: 'key', as: 'metas' });
+
+Meta.belongsTo(User, { foreignKey: 'creatorId', as: 'creator', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+User.hasMany(Meta, { foreignKey: 'creatorId', as: 'metasCreadas' });
+
+Meta.hasMany(MetaMetric, { foreignKey: 'metaId', as: 'metrics', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+MetaMetric.belongsTo(Meta, { foreignKey: 'metaId', as: 'meta', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+
+MetaMetric.belongsTo(IndicatorDefinition, { foreignKey: 'indicatorKey', targetKey: 'key', as: 'indicator', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
+IndicatorDefinition.hasMany(MetaMetric, { foreignKey: 'indicatorKey', sourceKey: 'key', as: 'metaMetrics' });
+
 module.exports = {
   sequelize,
   Item,
@@ -132,5 +150,7 @@ module.exports = {
   AuditCarga,
   AuditSesion,
   Department,
-  IndicatorDefinition
+  IndicatorDefinition,
+  Meta,
+  MetaMetric
 };
