@@ -1,4 +1,5 @@
 const metaService = require('../services/metaService');
+const metaProgressService = require('../services/metaProgressService');
 
 const create = async (req, res, next) => {
   try {
@@ -36,4 +37,22 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { create, getById, update, remove };
+const getProgress = async (req, res, next) => {
+  try {
+    const meta = await metaProgressService.getMetaProgress(req.params.id);
+    res.status(200).json({ success: true, data: meta });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listWithProgress = async (req, res, next) => {
+  try {
+    const metas = await metaProgressService.listMetasWithProgress(req.query);
+    res.status(200).json({ success: true, data: metas });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { create, getById, update, remove, getProgress, listWithProgress };
