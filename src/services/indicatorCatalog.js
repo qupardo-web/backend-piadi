@@ -1,10 +1,22 @@
 const PROGRAM_GROUP_BY = ['year', 'area', 'tipo', 'modalidad'];
 const PROGRAM_GROUP_BY_EXT = ['year', 'area', 'tipo', 'modalidad', 'programa'];
 
-const VCM_CONVENIO_GROUP_BY = ['year', 'sector', 'region', 'comuna', 'estado'];
-const VCM_ACTIVIDAD_GROUP_BY = ['year', 'modalidad', 'region', 'comuna', 'sector', 'lineaVcM'];
-const VCM_PARTICIPACION_GROUP_BY = ['year', 'region', 'comuna', 'internosExternos', 'tipoParticipante'];
-const VCM_ARTICULACION_GROUP_BY = ['year', 'region', 'comuna', 'especialidadTP', 'nivel', 'tipoArticulacion', 'estado'];
+const VCM_CONVENIO_GROUP_BY = [
+  'year', 'sector', 'region', 'comuna', 'estado',
+  'tipoConvenio', 'areaVinculada', 'contraparte', 'responsableEcas'
+];
+const VCM_ACTIVIDAD_GROUP_BY = [
+  'year', 'modalidad', 'region', 'comuna', 'sector', 'lineaVcM',
+  'tipoActividad'
+];
+const VCM_PARTICIPACION_GROUP_BY = [
+  'year', 'region', 'comuna', 'internosExternos', 'tipoParticipante',
+  'sexo', 'institucion'
+];
+const VCM_ARTICULACION_GROUP_BY = [
+  'year', 'region', 'comuna', 'especialidadTP', 'nivel', 'tipoArticulacion', 'estado',
+  'plataformaFoco', 'colegioLiceoTP'
+];
 const VCM_PROYECTO_GROUP_BY = ['year'];
 
 const INDICATORS = {
