@@ -230,7 +230,11 @@ const getVcmConvenioRows = async (filters = {}) => {
     region: c.region,
     comuna: c.comuna,
     estado: c.estado,
-    activo: c.estado && (c.estado.toLowerCase() === 'activo' || c.estado.toLowerCase() === 'vigente')
+    activo: c.estado && (c.estado.toLowerCase() === 'activo' || c.estado.toLowerCase() === 'vigente'),
+    tipoConvenio: c.tipoConvenio,
+    areaVinculada: c.areaVinculada,
+    contraparte: c.contraparte,
+    responsableEcas: c.responsableEcas
   }));
 };
 
@@ -252,7 +256,8 @@ const getVcmActividadRows = async (filters = {}) => {
     region: a.region,
     comuna: a.comuna,
     sector: a.sector,
-    lineaVcM: a.lineaVcM
+    lineaVcM: a.lineaVcM,
+    tipoActividad: a.tipoActividad
   }));
 };
 
@@ -272,7 +277,11 @@ const getVcmParticipacionRows = async (filters = {}) => {
     comuna: p.comuna,
     totalPersonas: p.totalPersonas,
     internosExternos: p.internosExternos,
-    tipoParticipante: p.tipoParticipante
+    tipoParticipante: p.tipoParticipante,
+    institucion: p.institucion,
+    mujeres: p.mujeres,
+    hombres: p.hombres,
+    noInforma: p.noInforma
   }));
 };
 
@@ -293,7 +302,9 @@ const getVcmArticulacionRows = async (filters = {}) => {
     especialidadTP: a.especialidadTP,
     nivel: a.nivel,
     tipoArticulacion: a.tipoArticulacion,
-    estado: a.estado
+    estado: a.estado,
+    plataformaFoco: a.plataformaFoco,
+    colegioLiceoTP: a.colegioLiceoTP
   }));
 };
 
