@@ -28,7 +28,8 @@ const GROUP_BY_DIMENSIONS = [
   'plataformaFoco',
   'tipoArticulacion',
   'especialidadTP',
-  'colegioLiceoTP'
+  'colegioLiceoTP',
+  'institucion'
 ];
 
 class FilterError extends Error {
