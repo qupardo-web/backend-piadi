@@ -93,7 +93,32 @@ const validarArchivo = async (filePath, plantillaId) => {
         if (!dataByTable[campo.tabla_destino]) {
           dataByTable[campo.tabla_destino] = {};
         }
-        dataByTable[campo.tabla_destino][campo.columna_destino] = fila[campo.columna_excel];
+        let valor = fila[campo.columna_excel];
+
+        // Normalizar fechas antes de la validación en memoria
+        const Model = sequelize.models[campo.tabla_destino];
+        if (Model) {
+          const attrType = Model.rawAttributes[campo.columna_destino];
+          if (attrType) {
+            const typeKey = attrType.type && (attrType.type.key || (attrType.type.constructor && attrType.type.constructor.name));
+            if (typeKey === 'DATEONLY' || typeKey === 'DATE') {
+              // DD-MM-YYYY o DD/MM/YYYY → YYYY-MM-DD
+              if (typeof valor === 'string') {
+                const matchDMY = valor.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
+                if (matchDMY) {
+                  valor = `${matchDMY[3]}-${matchDMY[2]}-${matchDMY[1]}`;
+                }
+              }
+              // Número serial de Excel → YYYY-MM-DD
+              if (typeof valor === 'number' && valor > 40000 && valor < 60000) {
+                const fecha = new Date((valor - 25569) * 86400 * 1000);
+                valor = fecha.toISOString().split('T')[0];
+              }
+            }
+          }
+        }
+
+        dataByTable[campo.tabla_destino][campo.columna_destino] = valor;
       }
 
       for (const [tabla, registro] of Object.entries(dataByTable)) {
