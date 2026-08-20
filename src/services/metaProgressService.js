@@ -1,4 +1,4 @@
-const { Meta, MetaMetric, IndicatorDefinition } = require('../models');
+const { Meta, MetaMetric, IndicatorDefinition, sequelize } = require('../models');
 const indicatorService = require('./indicatorService');
 const { ValidationError, NotFoundError } = require('../utils/errors');
 
@@ -65,10 +65,38 @@ const determineStatus = (meta, totalProgress, now = new Date()) => {
 
 const createIndicatorResolver = () => {
   const pending = new Map();
-  return (indicatorKey, query) => {
+  return (indicatorKey, query, meta) => {
     const cacheKey = JSON.stringify([indicatorKey, query]);
     if (!pending.has(cacheKey)) {
-      pending.set(cacheKey, indicatorService.getIndicatorValue(indicatorKey, query));
+      const getDBValue = async () => {
+        try {
+          const year = meta.anio;
+          const period = String(meta.periodo || '').trim().toLowerCase();
+          let start = `${year}-01-01`;
+          let end = `${year}-12-31`;
+          if (period === 'semestre 1') {
+            start = `${year}-01-01`;
+            end = `${year}-06-30`;
+          } else if (period === 'semestre 2') {
+            start = `${year}-07-01`;
+            end = `${year}-12-31`;
+          }
+
+          const result = await sequelize.query(
+            `SELECT get_indicator_value_for_period(:indicatorKey, CAST(:start AS DATE), CAST(:end AS DATE)) AS value`,
+            {
+              replacements: { indicatorKey, start, end },
+              type: sequelize.QueryTypes.SELECT
+            }
+          );
+          const value = result && result[0] ? Number(result[0].value) : 0;
+          return { data: { value, hasData: true } };
+        } catch (err) {
+          console.warn(`Fallback to JS indicator calculation for ${indicatorKey}:`, err.message);
+          return indicatorService.getIndicatorValue(indicatorKey, query);
+        }
+      };
+      pending.set(cacheKey, getDBValue());
     }
     return pending.get(cacheKey);
   };
@@ -79,7 +107,7 @@ const calculateMetric = async (meta, rawMetric, resolveIndicator) => {
   const targetValue = finiteNumber(metric.targetValue, 'MetaMetric.targetValue');
   const weight = finiteNumber(metric.weight, 'MetaMetric.weight');
   const query = buildIndicatorQuery(meta, metric);
-  const result = await resolveIndicator(metric.indicatorKey, query);
+  const result = await resolveIndicator(metric.indicatorKey, query, meta);
   const indicatorData = result && result.data;
 
   if (!indicatorData || indicatorData.hasData === false) {
