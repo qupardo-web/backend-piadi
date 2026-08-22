@@ -34,6 +34,7 @@ const swaggerOptions = {
       { name: 'Departamentos', description: 'Gestión de departamentos y KPIs relacionados' },
       { name: 'Indicadores', description: 'Cálculo de valores, series y breakdown de indicadores' },
       { name: 'Metas', description: 'Gestión de metas y sus métricas asociadas' },
+      { name: 'Landing', description: 'Información preparada para la página de inicio' },
       { name: 'Auditoria', description: 'Visualización de bitácoras de auditoría' },
       { name: 'default', description: 'Endpoints generales' }
     ]
