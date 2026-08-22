@@ -193,3 +193,54 @@ test('DELETE destruye la meta y la asociación declara cascade para métricas', 
   assert.equal(destroyed, true);
   assert.equal(models.Meta.associations.metrics.options.onDelete, 'CASCADE');
 });
+
+test('crea y actualiza la meta con los nuevos campos (nombre, inicio, limite, prioridad, comportamiento)', async () => {
+  setupPersistence(['kpi-a']);
+  let createdPayload;
+  let updatedPayload;
+  
+  stub(models.Meta, 'create', async (payload) => {
+    createdPayload = payload;
+    return { id: 88 };
+  });
+  stub(models.MetaMetric, 'bulkCreate', async () => {});
+  stub(models.MetaMetric, 'destroy', async () => {});
+  stub(models.Meta, 'findByPk', async () => ({
+    id: 88,
+    update: async (payload) => { updatedPayload = payload; }
+  }));
+
+  // Probar creación
+  const payload = {
+    ...metaPayload(),
+    nombre: 'Mi Meta de Prueba',
+    inicio: '2026-01-15T00:00:00Z',
+    limite: '2026-12-15T00:00:00Z',
+    prioridad: 'Alta',
+    comportamiento: 'Optimista'
+  };
+  await metaService.create(payload, 9);
+  
+  assert.equal(createdPayload.nombre, 'Mi Meta de Prueba');
+  assert.equal(createdPayload.fechaInicio, '2026-01-15T00:00:00Z');
+  assert.equal(createdPayload.fechaLimite, '2026-12-15T00:00:00Z');
+  assert.equal(createdPayload.prioridad, 'Alta');
+  assert.equal(createdPayload.comportamiento, 'Optimista');
+
+  // Probar actualización
+  const updatePayload = {
+    metrics: [metric()],
+    nombre: 'Meta Modificada',
+    inicio: '2026-02-01T00:00:00Z',
+    limite: '2026-11-30T00:00:00Z',
+    prioridad: 'Baja',
+    comportamiento: 'Conservador'
+  };
+  await metaService.update(88, updatePayload);
+
+  assert.equal(updatedPayload.nombre, 'Meta Modificada');
+  assert.equal(updatedPayload.fechaInicio, '2026-02-01T00:00:00Z');
+  assert.equal(updatedPayload.fechaLimite, '2026-11-30T00:00:00Z');
+  assert.equal(updatedPayload.prioridad, 'Baja');
+  assert.equal(updatedPayload.comportamiento, 'Conservador');
+});

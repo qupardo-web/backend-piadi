@@ -7,6 +7,11 @@ async function initDbConstraints() {
     // Compatibilidad PIADI-198: sequelize.sync() no agrega columnas a tablas existentes.
     await sequelize.query(`
       ALTER TABLE metas ADD COLUMN IF NOT EXISTS "creatorId" INTEGER;
+      ALTER TABLE metas ADD COLUMN IF NOT EXISTS "nombre" VARCHAR(255);
+      ALTER TABLE metas ADD COLUMN IF NOT EXISTS "fechaInicio" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE metas ADD COLUMN IF NOT EXISTS "fechaLimite" TIMESTAMP WITH TIME ZONE;
+      ALTER TABLE metas ADD COLUMN IF NOT EXISTS "prioridad" VARCHAR(50);
+      ALTER TABLE metas ADD COLUMN IF NOT EXISTS "comportamiento" VARCHAR(255);
     `);
     await sequelize.query(`
       CREATE INDEX IF NOT EXISTS idx_metas_creator ON metas ("creatorId");
@@ -476,15 +481,16 @@ async function initDbConstraints() {
           m."departmentId" AS "departmentId",
           m.anio AS anio,
           m.periodo AS periodo,
-          -- Calcular fechas de inicio y término dinámicamente
-          CASE 
+          m.nombre AS nombre,
+          -- Calcular fechas de inicio y término dinámicamente o usar las asignadas
+          COALESCE(m."fechaInicio", CASE 
             WHEN m.periodo = 'Semestre 2' THEN (m.anio || '-07-01')::DATE 
             ELSE (m.anio || '-01-01')::DATE 
-          END AS start_date,
-          CASE 
+          END::DATE) AS start_date,
+          COALESCE(m."fechaLimite", CASE 
             WHEN m.periodo = 'Semestre 1' THEN (m.anio || '-06-30')::DATE 
             ELSE (m.anio || '-12-31')::DATE 
-          END AS end_date,
+          END::DATE) AS end_date,
           i.name::varchar AS "indicatorName"
         FROM metas m
         LEFT JOIN indicator_definitions i ON m."indicatorKey" = i.key
@@ -492,7 +498,7 @@ async function initDbConstraints() {
       base_calculo AS (
         SELECT
           d."metaId",
-          ('Meta ' || d.anio || ' - ' || d."indicatorName")::varchar AS "metaName",
+          COALESCE(d.nombre, ('Meta ' || d.anio || ' - ' || d."indicatorName"))::varchar AS "metaName",
           d."indicatorKey",
           d."indicatorName",
           d."targetValue",

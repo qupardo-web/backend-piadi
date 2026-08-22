@@ -46,6 +46,44 @@ const Meta = sequelize.define('Meta', {
         type: DataTypes.STRING,
         allowNull: false,
         defaultValue: 'Anual' // Ej: 'Anual', 'Semestre 1', 'Semestre 2'
+    },
+    nombre: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    fechaInicio: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
+    fechaLimite: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
+    prioridad: {
+        type: DataTypes.STRING(50),
+        allowNull: true
+    },
+    comportamiento: {
+        type: DataTypes.STRING(255),
+        allowNull: true
+    },
+    inicio: {
+        type: DataTypes.VIRTUAL,
+        get() {
+            return this.getDataValue('fechaInicio');
+        },
+        set(val) {
+            this.setDataValue('fechaInicio', val);
+        }
+    },
+    limite: {
+        type: DataTypes.VIRTUAL,
+        get() {
+            return this.getDataValue('fechaLimite');
+        },
+        set(val) {
+            this.setDataValue('fechaLimite', val);
+        }
     }
 }, {
     tableName: 'metas',
