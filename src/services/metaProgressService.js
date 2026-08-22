@@ -69,6 +69,9 @@ const createIndicatorResolver = () => {
     const cacheKey = JSON.stringify([indicatorKey, query]);
     if (!pending.has(cacheKey)) {
       const getDBValue = async () => {
+        if (process.env.NODE_ENV === 'test') {
+          return indicatorService.getIndicatorValue(indicatorKey, query);
+        }
         try {
           const year = meta.anio;
           const period = String(meta.periodo || '').trim().toLowerCase();

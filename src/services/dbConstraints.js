@@ -460,9 +460,94 @@ async function initDbConstraints() {
       $$ LANGUAGE plpgsql;
     `);
 
-    await sequelize.query(`
+     await sequelize.query(`
       COMMENT ON MATERIALIZED VIEW v_meta_indicator_values IS 'Vista materializada que pre-agrupa valores de indicadores para optimización del sistema de metas.';
       COMMENT ON FUNCTION get_indicator_value_for_period IS 'Obtiene el valor pre-calculado del indicador para un periodo específico.';
+    `);
+
+    console.log('Creating consolidated view v_dashboard_metas...');
+    await sequelize.query(`
+      CREATE OR REPLACE VIEW v_dashboard_metas AS
+      WITH dates_calc AS (
+        SELECT
+          m.id AS "metaId",
+          m."indicatorKey" AS "indicatorKey",
+          m."valorMeta"::numeric AS "targetValue",
+          m."departmentId" AS "departmentId",
+          m.anio AS anio,
+          m.periodo AS periodo,
+          -- Calcular fechas de inicio y término dinámicamente
+          CASE 
+            WHEN m.periodo = 'Semestre 2' THEN (m.anio || '-07-01')::DATE 
+            ELSE (m.anio || '-01-01')::DATE 
+          END AS start_date,
+          CASE 
+            WHEN m.periodo = 'Semestre 1' THEN (m.anio || '-06-30')::DATE 
+            ELSE (m.anio || '-12-31')::DATE 
+          END AS end_date,
+          i.name::varchar AS "indicatorName"
+        FROM metas m
+        LEFT JOIN indicator_definitions i ON m."indicatorKey" = i.key
+      ),
+      base_calculo AS (
+        SELECT
+          d."metaId",
+          ('Meta ' || d.anio || ' - ' || d."indicatorName")::varchar AS "metaName",
+          d."indicatorKey",
+          d."indicatorName",
+          d."targetValue",
+          COALESCE(v.value, 0)::numeric AS "currentValue",
+          d."departmentId",
+          -- Calcular elapsedProgress
+          CASE
+            WHEN CURRENT_DATE < d.start_date THEN 0::numeric
+            WHEN CURRENT_DATE > d.end_date THEN 100::numeric
+            ELSE ROUND(((CURRENT_DATE - d.start_date)::NUMERIC / (d.end_date - d.start_date + 1)::NUMERIC) * 100, 2)::numeric
+          END AS "elapsedProgress",
+          -- Calcular días restantes
+          GREATEST(0, d.end_date - CURRENT_DATE) AS "daysRemaining"
+        FROM dates_calc d
+        LEFT JOIN v_meta_indicator_values v ON d."indicatorKey" = v."indicatorKey" 
+          AND d.anio = v.anio 
+          AND d.periodo = v.periodo
+      )
+      SELECT
+        "metaId",
+        "metaName",
+        "indicatorKey",
+        "indicatorName",
+        "targetValue",
+        "currentValue",
+        -- progressPercent
+        CASE 
+          WHEN "targetValue" = 0 THEN 0::numeric
+          ELSE ROUND(("currentValue" / "targetValue") * 100, 2)::numeric
+        END AS "progressPercent",
+        -- status
+        CASE
+          WHEN "currentValue" >= "targetValue" THEN 'cumplida'::varchar
+          WHEN "elapsedProgress" >= 100 THEN 'no_cumplida'::varchar
+          WHEN CASE WHEN "targetValue" = 0 THEN 0::numeric ELSE ROUND(("currentValue" / "targetValue") * 100, 2)::numeric END < "elapsedProgress" THEN 'en_riesgo'::varchar
+          ELSE 'en_progreso'::varchar
+        END AS status,
+        "daysRemaining",
+        "departmentId"
+      FROM base_calculo;
+    `);
+
+    console.log('Creating database function refresh_dashboard_metas...');
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION refresh_dashboard_metas()
+      RETURNS VOID AS $$
+      BEGIN
+        REFRESH MATERIALIZED VIEW v_meta_indicator_values;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    await sequelize.query(`
+      COMMENT ON VIEW v_dashboard_metas IS 'Vista consolidada que une metas con sus indicadores y avances pre-calculados.';
+      COMMENT ON FUNCTION refresh_dashboard_metas IS 'Refresca la vista materializada de indicadores subyacente para actualizar el dashboard.';
     `);
 
     console.log('Database-level constraints, triggers, and SQL documentation applied successfully.');
