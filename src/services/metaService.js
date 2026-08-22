@@ -4,7 +4,7 @@ const { ValidationError, NotFoundError } = require('../utils/errors');
 
 const WEIGHT_SCALE = 10000;
 const EXPECTED_WEIGHT_UNITS = 100 * WEIGHT_SCALE;
-const META_FIELDS = ['departmentId', 'anio', 'periodo'];
+const META_FIELDS = ['departmentId', 'anio', 'periodo', 'nombre', 'fechaInicio', 'fechaLimite', 'prioridad', 'comportamiento'];
 
 const requireNonEmptyString = (value, field) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -99,6 +99,25 @@ const normalizeMetaFields = async (payload, transaction, { partial = false } = {
       }
     }
   }
+  
+  if (!partial || payload.nombre !== undefined) {
+    data.nombre = payload.nombre === null || payload.nombre === undefined ? null : String(payload.nombre).trim();
+  }
+  if (!partial || payload.inicio !== undefined || payload.fechaInicio !== undefined) {
+    const val = payload.inicio !== undefined ? payload.inicio : payload.fechaInicio;
+    data.fechaInicio = val === null || val === undefined || val === '' ? null : val;
+  }
+  if (!partial || payload.limite !== undefined || payload.fechaLimite !== undefined) {
+    const val = payload.limite !== undefined ? payload.limite : payload.fechaLimite;
+    data.fechaLimite = val === null || val === undefined || val === '' ? null : val;
+  }
+  if (!partial || payload.prioridad !== undefined) {
+    data.prioridad = payload.prioridad === null || payload.prioridad === undefined ? null : String(payload.prioridad).trim();
+  }
+  if (!partial || payload.comportamiento !== undefined) {
+    data.comportamiento = payload.comportamiento === null || payload.comportamiento === undefined ? null : String(payload.comportamiento).trim();
+  }
+  
   return data;
 };
 
