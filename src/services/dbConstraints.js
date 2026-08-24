@@ -486,11 +486,11 @@ async function initDbConstraints() {
           COALESCE(m."fechaInicio", CASE 
             WHEN m.periodo = 'Semestre 2' THEN (m.anio || '-07-01')::DATE 
             ELSE (m.anio || '-01-01')::DATE 
-          END::DATE) AS start_date,
+          END::DATE)::DATE AS start_date,
           COALESCE(m."fechaLimite", CASE 
             WHEN m.periodo = 'Semestre 1' THEN (m.anio || '-06-30')::DATE 
             ELSE (m.anio || '-12-31')::DATE 
-          END::DATE) AS end_date,
+          END::DATE)::DATE AS end_date,
           i.name::varchar AS "indicatorName"
         FROM metas m
         LEFT JOIN indicator_definitions i ON m."indicatorKey" = i.key
