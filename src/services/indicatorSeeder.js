@@ -42,6 +42,15 @@ const VCM_KPI_SEED = [
   { key: 'financiamiento_vcm', name: 'Financiamiento total', description: 'Suma de financiamiento neto para proyectos de VCM.', unit: 'CLP', format: 'currency', formulaKey: 'FINANCING_SUM', enabled: true }
 ];
 
+const INSTITUCIONAL_DEPARTMENT_SEED = {
+  key: 'institucional',
+  name: 'Institucional',
+  description: 'Metas e indicadores a nivel de toda la institución (Rectoría).',
+  enabled: true,
+  hasData: false,
+  order: 3
+};
+
 async function seedIndicators() {
   // 1. Seed Educación Continua
   await Department.findOrCreate({ where: { key: DEPARTMENT_SEED.key }, defaults: DEPARTMENT_SEED });
@@ -60,6 +69,9 @@ async function seedIndicators() {
       defaults: { ...kpi, departmentId: VCM_DEPARTMENT_SEED.key }
     });
   }
+
+  // 3. Seed Institucional
+  await Department.findOrCreate({ where: { key: INSTITUCIONAL_DEPARTMENT_SEED.key }, defaults: INSTITUCIONAL_DEPARTMENT_SEED });
 }
 
 module.exports = { seedIndicators };
