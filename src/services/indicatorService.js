@@ -292,6 +292,32 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   const groupBy = validateGroupBy(config, filters.groupBy);
 
   const rows = await getRows(config, filters);
+
+  // Custom handler for VCM participaciones grouped by sex
+  if (config.kind === 'vcm_participacion' && groupBy === 'sexo') {
+    const totalMujeres = rows.reduce((sum, r) => sum + (r.mujeres || 0), 0);
+    const totalHombres = rows.reduce((sum, r) => sum + (r.hombres || 0), 0);
+    const totalNoInforma = rows.reduce((sum, r) => sum + (r.noInforma || 0), 0);
+    
+    const items = [];
+    if (totalMujeres > 0) items.push({ label: 'mujeres', value: totalMujeres });
+    if (totalHombres > 0) items.push({ label: 'hombres', value: totalHombres });
+    if (totalNoInforma > 0) items.push({ label: 'noInforma', value: totalNoInforma });
+    items.sort((a, b) => b.value - a.value);
+
+    return {
+      data: {
+        indicatorKey: key,
+        department: departmentId,
+        groupBy,
+        items,
+        hasData: items.length > 0,
+        filters: buildFilterMeta(filters),
+        meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+      }
+    };
+  }
+
   const groups = groupRowsBy(rows, groupBy);
   const items = [];
   [...groups.keys()].forEach((label) => {

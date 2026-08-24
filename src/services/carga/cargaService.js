@@ -289,6 +289,9 @@ const procesarCarga = async (workbook, campos) => {
       }
     }
 
+    console.log('Refreshing materialized view v_meta_indicator_values...');
+    await sequelize.query('REFRESH MATERIALIZED VIEW v_meta_indicator_values', { transaction });
+
     await transaction.commit();
 
     return { success: true, resumen: resumenFinal };

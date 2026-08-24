@@ -1,4 +1,5 @@
 const GROUP_BY_DIMENSIONS = [
+  // Campos de Educación Continua
   'year',
   'area',
   'tipo',
@@ -9,7 +10,26 @@ const GROUP_BY_DIMENSIONS = [
   'region',
   'nivelDeEstudio',
   'tipoParticipante',
-  'sectorEconomico'
+  'sectorEconomico',
+  'cohorte',
+  'jornada',
+  'periodo',
+
+  // Campos de Vinculación con el Medio (VcM)
+  'sector',
+  'tipoConvenio',
+  'areaVinculada',
+  'contraparte',
+  'responsableEcas',
+  'lineaVcM',
+  'tipoActividad',
+  'comuna',
+  'publicoObjetivo',
+  'plataformaFoco',
+  'tipoArticulacion',
+  'especialidadTP',
+  'colegioLiceoTP',
+  'institucion'
 ];
 
 class FilterError extends Error {
@@ -83,7 +103,33 @@ const parseIndicatorFilters = (query = {}) => {
     rangoEdad: uniq([...normalizeArrayParam(query.ageRange), ...normalizeArrayParam(query.rangoEdad)]),
     minAge: normalizeNumber(query.minAge),
     maxAge: normalizeNumber(query.maxAge),
-    groupBy: normalizeGroupBy(query.groupBy)
+    groupBy: normalizeGroupBy(query.groupBy),
+    
+    // Vinculación con el Medio
+    sector: normalizeArrayParam(query.sector),
+    tipoConvenio: normalizeArrayParam(query.tipoConvenio),
+    areaVinculada: normalizeArrayParam(query.areaVinculada),
+    contraparte: normalizeArrayParam(query.contraparte),
+    responsableEcas: normalizeArrayParam(query.responsableEcas),
+    lineaVcM: normalizeArrayParam(query.lineaVcM),
+    tipoActividad: normalizeArrayParam(query.tipoActividad),
+    comuna: normalizeArrayParam(query.comuna),
+    publicoObjetivo: normalizeArrayParam(query.publicoObjetivo),
+    plataformaFoco: normalizeArrayParam(query.plataformaFoco),
+    tipoArticulacion: normalizeArrayParam(query.tipoArticulacion),
+    especialidadTP: normalizeArrayParam(query.especialidadTP),
+    colegioLiceoTP: normalizeArrayParam(query.colegioLiceoTP),
+    institucion: normalizeArrayParam(query.institucion),
+    
+    // Educación Continua adicionales
+    programa: normalizeArrayParam(query.programa),
+    nivelDeEstudio: normalizeArrayParam(query.nivelDeEstudio),
+    tipoParticipante: normalizeArrayParam(query.tipoParticipante),
+    sectorEconomico: normalizeArrayParam(query.sectorEconomico),
+    cohorte: normalizeArrayParam(query.cohorte),
+    jornada: normalizeArrayParam(query.jornada),
+    periodo: normalizeArrayParam(query.periodo),
+    region: normalizeArrayParam(query.region)
   };
 
   if (query.year !== undefined && query.year !== '') {
@@ -157,6 +203,30 @@ const buildFilterMeta = (filters) => {
   if (filters.rangoEdad.length) meta.rangoEdad = filters.rangoEdad;
   if (filters.minAge !== null) meta.minAge = filters.minAge;
   if (filters.maxAge !== null) meta.maxAge = filters.maxAge;
+  
+  if (filters.sector.length) meta.sector = filters.sector;
+  if (filters.region.length) meta.region = filters.region;
+  if (filters.comuna.length) meta.comuna = filters.comuna;
+  if (filters.lineaVcM.length) meta.lineaVcM = filters.lineaVcM;
+  if (filters.tipoConvenio.length) meta.tipoConvenio = filters.tipoConvenio;
+  if (filters.areaVinculada.length) meta.areaVinculada = filters.areaVinculada;
+  if (filters.contraparte.length) meta.contraparte = filters.contraparte;
+  if (filters.responsableEcas.length) meta.responsableEcas = filters.responsableEcas;
+  if (filters.tipoActividad.length) meta.tipoActividad = filters.tipoActividad;
+  if (filters.publicoObjetivo.length) meta.publicoObjetivo = filters.publicoObjetivo;
+  if (filters.plataformaFoco.length) meta.plataformaFoco = filters.plataformaFoco;
+  if (filters.tipoArticulacion.length) meta.tipoArticulacion = filters.tipoArticulacion;
+  if (filters.especialidadTP.length) meta.especialidadTP = filters.especialidadTP;
+  if (filters.colegioLiceoTP.length) meta.colegioLiceoTP = filters.colegioLiceoTP;
+  if (filters.institucion.length) meta.institucion = filters.institucion;
+  if (filters.programa.length) meta.programa = filters.programa;
+  if (filters.nivelDeEstudio.length) meta.nivelDeEstudio = filters.nivelDeEstudio;
+  if (filters.tipoParticipante.length) meta.tipoParticipante = filters.tipoParticipante;
+  if (filters.sectorEconomico.length) meta.sectorEconomico = filters.sectorEconomico;
+  if (filters.cohorte.length) meta.cohorte = filters.cohorte;
+  if (filters.jornada.length) meta.jornada = filters.jornada;
+  if (filters.periodo.length) meta.periodo = filters.periodo;
+  
   return meta;
 };
 
