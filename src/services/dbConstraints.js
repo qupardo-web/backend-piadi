@@ -556,6 +556,46 @@ async function initDbConstraints() {
       COMMENT ON FUNCTION refresh_dashboard_metas IS 'Refresca la vista materializada de indicadores subyacente para actualizar el dashboard.';
     `);
 
+    console.log('Creating consolidated view v_landing_metas...');
+    await sequelize.query(`
+      CREATE OR REPLACE VIEW v_landing_metas AS
+      WITH ranked_metas AS (
+        SELECT
+          d."metaId",
+          d."metaName",
+          d."indicatorName",
+          d."targetValue",
+          d."currentValue",
+          d."progressPercent",
+          d.status,
+          1::integer AS priority,
+          d."daysRemaining",
+          COALESCE(dept.name, 'Institucional')::varchar AS "departmentName",
+          d."departmentId",
+          ROW_NUMBER() OVER (PARTITION BY d."departmentId" ORDER BY d."metaId" DESC) as rn
+        FROM v_dashboard_metas d
+        LEFT JOIN departments dept ON d."departmentId" = dept.key
+      )
+      SELECT
+        "metaId",
+        "metaName",
+        "indicatorName",
+        "targetValue",
+        "currentValue",
+        "progressPercent",
+        "status",
+        priority,
+        "daysRemaining",
+        "departmentName",
+        "departmentId"
+      FROM ranked_metas
+      WHERE rn <= 10;
+    `);
+
+    await sequelize.query(`
+      COMMENT ON VIEW v_landing_metas IS 'Vista consolidada optimizada para la Landing Page, limitada a las 10 metas más recientes por departamento.';
+    `);
+
     console.log('Database-level constraints, triggers, and SQL documentation applied successfully.');
   } catch (error) {
     console.error('Error applying database constraints:', error);
