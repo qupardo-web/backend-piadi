@@ -12,6 +12,8 @@ async function initDbConstraints() {
       ALTER TABLE metas ADD COLUMN IF NOT EXISTS "fechaLimite" TIMESTAMP WITH TIME ZONE;
       ALTER TABLE metas ADD COLUMN IF NOT EXISTS "prioridad" VARCHAR(50);
       ALTER TABLE metas ADD COLUMN IF NOT EXISTS "comportamiento" VARCHAR(255);
+      ALTER TABLE meta_metrics ADD COLUMN IF NOT EXISTS "lowerLimit" DECIMAL(12, 2);
+      ALTER TABLE meta_metrics ADD COLUMN IF NOT EXISTS "upperLimit" DECIMAL(12, 2);
     `);
     await sequelize.query(`
       CREATE INDEX IF NOT EXISTS idx_metas_creator ON metas ("creatorId");

@@ -42,6 +42,14 @@ const MetaMetric = sequelize.define('MetaMetric', {
     type: DataTypes.STRING,
     allowNull: false,
     validate: { notEmpty: true }
+  },
+  lowerLimit: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: true
+  },
+  upperLimit: {
+    type: DataTypes.DECIMAL(12, 2),
+    allowNull: true
   }
 }, {
   tableName: 'meta_metrics',
