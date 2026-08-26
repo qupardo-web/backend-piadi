@@ -62,10 +62,16 @@ const normalizeMetrics = (metrics) => {
       }
     }
 
+    const behavior = requireNonEmptyString(metric.behavior, `metrics[${index}].behavior`);
+    if (behavior.toLowerCase() === 'debe-mantenerse-en-rango'
+      && (lowerLimit === null || upperLimit === null || upperLimit <= lowerLimit)) {
+      throw new ValidationError(`metrics[${index}] requiere lowerLimit y upperLimit válidos para debe-mantenerse-en-rango`);
+    }
+
     return {
       indicatorKey: requireNonEmptyString(metric.indicatorKey, `metrics[${index}].indicatorKey`),
       weight: roundedWeight,
-      behavior: requireNonEmptyString(metric.behavior, `metrics[${index}].behavior`),
+      behavior,
       targetValue,
       valueType: requireNonEmptyString(metric.valueType, `metrics[${index}].valueType`),
       lowerLimit,

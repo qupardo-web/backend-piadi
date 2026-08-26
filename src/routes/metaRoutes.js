@@ -18,6 +18,8 @@ const router = express.Router();
  *         behavior: { type: string, example: increasing }
  *         targetValue: { type: number, example: 100 }
  *         valueType: { type: string, example: number }
+ *         lowerLimit: { type: number, nullable: true, example: 40 }
+ *         upperLimit: { type: number, nullable: true, example: 80 }
  *     MetaInput:
  *       type: object
  *       required: [anio, periodo, metrics]
@@ -52,6 +54,8 @@ const router = express.Router();
  *         weight: { type: number, description: Ponderación en escala 0 a 100. }
  *         behavior: { type: string }
  *         valueType: { type: string }
+ *         lowerLimit: { type: number, nullable: true }
+ *         upperLimit: { type: number, nullable: true }
  *         progress: { type: number, description: Cumplimiento no ponderado de la métrica. }
  *         weightedProgress: { type: number, description: Aporte ponderado al progreso total. }
  *         hasData: { type: boolean }

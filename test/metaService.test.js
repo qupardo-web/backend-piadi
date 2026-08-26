@@ -263,3 +263,16 @@ test('rechaza lowerLimit o upperLimit con más de 2 decimales', () => {
   ]), /upperLimit admite como máximo 2 decimales/);
 });
 
+test('debe-mantenerse-en-rango exige límites completos y ordenados', () => {
+  for (const limits of [
+    { lowerLimit: null, upperLimit: 80 },
+    { lowerLimit: 40, upperLimit: null },
+    { lowerLimit: 80, upperLimit: 40 },
+    { lowerLimit: 40, upperLimit: 40 }
+  ]) {
+    assert.throws(() => metaService.normalizeMetrics([
+      metric({ behavior: 'debe-mantenerse-en-rango', ...limits })
+    ]), /requiere lowerLimit y upperLimit válidos/);
+  }
+});
+
