@@ -192,3 +192,111 @@ test('Semestre 2 se traduce a semester 2', () => {
     department: 'calidad', year: 2026, semester: '2'
   });
 });
+
+test('no-debe-superar aplica umbrales 75/75 y riesgo inmediato al límite', () => {
+  const cases = [
+    [30, 70, false],
+    [75, 74, false],
+    [75, 75, true],
+    [10, 100, true],
+    [10, 110, true]
+  ];
+  for (const [elapsed, currentValue, atRisk] of cases) {
+    assert.equal(progressService.evaluateMetricRisk({
+      behavior: 'no-debe-superar', currentValue, targetValue: 100, hasData: true
+    }, elapsed).atRisk, atRisk);
+  }
+});
+
+test('debe-alcanzar-o-superar y alias debe-superar aplican umbrales 50/25', () => {
+  const cases = [
+    ['debe-alcanzar-o-superar', 49, 10, false],
+    ['debe-alcanzar-o-superar', 50, 25, true],
+    ['debe-superar', 50, 26, false],
+    ['debe-superar', 80, 20, true]
+  ];
+  for (const [behavior, elapsed, currentValue, atRisk] of cases) {
+    assert.equal(progressService.evaluateMetricRisk({
+      behavior, currentValue, targetValue: 100, hasData: true
+    }, elapsed).atRisk, atRisk);
+  }
+});
+
+test('debe-mantenerse-en-rango aplica salida inmediata y franjas críticas al 75%', () => {
+  const cases = [
+    [30, 39, true],
+    [30, 81, true],
+    [74, 45, false],
+    [75, 45, true],
+    [75, 60, false],
+    [75, 75, true]
+  ];
+  for (const [elapsed, currentValue, atRisk] of cases) {
+    assert.equal(progressService.evaluateMetricRisk({
+      behavior: 'debe-mantenerse-en-rango', currentValue,
+      lowerLimit: '40.00', upperLimit: '80.00', hasData: true
+    }, elapsed).atRisk, atRisk);
+  }
+});
+
+test('no-debe-superar al 100% queda en_riesgo y no cumplida', async () => {
+  mockValues([{ data: { value: 100, hasData: true } }]);
+  const result = await progressService.calculateProgress(meta({
+    metrics: [metric({ behavior: 'no-debe-superar' })]
+  }), { now: new Date('2026-02-06T00:00:00Z') });
+  assert.equal(result.totalProgress, 100);
+  assert.equal(result.status, 'en_riesgo');
+});
+
+test('cualquier métrica crítica lleva el estado global a en_riesgo', async () => {
+  mockValues([
+    { data: { value: 80, hasData: true } },
+    { data: { value: 100, hasData: true } }
+  ]);
+  const result = await progressService.calculateProgress(meta({ metrics: [
+    metric({ weight: 50, behavior: 'debe-superar' }),
+    metric({ id: 2, indicatorKey: 'kpi-b', weight: 50, behavior: 'no-debe-superar' })
+  ] }), { now: new Date('2026-02-06T00:00:00Z') });
+  assert.equal(result.status, 'en_riesgo');
+});
+
+test('dos métricas con behavior satisfecho conservan cumplimiento global', async () => {
+  mockValues([
+    { data: { value: 100, hasData: true } },
+    { data: { value: 100, hasData: true } }
+  ]);
+  const result = await progressService.calculateProgress(meta({ metrics: [
+    metric({ weight: 50, behavior: 'debe-superar' }),
+    metric({ id: 2, indicatorKey: 'kpi-b', weight: 50, behavior: 'debe-alcanzar-o-superar' })
+  ] }), { now: new Date('2026-02-06T00:00:00Z') });
+  assert.equal(result.status, 'cumplida');
+});
+
+test('hasData false no se interpreta como cero para reglas de behavior', () => {
+  for (const behavior of ['debe-superar', 'no-debe-superar']) {
+    const evaluation = progressService.evaluateMetricRisk({
+      behavior, currentValue: null, targetValue: 100, hasData: false
+    }, 80);
+    assert.equal(evaluation.atRisk, false);
+  }
+});
+
+test('targetValue cero y rangos inválidos no generan alertas aritméticas', () => {
+  assert.equal(progressService.evaluateMetricRisk({
+    behavior: 'debe-superar', currentValue: 10, targetValue: 0, hasData: true
+  }, 80).atRisk, false);
+  for (const limits of [[null, 80], [40, null], [80, 40], [40, 40]]) {
+    assert.equal(progressService.evaluateMetricRisk({
+      behavior: 'debe-mantenerse-en-rango', currentValue: 60,
+      lowerLimit: limits[0], upperLimit: limits[1], hasData: true
+    }, 80).atRisk, false);
+  }
+});
+
+test('behavior reconocido sin riesgo no hereda la comparación genérica con elapsedProgress', async () => {
+  mockValues([{ data: { value: 10, hasData: true } }]);
+  const result = await progressService.calculateProgress(meta({
+    metrics: [metric({ behavior: 'debe-superar' })]
+  }), { now: new Date('2026-06-29T00:00:00Z') });
+  assert.equal(result.status, 'en_progreso');
+});

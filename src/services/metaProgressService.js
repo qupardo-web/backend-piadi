@@ -3,6 +3,9 @@ const indicatorService = require('./indicatorService');
 const { ValidationError, NotFoundError } = require('../utils/errors');
 
 const STATUSES = ['cumplida', 'en_progreso', 'en_riesgo', 'no_cumplida'];
+const TARGET_LIMIT_BEHAVIOR = 'no-debe-superar';
+const TARGET_GROWTH_BEHAVIORS = new Set(['debe-alcanzar-o-superar', 'debe-superar']);
+const RANGE_BEHAVIOR = 'debe-mantenerse-en-rango';
 
 const asPlain = (value) => (value && typeof value.toJSON === 'function' ? value.toJSON() : value);
 
@@ -56,10 +59,59 @@ const elapsedPercentage = (meta, now = new Date()) => {
   return ((current - start) / (end - start)) * 100;
 };
 
-const determineStatus = (meta, totalProgress, now = new Date()) => {
-  if (totalProgress >= 100) return 'cumplida';
+const normalizeBehavior = (behavior) => String(behavior || '').trim().toLowerCase();
+
+const evaluateMetricRisk = (metric, elapsedProgress) => {
+  const behavior = normalizeBehavior(metric && metric.behavior);
+  const recognized = behavior === TARGET_LIMIT_BEHAVIOR
+    || TARGET_GROWTH_BEHAVIORS.has(behavior)
+    || behavior === RANGE_BEHAVIOR;
+  if (!metric || metric.hasData === false || metric.currentValue === null || metric.currentValue === undefined) {
+    return { recognized, atRisk: false };
+  }
+
+  const currentValue = Number(metric.currentValue);
+  if (!Number.isFinite(currentValue)) return { recognized: false, atRisk: false };
+
+  if (behavior === TARGET_LIMIT_BEHAVIOR) {
+    const targetValue = Number(metric.targetValue);
+    if (!Number.isFinite(targetValue) || targetValue === 0) return { recognized: true, atRisk: false };
+    return {
+      recognized: true,
+      atRisk: currentValue >= targetValue || (elapsedProgress >= 75 && currentValue >= targetValue * 0.75)
+    };
+  }
+
+  if (TARGET_GROWTH_BEHAVIORS.has(behavior)) {
+    const targetValue = Number(metric.targetValue);
+    if (!Number.isFinite(targetValue) || targetValue === 0) return { recognized: true, atRisk: false };
+    const progressRatio = (currentValue / targetValue) * 100;
+    return { recognized: true, atRisk: elapsedProgress >= 50 && progressRatio <= 25 };
+  }
+
+  if (behavior === RANGE_BEHAVIOR) {
+    const lowerLimit = Number(metric.lowerLimit);
+    const upperLimit = Number(metric.upperLimit);
+    const validRange = metric.lowerLimit !== null && metric.lowerLimit !== undefined
+      && metric.upperLimit !== null && metric.upperLimit !== undefined
+      && Number.isFinite(lowerLimit) && Number.isFinite(upperLimit) && upperLimit > lowerLimit;
+    if (!validRange) return { recognized: true, atRisk: false };
+    if (currentValue < lowerLimit || currentValue > upperLimit) return { recognized: true, atRisk: true };
+    const criticalWidth = (upperLimit - lowerLimit) * 0.25;
+    const nearBoundary = currentValue <= lowerLimit + criticalWidth || currentValue >= upperLimit - criticalWidth;
+    return { recognized: true, atRisk: elapsedProgress >= 75 && nearBoundary };
+  }
+
+  return { recognized: false, atRisk: false };
+};
+
+const determineStatus = (meta, totalProgress, now = new Date(), metrics = []) => {
   const elapsedProgress = elapsedPercentage(meta, now);
+  const evaluations = metrics.map((metric) => evaluateMetricRisk(metric, elapsedProgress));
+  if (evaluations.some((evaluation) => evaluation.atRisk)) return 'en_riesgo';
+  if (totalProgress >= 100) return 'cumplida';
   if (elapsedProgress >= 100) return 'no_cumplida';
+  if (evaluations.length > 0 && evaluations.every((evaluation) => evaluation.recognized)) return 'en_progreso';
   return totalProgress < elapsedProgress ? 'en_riesgo' : 'en_progreso';
 };
 
@@ -122,6 +174,8 @@ const calculateMetric = async (meta, rawMetric, resolveIndicator) => {
       weight,
       behavior: metric.behavior,
       valueType: metric.valueType,
+      lowerLimit: metric.lowerLimit === null || metric.lowerLimit === undefined ? null : finiteNumber(metric.lowerLimit, 'MetaMetric.lowerLimit'),
+      upperLimit: metric.upperLimit === null || metric.upperLimit === undefined ? null : finiteNumber(metric.upperLimit, 'MetaMetric.upperLimit'),
       progress: 0,
       weightedProgress: 0,
       hasData: false
@@ -140,6 +194,8 @@ const calculateMetric = async (meta, rawMetric, resolveIndicator) => {
     weight,
     behavior: metric.behavior,
     valueType: metric.valueType,
+    lowerLimit: metric.lowerLimit === null || metric.lowerLimit === undefined ? null : finiteNumber(metric.lowerLimit, 'MetaMetric.lowerLimit'),
+    upperLimit: metric.upperLimit === null || metric.upperLimit === undefined ? null : finiteNumber(metric.upperLimit, 'MetaMetric.upperLimit'),
     progress,
     weightedProgress,
     hasData: true,
@@ -157,7 +213,7 @@ const calculateProgress = async (rawMeta, options = {}) => {
   return {
     totalProgress,
     elapsedProgress,
-    status: determineStatus(meta, totalProgress, options.now || new Date()),
+    status: determineStatus(meta, totalProgress, options.now || new Date(), metricProgress),
     metrics: metricProgress
   };
 };
@@ -200,6 +256,7 @@ module.exports = {
   STATUSES,
   buildIndicatorQuery,
   elapsedPercentage,
+  evaluateMetricRisk,
   determineStatus,
   calculateProgress,
   getMetaProgress,
