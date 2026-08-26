@@ -46,12 +46,36 @@ const normalizeMetrics = (metrics) => {
       throw new ValidationError(`metrics[${index}].targetValue admite como máximo 2 decimales`);
     }
 
+    let lowerLimit = null;
+    if (metric.lowerLimit !== undefined && metric.lowerLimit !== null && metric.lowerLimit !== '') {
+      lowerLimit = requireFiniteNumber(metric.lowerLimit, `metrics[${index}].lowerLimit`);
+      if (Math.abs(lowerLimit * 100 - Math.round(lowerLimit * 100)) > Number.EPSILON) {
+        throw new ValidationError(`metrics[${index}].lowerLimit admite como máximo 2 decimales`);
+      }
+    }
+
+    let upperLimit = null;
+    if (metric.upperLimit !== undefined && metric.upperLimit !== null && metric.upperLimit !== '') {
+      upperLimit = requireFiniteNumber(metric.upperLimit, `metrics[${index}].upperLimit`);
+      if (Math.abs(upperLimit * 100 - Math.round(upperLimit * 100)) > Number.EPSILON) {
+        throw new ValidationError(`metrics[${index}].upperLimit admite como máximo 2 decimales`);
+      }
+    }
+
+    const behavior = requireNonEmptyString(metric.behavior, `metrics[${index}].behavior`);
+    if (behavior.toLowerCase() === 'debe-mantenerse-en-rango'
+      && (lowerLimit === null || upperLimit === null || upperLimit <= lowerLimit)) {
+      throw new ValidationError(`metrics[${index}] requiere lowerLimit y upperLimit válidos para debe-mantenerse-en-rango`);
+    }
+
     return {
       indicatorKey: requireNonEmptyString(metric.indicatorKey, `metrics[${index}].indicatorKey`),
       weight: roundedWeight,
-      behavior: requireNonEmptyString(metric.behavior, `metrics[${index}].behavior`),
+      behavior,
       targetValue,
-      valueType: requireNonEmptyString(metric.valueType, `metrics[${index}].valueType`)
+      valueType: requireNonEmptyString(metric.valueType, `metrics[${index}].valueType`),
+      lowerLimit,
+      upperLimit
     };
   });
 

@@ -244,3 +244,35 @@ test('crea y actualiza la meta con los nuevos campos (nombre, inicio, limite, pr
   assert.equal(updatedPayload.prioridad, 'Baja');
   assert.equal(updatedPayload.comportamiento, 'Conservador');
 });
+
+test('acepta lowerLimit y upperLimit en las métricas', () => {
+  const result = metaService.normalizeMetrics([
+    metric({ lowerLimit: 25.50, upperLimit: 75.25 })
+  ]);
+  assert.equal(result[0].lowerLimit, 25.50);
+  assert.equal(result[0].upperLimit, 75.25);
+});
+
+test('rechaza lowerLimit o upperLimit con más de 2 decimales', () => {
+  assert.throws(() => metaService.normalizeMetrics([
+    metric({ lowerLimit: 25.555 })
+  ]), /lowerLimit admite como máximo 2 decimales/);
+
+  assert.throws(() => metaService.normalizeMetrics([
+    metric({ upperLimit: 75.222 })
+  ]), /upperLimit admite como máximo 2 decimales/);
+});
+
+test('debe-mantenerse-en-rango exige límites completos y ordenados', () => {
+  for (const limits of [
+    { lowerLimit: null, upperLimit: 80 },
+    { lowerLimit: 40, upperLimit: null },
+    { lowerLimit: 80, upperLimit: 40 },
+    { lowerLimit: 40, upperLimit: 40 }
+  ]) {
+    assert.throws(() => metaService.normalizeMetrics([
+      metric({ behavior: 'debe-mantenerse-en-rango', ...limits })
+    ]), /requiere lowerLimit y upperLimit válidos/);
+  }
+});
+

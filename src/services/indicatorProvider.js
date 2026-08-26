@@ -445,12 +445,14 @@ const deleteDepartment = async (key) => {
 };
 
 const getKpisByDepartment = async (departmentId) => {
-  const rows = await IndicatorDefinition.findAll({ where: { departmentId }, order: [['id', 'ASC']] });
+  const where = departmentId === 'institucional' ? {} : { departmentId };
+  const rows = await IndicatorDefinition.findAll({ where, order: [['id', 'ASC']] });
   return rows.map((row) => row.toJSON());
 };
 
 const getKpi = async (departmentId, indicatorKey) => {
-  const row = await IndicatorDefinition.findOne({ where: { departmentId, key: indicatorKey } });
+  const where = departmentId === 'institucional' ? { key: indicatorKey } : { departmentId, key: indicatorKey };
+  const row = await IndicatorDefinition.findOne({ where });
   return row ? row.toJSON() : null;
 };
 
