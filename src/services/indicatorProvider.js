@@ -221,6 +221,9 @@ const getVcmConvenioRows = async (filters = {}) => {
   if (filters.region && filters.region.length) where.region = buildCaseInsensitiveIn(filters.region);
   if (filters.comuna && filters.comuna.length) where.comuna = buildCaseInsensitiveIn(filters.comuna);
   if (filters.sector && filters.sector.length) where.sector = buildCaseInsensitiveIn(filters.sector);
+  if (filters.areaVinculada && filters.areaVinculada.length) {
+    where.areaVinculada = buildCaseInsensitiveIn(filters.areaVinculada);
+  }
 
   const convenios = await Convenio.findAll({ where });
   return convenios.map(c => ({
@@ -339,6 +342,18 @@ const distinctValues = (rows, key) => {
   return [...set];
 };
 
+const distinctTextValues = (rows, key) => {
+  const values = new Map();
+  rows.forEach((row) => {
+    if (typeof row[key] !== 'string') return;
+    const value = row[key].trim();
+    if (value === '') return;
+    const normalized = value.toLocaleLowerCase('es');
+    if (!values.has(normalized)) values.set(normalized, value);
+  });
+  return [...values.values()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+};
+
 const toMonthValue = (v) => (/^\d+$/.test(String(v)) ? Number(v) : v);
 
 const getFilterOptions = async (department, filters = {}) => {
@@ -385,7 +400,7 @@ const getFilterOptions = async (department, filters = {}) => {
       years: [...years].sort((a, b) => a - b),
       semesters: [],
       startMonths: [],
-      areas: [],
+      areas: distinctTextValues(convenios, 'areaVinculada'),
       tipos: [],
       modalidades: distinctValues(actividades, 'modalidad').sort(),
       sexos: [],
