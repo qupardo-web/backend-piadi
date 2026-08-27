@@ -193,13 +193,15 @@ test('Semestre 2 se traduce a semester 2', () => {
   });
 });
 
-test('no-debe-superar aplica umbrales 75/75 y riesgo inmediato al límite', () => {
+test('no-debe-superar aplica alerta inmediata al 75% y preventiva 75/50', () => {
   const cases = [
-    [30, 70, false],
-    [75, 74, false],
-    [75, 75, true],
+    [10, 74, false],
+    [10, 75, true],
     [10, 100, true],
-    [10, 110, true]
+    [74, 55, false],
+    [75, 50, true],
+    [75, 49, false],
+    [90, 60, true]
   ];
   for (const [elapsed, currentValue, atRisk] of cases) {
     assert.equal(progressService.evaluateMetricRisk({
@@ -222,20 +224,25 @@ test('debe-alcanzar-o-superar y alias debe-superar aplican umbrales 50/25', () =
   }
 });
 
-test('debe-mantenerse-en-rango aplica salida inmediata y franjas críticas al 75%', () => {
+test('debe-mantenerse-en-rango aplica salida y franjas críticas inmediatamente', () => {
   const cases = [
-    [30, 39, true],
-    [30, 81, true],
-    [74, 45, false],
-    [75, 45, true],
-    [75, 60, false],
-    [75, 75, true]
+    [39, true],
+    [40, true],
+    [45, true],
+    [50, true],
+    [51, false],
+    [60, false],
+    [69, false],
+    [70, true],
+    [75, true],
+    [80, true],
+    [81, true]
   ];
-  for (const [elapsed, currentValue, atRisk] of cases) {
+  for (const [currentValue, atRisk] of cases) {
     assert.equal(progressService.evaluateMetricRisk({
       behavior: 'debe-mantenerse-en-rango', currentValue,
       lowerLimit: '40.00', upperLimit: '80.00', hasData: true
-    }, elapsed).atRisk, atRisk);
+    }, 10).atRisk, atRisk);
   }
 });
 
