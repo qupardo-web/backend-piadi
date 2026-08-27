@@ -78,7 +78,8 @@ const evaluateMetricRisk = (metric, elapsedProgress) => {
     if (!Number.isFinite(targetValue) || targetValue === 0) return { recognized: true, atRisk: false };
     return {
       recognized: true,
-      atRisk: currentValue >= targetValue || (elapsedProgress >= 75 && currentValue >= targetValue * 0.75)
+      atRisk: currentValue >= targetValue * 0.75
+        || (elapsedProgress >= 75 && currentValue >= targetValue * 0.50)
     };
   }
 
@@ -99,7 +100,7 @@ const evaluateMetricRisk = (metric, elapsedProgress) => {
     if (currentValue < lowerLimit || currentValue > upperLimit) return { recognized: true, atRisk: true };
     const criticalWidth = (upperLimit - lowerLimit) * 0.25;
     const nearBoundary = currentValue <= lowerLimit + criticalWidth || currentValue >= upperLimit - criticalWidth;
-    return { recognized: true, atRisk: elapsedProgress >= 75 && nearBoundary };
+    return { recognized: true, atRisk: nearBoundary };
   }
 
   return { recognized: false, atRisk: false };
