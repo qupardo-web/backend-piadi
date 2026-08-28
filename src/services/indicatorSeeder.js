@@ -51,6 +51,34 @@ const INSTITUCIONAL_DEPARTMENT_SEED = {
   order: 3
 };
 
+const INNOVACION_DEPARTMENT_SEED = {
+  key: 'innovacion',
+  name: 'Innovación',
+  description: 'Dirección de innovación, desarrollo y transferencia de conocimiento.',
+  enabled: true,
+  hasData: false,
+  order: 4
+};
+
+const INNOVACION_KPI_SEED = [
+  { key: 'proyectos_innovacion', name: 'Proyectos de innovación', description: 'Cantidad de proyectos de innovación adjudicados o desarrollados.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_INNOVATION_PROJECTS', enabled: true },
+  { key: 'patentes_solicitadas', name: 'Patentes solicitadas', description: 'Cantidad de patentes, registros de propiedad intelectual o marcas solicitadas.', unit: 'registros', format: 'number', formulaKey: 'COUNT_PATENTS', enabled: true }
+];
+
+const CURRICULAR_DEPARTMENT_SEED = {
+  key: 'desarrollo_curricular',
+  name: 'Desarrollo Curricular',
+  description: 'Dirección de desarrollo curricular y rediseño de planes de estudio.',
+  enabled: true,
+  hasData: false,
+  order: 5
+};
+
+const CURRICULAR_KPI_SEED = [
+  { key: 'programas_actualizados', name: 'Programas de estudio actualizados', description: 'Porcentaje o cantidad de programas de estudio actualizados o rediseñados.', unit: 'programas', format: 'number', formulaKey: 'COUNT_CURRICULUM_UPDATED', enabled: true },
+  { key: 'innovaciones_pedagogicas', name: 'Innovaciones pedagógicas', description: 'Cantidad de innovaciones pedagógicas o metodologías activas implementadas en el aula.', unit: 'innovaciones', format: 'number', formulaKey: 'COUNT_PEDAGOGICAL_INNOVATIONS', enabled: true }
+];
+
 async function seedIndicators() {
   // 1. Seed Educación Continua
   await Department.findOrCreate({ where: { key: DEPARTMENT_SEED.key }, defaults: DEPARTMENT_SEED });
@@ -72,6 +100,24 @@ async function seedIndicators() {
 
   // 3. Seed Institucional
   await Department.findOrCreate({ where: { key: INSTITUCIONAL_DEPARTMENT_SEED.key }, defaults: INSTITUCIONAL_DEPARTMENT_SEED });
+
+  // 4. Seed Innovación
+  await Department.findOrCreate({ where: { key: INNOVACION_DEPARTMENT_SEED.key }, defaults: INNOVACION_DEPARTMENT_SEED });
+  for (const kpi of INNOVACION_KPI_SEED) {
+    await IndicatorDefinition.findOrCreate({
+      where: { departmentId: INNOVACION_DEPARTMENT_SEED.key, key: kpi.key },
+      defaults: { ...kpi, departmentId: INNOVACION_DEPARTMENT_SEED.key }
+    });
+  }
+
+  // 5. Seed Desarrollo Curricular
+  await Department.findOrCreate({ where: { key: CURRICULAR_DEPARTMENT_SEED.key }, defaults: CURRICULAR_DEPARTMENT_SEED });
+  for (const kpi of CURRICULAR_KPI_SEED) {
+    await IndicatorDefinition.findOrCreate({
+      where: { departmentId: CURRICULAR_DEPARTMENT_SEED.key, key: kpi.key },
+      defaults: { ...kpi, departmentId: CURRICULAR_DEPARTMENT_SEED.key }
+    });
+  }
 }
 
 module.exports = { seedIndicators };

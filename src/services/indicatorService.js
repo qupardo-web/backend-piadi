@@ -457,6 +457,27 @@ const getEnabledKpis = async (departmentKey) => {
   return kpis.filter((kpi) => kpi.enabled !== false);
 };
 
+const getIndicatorDetail = async (indicatorKey) => {
+  const key = ensureIndicatorKey(indicatorKey);
+  const kpi = await provider.getKpi('institucional', key);
+  if (!kpi) {
+    throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe', { indicatorKey: key });
+  }
+  return {
+    data: {
+      key: kpi.key,
+      name: kpi.name,
+      title: kpi.name,
+      description: kpi.description,
+      unit: kpi.unit,
+      format: kpi.format,
+      formulaKey: kpi.formulaKey,
+      departmentId: kpi.departmentId,
+      enabled: kpi.enabled
+    }
+  };
+};
+
 module.exports = {
   ServiceError,
   parseYear,
@@ -471,6 +492,7 @@ module.exports = {
   updateKpi,
   deleteKpi,
   getEnabledKpis,
+  getIndicatorDetail,
   getDepartmentFilters,
   getIndicatorValue,
   getIndicatorSeries,
