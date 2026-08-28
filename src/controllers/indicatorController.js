@@ -111,6 +111,15 @@ const getDepartmentFilters = async (req, res) => {
   }
 };
 
+const getIndicatorDetail = async (req, res) => {
+  try {
+    const result = await indicatorService.getIndicatorDetail(req.params.indicatorKey);
+    res.status(200).json(result);
+  } catch (err) {
+    sendError(res, err);
+  }
+};
+
 module.exports = {
   listDepartments,
   createDepartment,
@@ -122,6 +131,7 @@ module.exports = {
   deleteKpi,
   getDepartmentFilters,
   getIndicatorValue,
+  getIndicatorDetail,
   getIndicatorSeries,
   getIndicatorBreakdown
 };

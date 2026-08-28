@@ -288,4 +288,21 @@ router.get('/indicators/:indicatorKey/series', indicatorController.getIndicatorS
  */
 router.get('/indicators/:indicatorKey/breakdown', indicatorController.getIndicatorBreakdown);
 
+/**
+ * @openapi
+ * /api/indicators/{indicatorKey}/detail:
+ *   get:
+ *     tags: [Indicadores]
+ *     summary: Obtiene el detalle (título y descripción) de un indicador desde la base de datos
+ *     parameters:
+ *       - in: path
+ *         name: indicatorKey
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Detalle del indicador.
+ */
+router.get('/indicators/:indicatorKey/detail', indicatorController.getIndicatorDetail);
+
 module.exports = router;
