@@ -1,7 +1,8 @@
+const fs = require('node:fs/promises');
 const plantillaService = require('../services/plantillaService');
 const { validarArchivo } = require('../services/carga/validacionService');
 const { procesarCarga } = require('../services/carga/cargaService');
-const { NotFoundError, ValidationError, ConflictError } = require('../utils/errors');
+const { NotFoundError, ValidationError, ConflictError, UnprocessableEntityError } = require('../utils/errors');
 
 const getPlantillas = async (req, res, next) => {
   try {
@@ -71,38 +72,57 @@ const deletePlantilla = async (req, res, next) => {
   }
 }
 
-const cargarArchivo = async (req, res, next) => {
+const limpiarArchivoTemporal = async (filePath, removeFile = fs.unlink) => {
+  if (!filePath) return;
+
+  try {
+    await removeFile(filePath);
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error(`No se pudo eliminar el archivo temporal de carga ${filePath}`, err);
+    }
+  }
+};
+
+const createCargarArchivo = ({
+  validateFile = validarArchivo,
+  processUpload = procesarCarga,
+  removeFile = fs.unlink
+} = {}) => async (req, res, next) => {
   const { id } = req.params;
 
   try {
     if (!req.file) {
-      throw new ValidationError('Debe enviar un archivo Excel');
+      throw new UnprocessableEntityError('Debe enviar un archivo Excel');
     }
 
-    const { valido, errores, campos, workbook } = await validarArchivo(req.file.path, id);
+    const { valido, errores, campos, workbook } = await validateFile(req.file.path, id);
 
     if (!valido) {
       const errorMsg = `Error de validación en carga: ${errores.map(e => e.mensaje).join('. ')}`;
-      return res.status(400).json({
+      return res.status(422).json({
         error: errorMsg,
-        errores: errores.map(e => ({ 
+        errores: errores.map(e => ({
           message: e.mensaje,
           hoja: e.hoja || 'General',
           fila: e.fila || '',
           columna: e.campo || '',
-          celda: e.fila ? `Fila ${e.fila}` : ''
+          celda: e.celda || ''
         })),
-        success: false,
-        errorType: 'ExcelValidationError'
+        success: false
       });
     }
 
-    const resultado = await procesarCarga(workbook, campos);
+    const resultado = await processUpload(workbook, campos);
     res.json(resultado);
   } catch (err) {
     next(err);
+  } finally {
+    await limpiarArchivoTemporal(req.file && req.file.path, removeFile);
   }
-}
+};
+
+const cargarArchivo = createCargarArchivo();
 
 const descargarExcel = async (req, res, next) => {
   const { id } = req.params;
@@ -149,6 +169,8 @@ module.exports = {
   updatePlantilla,
   deletePlantilla,
   cargarArchivo,
+  createCargarArchivo,
+  limpiarArchivoTemporal,
   descargarExcel,
   subirTemplate
 }
