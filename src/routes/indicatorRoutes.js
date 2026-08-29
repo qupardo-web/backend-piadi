@@ -304,6 +304,6 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *       200:
  *         description: Detalle del indicador.
  */
-router.get('/indicators/:indicatorKey/detail', indicatorController.getIndicatorDetail);
+router.get('/indicators/:indicatorKey/detail', authenticateToken, indicatorController.getIndicatorDetail);
 
 module.exports = router;

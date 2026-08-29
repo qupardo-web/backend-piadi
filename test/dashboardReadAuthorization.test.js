@@ -12,7 +12,8 @@ const protectedRoutes = [
   [indicatorRoutes, '/departments/:departmentKey/kpis'],
   [indicatorRoutes, '/indicators/:indicatorKey/values'],
   [indicatorRoutes, '/indicators/:indicatorKey/series'],
-  [indicatorRoutes, '/indicators/:indicatorKey/breakdown']
+  [indicatorRoutes, '/indicators/:indicatorKey/breakdown'],
+  [indicatorRoutes, '/indicators/:indicatorKey/detail']
 ];
 
 const findGetRoute = (router, path) => router.stack.find(
