@@ -17,7 +17,8 @@ const { requireVcmUploadRole } = require('../middleware/vcmUploadAuthorization')
  * /api/plantillas/{id}/cargar:
  *   post:
  *     tags: [Plantillas]
- *     summary: Carga un archivo Excel y procesa los datos según la plantilla
+ *     summary: Carga un archivo Excel y procesa los datos según la plantilla, incluida VCM
+ *     description: El id corresponde a una plantilla registrada. Para VCM, use el id de la plantilla Vinculación Con El Medio; sus hojas y columnas se resuelven desde campos_plantilla.
  *     parameters:
  *       - in: path
  *         name: id
@@ -34,6 +35,7 @@ const { requireVcmUploadRole } = require('../middleware/vcmUploadAuthorization')
  *               archivo:
  *                 type: string
  *                 format: binary
+ *             required: [archivo]
  *     responses:
  *       200:
  *         description: Carga exitosa.

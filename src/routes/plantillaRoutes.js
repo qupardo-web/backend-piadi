@@ -140,7 +140,8 @@ router.delete('/:id', plantillaController.deletePlantilla);
  * /api/plantillas/{id}/descargar:
  *   get:
  *     tags: [Plantillas]
- *     summary: Descarga el archivo Excel de la plantilla directamente en formato binario
+ *     summary: Descarga el archivo Excel asociado a una plantilla, incluida VCM
+ *     description: Para descargar el template VCM, use el id de la plantilla Vinculación Con El Medio registrada. La respuesta contiene el XLSX almacenado para esa plantilla.
  *     parameters:
  *       - in: path
  *         name: id
