@@ -18,9 +18,12 @@ const procesarCarga = async (workbook, campos) => {
     // Cada fila se identifica por su contenido único
     const filasProcesadas = [];
 
-    for (const [nombreHoja, camposHoja] of Object.entries(hojas)) {
+    const promesasHojas = Object.entries(hojas).map(async ([nombreHoja, camposHoja]) => {
+      await Promise.resolve(); // Yield control to the event loop
       const hoja = workbook.Sheets[nombreHoja];
+      if (!hoja) return [];
       const filas = XLSX.utils.sheet_to_json(hoja, { defval: null });
+      const resultadoHoja = [];
 
       for (const [index, fila] of filas.entries()) {
         const filaObj = { _key: JSON.stringify(fila), _orden: Infinity, _hoja: nombreHoja, _fila: index + 2, datos: {} };
@@ -38,8 +41,14 @@ const procesarCarga = async (workbook, campos) => {
           }
         }
 
-        filasProcesadas.push(filaObj);
+        resultadoHoja.push(filaObj);
       }
+      return resultadoHoja;
+    });
+
+    const resultadosHojas = await Promise.all(promesasHojas);
+    for (const resHoja of resultadosHojas) {
+      filasProcesadas.push(...resHoja);
     }
 
     // 2. Agrupar tablas por orden_insercion
@@ -194,13 +203,18 @@ const procesarCarga = async (workbook, campos) => {
             console.log("ResultadosPrograma rows to insert (first 5):", registrosAInsertar.slice(0, 5));
             console.log("Total rows to insert:", registrosAInsertar.length);
           }
-          let insertados;
+          let insertados = [];
+          const CHUNK_SIZE = 1000;
           try {
-            insertados = await Model.bulkCreate(registrosAInsertar, {
-              transaction,
-              returning: true,
-              validate: true
-            });
+            for (let i = 0; i < registrosAInsertar.length; i += CHUNK_SIZE) {
+              const chunk = registrosAInsertar.slice(i, i + CHUNK_SIZE);
+              const chunkResult = await Model.bulkCreate(chunk, {
+                transaction,
+                returning: true,
+                validate: false
+              });
+              insertados.push(...chunkResult);
+            }
           } catch (err) {
             if (err.errors) {
               const enrichValidationErrors = (e) => {
