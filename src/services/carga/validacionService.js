@@ -1,6 +1,29 @@
 const XLSX = require('xlsx');
 const { CampoPlantilla, sequelize } = require('../../models');
 
+const estaVacio = (valor) => valor === null ||
+  valor === undefined ||
+  (typeof valor === 'string' && valor.trim() === '');
+
+const esTipoCompatible = (valor, tipoDato) => {
+  const tipo = String(tipoDato || '').trim().toLowerCase();
+
+  if (tipo === 'number') {
+    if (typeof valor === 'number') return Number.isFinite(valor);
+    if (typeof valor !== 'string' || valor.trim() === '') return false;
+    return Number.isFinite(Number(valor.trim()));
+  }
+
+  if (tipo === 'string') {
+    return typeof valor === 'string' ||
+      typeof valor === 'number' ||
+      typeof valor === 'boolean' ||
+      (valor instanceof Date && !Number.isNaN(valor.getTime()));
+  }
+
+  return true;
+};
+
 const validarArchivo = async (filePath, plantillaId) => {
   const campos = await CampoPlantilla.findAll({
     where: { plantillaId }
@@ -73,11 +96,7 @@ const validarArchivo = async (filePath, plantillaId) => {
         const valorCelda = fila[campo.columna_excel];
         
         // Comprobar si el valor es null, undefined, o un string vacío tras hacer trim
-        const estaVacio = valorCelda === null || 
-                          valorCelda === undefined || 
-                          (typeof valorCelda === 'string' && valorCelda.trim() === '');
-                          
-        if (estaVacio) {
+        if (estaVacio(valorCelda)) {
           errores.push({
             hoja: nombreHoja,
             campo: campo.columna_excel,
@@ -89,11 +108,25 @@ const validarArchivo = async (filePath, plantillaId) => {
 
       // Validar las reglas del modelo en memoria (ej: formato RUT, formato email, fechas, etc.)
       const dataByTable = {};
+      const tiposValidados = new Set();
       for (const campo of camposDeHoja) {
         if (!dataByTable[campo.tabla_destino]) {
           dataByTable[campo.tabla_destino] = {};
         }
         let valor = fila[campo.columna_excel];
+
+        const tipoKey = `${campo.columna_excel}:${campo.tipo_dato}`;
+        if (!estaVacio(valor) && !tiposValidados.has(tipoKey)) {
+          tiposValidados.add(tipoKey);
+          if (!esTipoCompatible(valor, campo.tipo_dato)) {
+            errores.push({
+              hoja: nombreHoja,
+              campo: campo.columna_excel,
+              fila: numeroFilaExcel,
+              mensaje: `Fila ${numeroFilaExcel}: El campo ${campo.columna_excel} debe ser de tipo ${campo.tipo_dato} en la hoja ${nombreHoja}`
+            });
+          }
+        }
 
         // Normalizar fechas antes de la validación en memoria
         const Model = sequelize.models[campo.tabla_destino];
