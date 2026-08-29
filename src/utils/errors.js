@@ -20,6 +20,15 @@ class ValidationError extends AppError {
 }
 
 /**
+ * Error 422 - La solicitud es válida, pero sus datos no superan la validación.
+ */
+class UnprocessableEntityError extends AppError {
+  constructor(message = 'Los datos enviados no superan la validación') {
+    super(message, 422);
+  }
+}
+
+/**
  * Error 401 - No Autorizado (Ej: credenciales incorrectas, token expirado)
  */
 class UnauthorizedError extends AppError {
@@ -58,6 +67,7 @@ class ConflictError extends AppError {
 module.exports = {
   AppError,
   ValidationError,
+  UnprocessableEntityError,
   UnauthorizedError,
   ForbiddenError,
   NotFoundError,

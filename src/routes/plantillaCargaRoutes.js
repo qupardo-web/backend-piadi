@@ -37,7 +37,7 @@ const { requireVcmUploadRole } = require('../middleware/vcmUploadAuthorization')
  *     responses:
  *       200:
  *         description: Carga exitosa.
- *       400:
+ *       422:
  *         description: Error de validación del archivo.
  */
 router.post('/:id/cargar', authenticateToken, requireVcmUploadRole, upload.single('archivo'), auditLogger({ type: 'carga', action: 'UPLOAD_TEMPLATE', module: 'Carga de Datos', entity: 'Plantilla' }), plantillaController.cargarArchivo);
