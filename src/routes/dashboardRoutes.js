@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const dashboardController = require('../controllers/dashboardController');
+const { authenticateToken } = require('../middleware/authMiddleware');
 
 /**
  * @openapi
@@ -68,6 +69,6 @@ const dashboardController = require('../controllers/dashboardController');
  *       200:
  *         description: Resumen de tarjetas por departamento.
  */
-router.get('/dashboard/summary', dashboardController.getSummary);
+router.get('/dashboard/summary', authenticateToken, dashboardController.getSummary);
 
 module.exports = router;

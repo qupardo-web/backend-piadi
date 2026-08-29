@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const indicatorController = require('../controllers/indicatorController');
+const { authenticateToken } = require('../middleware/authMiddleware');
 
 /**
  * @openapi
@@ -18,7 +19,7 @@ const indicatorController = require('../controllers/indicatorController');
  *       201:
  *         description: Departamento creado.
  */
-router.get('/departments', indicatorController.listDepartments);
+router.get('/departments', authenticateToken, indicatorController.listDepartments);
 router.post('/departments', indicatorController.createDepartment);
 
 /**
@@ -80,7 +81,7 @@ router.delete('/departments/:departmentKey', indicatorController.deleteDepartmen
  *       200:
  *         description: Listas de valores para poblar los selects del frontend.
  */
-router.get('/departments/:departmentKey/filters', indicatorController.getDepartmentFilters);
+router.get('/departments/:departmentKey/filters', authenticateToken, indicatorController.getDepartmentFilters);
 
 /**
  * @openapi
@@ -108,7 +109,7 @@ router.get('/departments/:departmentKey/filters', indicatorController.getDepartm
  *       201:
  *         description: KPI creado.
  */
-router.get('/departments/:departmentKey/kpis', indicatorController.listDepartmentKpis);
+router.get('/departments/:departmentKey/kpis', authenticateToken, indicatorController.listDepartmentKpis);
 router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
 
 /**
@@ -206,7 +207,7 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *       200:
  *         description: Valor del indicador (hasData false si faltan datos).
  */
-router.get('/indicators/:indicatorKey/values', indicatorController.getIndicatorValue);
+router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorController.getIndicatorValue);
 
 /**
  * @openapi
@@ -253,7 +254,7 @@ router.get('/indicators/:indicatorKey/values', indicatorController.getIndicatorV
  *       200:
  *         description: Serie simple (points) o segmentada (series) según groupBy.
  */
-router.get('/indicators/:indicatorKey/series', indicatorController.getIndicatorSeries);
+router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorController.getIndicatorSeries);
 
 /**
  * @openapi
@@ -286,7 +287,7 @@ router.get('/indicators/:indicatorKey/series', indicatorController.getIndicatorS
  *       200:
  *         description: Items de distribución { label, value }.
  */
-router.get('/indicators/:indicatorKey/breakdown', indicatorController.getIndicatorBreakdown);
+router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorController.getIndicatorBreakdown);
 
 /**
  * @openapi
