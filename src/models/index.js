@@ -40,6 +40,8 @@ const Seccion = require('./EntidadesBBDD/Seccion');
 // --- Asociaciones de Seguridad y Plantillas ---
 Role.hasMany(User, { foreignKey: 'roleId' });
 User.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
+Department.hasMany(User, { foreignKey: 'departmentId', sourceKey: 'key', as: 'users' });
+User.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
 Plantilla.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 Role.hasMany(Plantilla, { foreignKey: 'roleId' });
 Plantilla.hasMany(CampoPlantilla, { foreignKey: 'plantillaId' });
