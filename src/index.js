@@ -61,6 +61,9 @@ async function initDb(retries = 5, delay = 2000) {
       const { seedIndicators } = require('./services/indicatorSeeder');
       await seedIndicators();
 
+      const { initDbConstraints } = require('./services/dbConstraints');
+      await initDbConstraints();
+
       return true;
     } catch (err) {
       console.error(`Database connection failed. Retries remaining: ${retries - 1}`, err.message);
