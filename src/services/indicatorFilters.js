@@ -29,7 +29,8 @@ const GROUP_BY_DIMENSIONS = [
   'tipoArticulacion',
   'especialidadTP',
   'colegioLiceoTP',
-  'institucion'
+  'institucion',
+  'internosExternos'
 ];
 
 class FilterError extends Error {
@@ -120,7 +121,7 @@ const parseIndicatorFilters = (query = {}) => {
     especialidadTP: normalizeArrayParam(query.especialidadTP),
     colegioLiceoTP: normalizeArrayParam(query.colegioLiceoTP),
     institucion: normalizeArrayParam(query.institucion),
-    
+    internosExternos: normalizeArrayParam(query.internosExternos),
     // Educación Continua adicionales
     programa: normalizeArrayParam(query.programa),
     nivelDeEstudio: normalizeArrayParam(query.nivelDeEstudio),
@@ -203,7 +204,7 @@ const buildFilterMeta = (filters) => {
   if (filters.rangoEdad.length) meta.rangoEdad = filters.rangoEdad;
   if (filters.minAge !== null) meta.minAge = filters.minAge;
   if (filters.maxAge !== null) meta.maxAge = filters.maxAge;
-  
+  if (filters.internosExternos.length) meta.internosExternos = filters.internosExternos;
   if (filters.sector.length) meta.sector = filters.sector;
   if (filters.region.length) meta.region = filters.region;
   if (filters.comuna.length) meta.comuna = filters.comuna;
