@@ -163,13 +163,16 @@ const validateGroupBy = (config, groupBy) => {
   if (!groupBy) {
     return null;
   }
-  if (!config.allowedGroupBy.includes(groupBy)) {
+  let resolvedGroupBy = groupBy;
+  if (groupBy === 'tipo' && config.kind === 'vcm_actividad') resolvedGroupBy = 'tipoActividad';
+  if (groupBy === 'tipo' && config.kind === 'vcm_convenio') resolvedGroupBy = 'tipoConvenio';
+  if (!config.allowedGroupBy.includes(resolvedGroupBy)) {
     throw new ServiceError(400, 'INVALID_GROUP_BY', 'El groupBy solicitado no aplica para este indicador.', {
       groupBy,
       allowed: config.allowedGroupBy
     });
   }
-  return groupBy;
+  return resolvedGroupBy;
 };
 
 const resolveConfig = async (departmentKey, indicatorKey) => {
@@ -289,6 +292,7 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
       allowed: config.allowedGroupBy
     });
   }
+  const requestedGroupBy = filters.groupBy;
   const groupBy = validateGroupBy(config, filters.groupBy);
 
   const rows = await getRows(config, filters);
@@ -309,7 +313,7 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
       data: {
         indicatorKey: key,
         department: departmentId,
-        groupBy,
+        groupBy: requestedGroupBy,
         items,
         hasData: items.length > 0,
         filters: buildFilterMeta(filters),
@@ -332,7 +336,7 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
     data: {
       indicatorKey: key,
       department: departmentId,
-      groupBy,
+      groupBy: requestedGroupBy,
       items,
       hasData: items.length > 0,
       filters: buildFilterMeta(filters),

@@ -221,6 +221,8 @@ const getVcmConvenioRows = async (filters = {}) => {
   if (filters.region && filters.region.length) where.region = buildCaseInsensitiveIn(filters.region);
   if (filters.comuna && filters.comuna.length) where.comuna = buildCaseInsensitiveIn(filters.comuna);
   if (filters.sector && filters.sector.length) where.sector = buildCaseInsensitiveIn(filters.sector);
+  const tiposConvenio = filters.tipoConvenio && filters.tipoConvenio.length ? filters.tipoConvenio : filters.tipo;
+  if (tiposConvenio && tiposConvenio.length) where.tipoConvenio = buildCaseInsensitiveIn(tiposConvenio);
   if (filters.areaVinculada && filters.areaVinculada.length) {
     where.areaVinculada = buildCaseInsensitiveIn(filters.areaVinculada);
   }
@@ -250,6 +252,8 @@ const getVcmActividadRows = async (filters = {}) => {
   if (filters.region && filters.region.length) where.region = buildCaseInsensitiveIn(filters.region);
   if (filters.comuna && filters.comuna.length) where.comuna = buildCaseInsensitiveIn(filters.comuna);
   if (filters.sector && filters.sector.length) where.sector = buildCaseInsensitiveIn(filters.sector);
+  const tiposActividad = filters.tipoActividad && filters.tipoActividad.length ? filters.tipoActividad : filters.tipo;
+  if (tiposActividad && tiposActividad.length) where.tipoActividad = buildCaseInsensitiveIn(tiposActividad);
 
   const actividades = await Actividad.findAll({ where });
   return actividades.map(a => ({

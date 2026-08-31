@@ -126,7 +126,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         schema: { type: string }
+ *         description: Clave del indicador. VCM incluye total_convenios, convenios_activos y actividades_realizadas.
+ *         schema: { type: string, example: total_convenios }
  *     responses:
  *       200:
  *         description: KPI actualizado.
@@ -187,6 +188,11 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
+ *         description: En VCM se aplica a tipoConvenio o tipoActividad según el indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: sector
+ *         description: Sector del convenio o actividad VCM.
  *         schema: { type: string }
  *       - in: query
  *         name: modalidad
@@ -219,11 +225,15 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         schema: { type: string }
+ *         description: Clave del indicador. Para este contrato VCM use convenios_activos.
+ *         schema: { type: string, example: convenios_activos }
  *       - in: query
  *         name: department
  *         required: true
  *         schema: { type: string }
+ *       - in: query
+ *         name: year
+ *         schema: { type: integer }
  *       - in: query
  *         name: fromYear
  *         schema: { type: integer }
@@ -241,6 +251,10 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
+ *         description: En VCM se aplica a tipoConvenio o tipoActividad según el indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: sector
  *         schema: { type: string }
  *       - in: query
  *         name: modalidad
@@ -249,7 +263,8 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         name: groupBy
  *         schema:
  *           type: string
- *           enum: [year, area, tipo, modalidad, programa, sexo, rangoEdad]
+ *           description: anio es alias externo de year; tipo se resuelve según la entidad VCM.
+ *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, sector]
  *     responses:
  *       200:
  *         description: Serie simple (points) o segmentada (series) según groupBy.
@@ -266,7 +281,8 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         schema: { type: string }
+ *         description: Clave del indicador. Para este contrato VCM use actividades_realizadas.
+ *         schema: { type: string, example: actividades_realizadas }
  *       - in: query
  *         name: department
  *         required: true
@@ -276,7 +292,18 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *         required: true
  *         schema:
  *           type: string
- *           enum: [year, area, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico]
+ *           description: anio es alias de year; para actividades VCM tipo representa tipoActividad.
+ *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico, sector]
+ *       - in: query
+ *         name: year
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: tipo
+ *         description: En actividades VCM filtra tipoActividad.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: sector
+ *         schema: { type: string }
  *       - in: query
  *         name: fromYear
  *         schema: { type: integer }
