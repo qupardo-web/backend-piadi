@@ -81,6 +81,7 @@ const normalizeGroupBy = (value) => {
     return null;
   }
   const g = String(value).trim();
+  if (g === 'anio') return 'year';
   return g === 'ageRange' ? 'rangoEdad' : g;
 };
 

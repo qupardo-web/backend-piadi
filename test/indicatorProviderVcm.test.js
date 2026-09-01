@@ -29,6 +29,95 @@ const captureConvenioWhere = async (query) => {
   return captured;
 };
 
+const stubKpi = (key, formulaKey, format = 'number', unit = 'registros') => {
+  stub(provider, 'getDepartmentByKey', async () => ({ key: 'vinculacion_medio' }));
+  stub(provider, 'getKpi', async () => ({ key, formulaKey, format, unit }));
+};
+
+test('total_convenios/values calcula el total con datos VCM', async () => {
+  stubKpi('total_convenios', 'COUNT_CONVENIOS', 'number', 'convenios');
+  stub(provider, 'getVcmConvenioRows', async () => [
+    { idConvenio: 'C-1', anio: 2025 },
+    { idConvenio: 'C-2', anio: 2025 },
+    { idConvenio: 'C-3', anio: 2026 }
+  ]);
+
+  const result = await indicatorService.getIndicatorValue('total_convenios', {
+    department: 'vinculacion_medio'
+  });
+
+  assert.equal(result.data.value, 3);
+  assert.equal(result.data.hasData, true);
+  assert.equal(result.data.indicatorKey, 'total_convenios');
+});
+
+test('convenios_activos/series acepta groupBy=anio y calcula la serie ordenada', async () => {
+  stubKpi('convenios_activos', 'COUNT_ACTIVE_CONVENIOS', 'number', 'convenios');
+  stub(provider, 'getVcmConvenioRows', async () => [
+    { anio: 2025, activo: true },
+    { anio: 2024, activo: true },
+    { anio: 2025, activo: false },
+    { anio: 2025, activo: true }
+  ]);
+
+  const result = await indicatorService.getIndicatorSeries('convenios_activos', {
+    department: 'vinculacion_medio', groupBy: 'anio'
+  });
+  const resultWithYear = await indicatorService.getIndicatorSeries('convenios_activos', {
+    department: 'vinculacion_medio', groupBy: 'year'
+  });
+
+  assert.deepEqual(result.data.points, [
+    { year: 2024, value: 1 },
+    { year: 2025, value: 2 }
+  ]);
+  assert.deepEqual(result.data.points, resultWithYear.data.points);
+});
+
+test('actividades_realizadas/breakdown interpreta groupBy=tipo como tipoActividad', async () => {
+  stubKpi('actividades_realizadas', 'COUNT_ACTIVITIES', 'number', 'actividades');
+  stub(provider, 'getVcmActividadRows', async () => [
+    { anio: 2026, tipoActividad: 'Taller' },
+    { anio: 2026, tipoActividad: 'Taller' },
+    { anio: 2026, tipoActividad: 'Seminario' }
+  ]);
+
+  const result = await indicatorService.getIndicatorBreakdown('actividades_realizadas', {
+    department: 'vinculacion_medio', groupBy: 'tipo'
+  });
+
+  assert.equal(result.data.groupBy, 'tipo');
+  assert.deepEqual(result.data.items, [
+    { label: 'Taller', value: 2 },
+    { label: 'Seminario', value: 1 }
+  ]);
+});
+
+test('provider de convenios aplica juntos los filtros year, tipo y sector', async () => {
+  const where = await captureConvenioWhere({ year: '2026', tipo: 'Marco', sector: 'Público' });
+  assert.equal(where.anioFirma, 2026);
+  assert.equal(where.tipoConvenio[Op.iLike], 'Marco');
+  assert.equal(where.sector[Op.iLike], 'Público');
+});
+
+test('provider de actividades aplica tipo, sector y año sin reemplazar condiciones', async () => {
+  let where;
+  stub(models.Actividad, 'findAll', async (options) => { where = options.where; return []; });
+  await provider.getVcmActividadRows(filters({ year: '2025', tipo: 'Taller', sector: 'Social' }));
+  assert.equal(where.anio, 2025);
+  assert.equal(where.tipoActividad[Op.iLike], 'Taller');
+  assert.equal(where.sector[Op.iLike], 'Social');
+});
+
+test('quitar el filtro tipo restaura una consulta VCM sin condición de tipo', async () => {
+  const queries = [];
+  stub(models.Actividad, 'findAll', async (options) => { queries.push(options.where); return []; });
+  await provider.getVcmActividadRows(filters({ tipo: 'Taller' }));
+  await provider.getVcmActividadRows(filters());
+  assert.equal(queries[0].tipoActividad[Op.iLike], 'Taller');
+  assert.equal(queries[1].tipoActividad, undefined);
+});
+
 test('sin areaVinculada no agrega condición y una request posterior restaura el where base', async () => {
   const queries = [];
   stub(models.Convenio, 'findAll', async (options) => { queries.push(options.where); return []; });
