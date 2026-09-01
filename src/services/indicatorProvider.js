@@ -331,6 +331,8 @@ const getVcmProyectoRows = async (filters = {}) => {
     return {
       idProyecto: p.idProyecto,
       anio: p.anioInicio,
+      estado: p.estado,
+      vigente: String(p.estado || '').trim().toLowerCase() === 'en curso',
       montoFinanciado: f ? Number(f.montoAdjudicado || 0) : 0
     };
   });

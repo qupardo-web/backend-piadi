@@ -112,7 +112,7 @@ const aggregateVcmArticulacion = (rows) => ({
 });
 
 const aggregateVcmProyecto = (rows) => ({
-  proyectosCount: rows.length,
+  proyectosCount: rows.filter((r) => r.vigente).length,
   financiamientoSum: rows.reduce((sum, r) => sum + (r.montoFinanciado || 0), 0)
 });
 
