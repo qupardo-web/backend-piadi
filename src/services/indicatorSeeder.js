@@ -38,7 +38,7 @@ const VCM_KPI_SEED = [
   { key: 'actividades_realizadas', name: 'Actividades realizadas', description: 'Cantidad de actividades de vinculación ejecutadas.', unit: 'actividades', format: 'number', formulaKey: 'COUNT_ACTIVITIES', enabled: true },
   { key: 'participaciones', name: 'Total de participaciones', description: 'Suma total de personas participantes en las actividades de VCM.', unit: 'personas', format: 'number', formulaKey: 'PARTICIPACIONES_SUM', enabled: true },
   { key: 'articulaciones_tp', name: 'Articulaciones técnico-profesionales', description: 'Cantidad de articulaciones con colegios y liceos TP.', unit: 'articulaciones', format: 'number', formulaKey: 'COUNT_ARTICULACIONES', enabled: true },
-  { key: 'proyectos_vcm', name: 'Proyectos ejecutados', description: 'Cantidad total de proyectos de VCM.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_PROJECTS', enabled: true },
+  { key: 'proyectos_vcm', name: 'Proyectos vigentes', description: 'Cantidad de proyectos de VCM con estado En Curso.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_PROJECTS', enabled: true },
   { key: 'financiamiento_vcm', name: 'Financiamiento total', description: 'Suma de financiamiento neto para proyectos de VCM.', unit: 'CLP', format: 'currency', formulaKey: 'FINANCING_SUM', enabled: true }
 ];
 
@@ -97,6 +97,11 @@ async function seedIndicators() {
       defaults: { ...kpi, departmentId: VCM_DEPARTMENT_SEED.key }
     });
   }
+  const proyectosVigentes = VCM_KPI_SEED.find((kpi) => kpi.key === 'proyectos_vcm');
+  await IndicatorDefinition.update(
+    { name: proyectosVigentes.name, description: proyectosVigentes.description },
+    { where: { departmentId: VCM_DEPARTMENT_SEED.key, key: proyectosVigentes.key } }
+  );
 
   // 3. Seed Institucional
   await Department.findOrCreate({ where: { key: INSTITUCIONAL_DEPARTMENT_SEED.key }, defaults: INSTITUCIONAL_DEPARTMENT_SEED });
