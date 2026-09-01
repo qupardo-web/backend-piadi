@@ -21,20 +21,6 @@ async function initDbConstraints() {
       CREATE INDEX IF NOT EXISTS idx_metas_creator ON metas ("creatorId");
     `);
     await sequelize.query(`
-      -- Sanitización de caracteres y tildes corruptas en VcM
-      UPDATE convenios SET sector = 'Público' WHERE sector ILIKE '%P%blico%' AND sector != 'Público';
-      UPDATE convenios SET sector = 'Educación TP' WHERE sector ILIKE '%Educaci%n TP%' AND sector != 'Educación TP';
-      UPDATE convenios SET sector = 'ONG/Fundación' WHERE sector ILIKE '%Fundaci%n%' AND sector != 'ONG/Fundación';
-      UPDATE convenios SET "areaVinculada" = 'Auditoría' WHERE "areaVinculada" ILIKE '%Auditor%a%' AND "areaVinculada" != 'Auditoría';
-      UPDATE convenios SET "areaVinculada" = 'Gestión Tributaria' WHERE "areaVinculada" ILIKE '%Gesti%n%' AND "areaVinculada" != 'Gestión Tributaria';
-      UPDATE convenios SET "areaVinculada" = 'Administración' WHERE "areaVinculada" ILIKE '%Administraci%n%' AND "areaVinculada" != 'Administración';
-
-      UPDATE actividades SET sector = 'Público' WHERE sector ILIKE '%P%blico%' AND sector != 'Público';
-      UPDATE actividades SET sector = 'Educación TP' WHERE sector ILIKE '%Educaci%n TP%' AND sector != 'Educación TP';
-      UPDATE actividades SET sector = 'ONG/Fundación' WHERE sector ILIKE '%Fundaci%n%' AND sector != 'ONG/Fundación';
-      UPDATE actividades SET modalidad = 'Híbrida' WHERE modalidad ILIKE '%H%brida%' AND modalidad != 'Híbrida';
-    `);
-    await sequelize.query(`
       DO $$
       BEGIN
         IF NOT EXISTS (
