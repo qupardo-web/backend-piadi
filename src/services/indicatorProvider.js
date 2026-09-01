@@ -406,18 +406,18 @@ const getFilterOptions = async (department, filters = {}) => {
       sexos: [],
       rangosEdad: [],
       // Extra filters for VCM
-      regiones: [...new Set([
+      regiones: new Set([
         ...convenios.map(c => c.region),
         ...actividades.map(a => a.region),
         ...participaciones.map(p => p.region),
         ...articulaciones.map(ar => ar.region)
-      ].filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'es')),
-      comunas: [...new Set([
+      ]),
+      comunas: new Set([
         ...convenios.map(c => c.comuna),
         ...actividades.map(a => a.comuna),
         ...participaciones.map(p => p.comuna),
         ...articulaciones.map(ar => ar.comuna)
-      ].filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'es')),
+      ]),
       sectores: distinctValues(convenios, 'sector').sort()
     };
   }
