@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const { sequelize } = require('../../models');
 const { Op } = require('sequelize');
+const cacheService = require('../cacheService');
 
 const procesarCarga = async (workbook, campos) => {
   const transaction = await sequelize.transaction();
@@ -307,6 +308,7 @@ const procesarCarga = async (workbook, campos) => {
     await sequelize.query('REFRESH MATERIALIZED VIEW v_meta_indicator_values', { transaction });
 
     await transaction.commit();
+    cacheService.flush();
 
     return { success: true, resumen: resumenFinal };
   } catch (error) {
