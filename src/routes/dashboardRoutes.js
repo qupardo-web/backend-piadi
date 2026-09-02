@@ -80,6 +80,14 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *                   type: object
  *                   properties:
  *                     year: { type: integer, example: 2026 }
+ *                     metas:
+ *                       type: object
+ *                       description: Resumen aditivo de metas calculadas en el mismo alcance del dashboard.
+ *                       properties:
+ *                         total: { type: integer, example: 5 }
+ *                         cumplidas: { type: integer, example: 2 }
+ *                         enRiesgo: { type: integer, example: 1 }
+ *                         cumplimientoGlobal: { type: number, example: 64 }
  *                     departments:
  *                       type: array
  *                       items:

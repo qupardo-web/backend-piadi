@@ -267,7 +267,22 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, sector]
  *     responses:
  *       200:
- *         description: Serie simple (points) o segmentada (series) según groupBy.
+ *         description: Serie simple (points) o segmentada (series) según groupBy. Si existe una única meta aplicable, incluye targetLine.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     targetLine:
+ *                       type: object
+ *                       description: Campo opcional; se omite cuando no existe una meta aplicable.
+ *                       properties:
+ *                         value: { type: number, example: 100 }
+ *                         label: { type: string, example: Meta }
  */
 router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorController.getIndicatorSeries);
 
@@ -312,7 +327,24 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *         schema: { type: integer }
  *     responses:
  *       200:
- *         description: Items de distribución { label, value }.
+ *         description: Items de distribución { label, value }. La información de meta es opcional.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     metaTarget:
+ *                       type: number
+ *                       description: Objetivo de la MetaMetric aplicable; se omite si no existe.
+ *                       example: 100
+ *                     metaStatus:
+ *                       type: string
+ *                       description: Estado calculado por el motor de progreso; se omite si no existe meta aplicable.
+ *                       enum: [cumplida, en_progreso, en_riesgo, no_cumplida]
  */
 router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorController.getIndicatorBreakdown);
 

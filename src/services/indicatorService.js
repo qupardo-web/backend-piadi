@@ -223,6 +223,7 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
   const groupBy = validateGroupBy(config, filters.groupBy);
 
   const rows = await getRows(config, filters);
+  const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
   if (!groupBy || groupBy === 'year') {
     const byYear = groupRowsBy(rows, 'year');
@@ -243,7 +244,8 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
         points,
         hasData: points.length > 0,
         filters: buildFilterMeta(filters),
-        meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+        meta: { source: 'postgresql', formulaKey: definition.formulaKey },
+        ...(metaContext ? { targetLine: metaContext.targetLine } : {})
       }
     };
   }
@@ -275,7 +277,8 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
       series,
       hasData: series.length > 0,
       filters: buildFilterMeta(filters),
-      meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+      meta: { source: 'postgresql', formulaKey: definition.formulaKey },
+      ...(metaContext ? { targetLine: metaContext.targetLine } : {})
     }
   };
 };
@@ -296,6 +299,7 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   const groupBy = validateGroupBy(config, filters.groupBy);
 
   const rows = await getRows(config, filters);
+  const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
   // Custom handler for VCM participaciones grouped by sex
   if (config.kind === 'vcm_participacion' && groupBy === 'sexo') {
@@ -317,7 +321,11 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
         items,
         hasData: items.length > 0,
         filters: buildFilterMeta(filters),
-        meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+        meta: { source: 'postgresql', formulaKey: definition.formulaKey },
+        ...(metaContext ? {
+          metaTarget: metaContext.metaTarget,
+          metaStatus: metaContext.metaStatus
+        } : {})
       }
     };
   }
@@ -340,7 +348,11 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
       items,
       hasData: items.length > 0,
       filters: buildFilterMeta(filters),
-      meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+      meta: { source: 'postgresql', formulaKey: definition.formulaKey },
+      ...(metaContext ? {
+        metaTarget: metaContext.metaTarget,
+        metaStatus: metaContext.metaStatus
+      } : {})
     }
   };
 };
