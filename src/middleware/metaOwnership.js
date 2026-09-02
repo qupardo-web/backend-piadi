@@ -1,5 +1,6 @@
 const { Meta } = require('../models');
 const { ValidationError, UnauthorizedError, ForbiddenError, NotFoundError } = require('../utils/errors');
+const { isRectoria } = require('./rectoriaAuthorization');
 
 const requireMetaOwnership = async (req, res, next) => {
   try {
@@ -15,8 +16,7 @@ const requireMetaOwnership = async (req, res, next) => {
       throw new NotFoundError('La meta solicitada no existe');
     }
     const isOwner = Number(meta.creatorId) === Number(req.user.id);
-    const isRectoria = req.user.roleGroup === 'Rectoria';
-    if (!isOwner && !isRectoria) {
+    if (!isOwner && !isRectoria(req.user)) {
       throw new ForbiddenError('Solo el creador de la meta o Rectoría puede modificarla o eliminarla');
     }
     req.meta = meta;

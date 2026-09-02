@@ -2,6 +2,11 @@ const express = require('express');
 const metaController = require('../controllers/metaController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { requireMetaOwnership } = require('../middleware/metaOwnership');
+const {
+  requireRectoria,
+  requireRectoriaForInstitutionalCreation
+} = require('../middleware/rectoriaAuthorization');
+const { auditRectoriaDepartmentalMetaUpdate } = require('../middleware/metaAudit');
 
 const router = express.Router();
 
@@ -96,9 +101,10 @@ const router = express.Router();
  *                 data: { $ref: '#/components/schemas/Meta' }
  *       400: { description: Payload o suma de pesos inválida. }
  *       401: { description: Token ausente o inválido. }
+ *       403: { description: Solo Rectoría puede crear una meta institucional. }
  *       404: { description: Departamento o indicador inexistente. }
  */
-router.post('/', authenticateToken, metaController.create);
+router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, metaController.create);
 
 /**
  * @openapi
@@ -132,6 +138,34 @@ router.post('/', authenticateToken, metaController.create);
  *       400: { description: Filtro status inválido o periodo de meta no reconocido. }
  */
 router.get('/', metaController.listWithProgress);
+
+/**
+ * @openapi
+ * /api/metas/institucional/progress:
+ *   get:
+ *     tags: [Metas]
+ *     summary: Obtiene el cumplimiento global de las metas institucionales
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Promedio del progreso ponderado de las metas institucionales. }
+ *       401: { description: Token ausente o inválido. }
+ *       403: { description: El usuario no pertenece a Rectoría. }
+ */
+router.get('/institucional/progress', authenticateToken, requireRectoria, metaController.getInstitutionalProgress);
+
+/**
+ * @openapi
+ * /api/metas/institucional:
+ *   get:
+ *     tags: [Metas]
+ *     summary: Lista metas institucionales con progreso y breakdown por métrica
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Metas cuyo departmentId es null. }
+ *       401: { description: Token ausente o inválido. }
+ *       403: { description: El usuario no pertenece a Rectoría. }
+ */
+router.get('/institucional', authenticateToken, requireRectoria, metaController.listInstitutional);
 
 /**
  * @openapi
@@ -217,7 +251,7 @@ router.get('/:id/progress', metaController.getProgress);
  *       404: { description: Meta inexistente. }
  */
 router.get('/:id', metaController.getById);
-router.put('/:id', authenticateToken, requireMetaOwnership, metaController.update);
+router.put('/:id', authenticateToken, requireMetaOwnership, auditRectoriaDepartmentalMetaUpdate, metaController.update);
 router.delete('/:id', authenticateToken, requireMetaOwnership, metaController.remove);
 
 module.exports = router;
