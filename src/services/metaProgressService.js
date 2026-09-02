@@ -253,6 +253,18 @@ const listMetasWithProgress = async (filters = {}, options = {}) => {
   return filters.status ? enriched.filter((meta) => meta.status === filters.status) : enriched;
 };
 
+const listInstitutionalMetasWithProgress = (options = {}) => (
+  listMetasWithProgress({ departmentId: null }, options)
+);
+
+const getInstitutionalProgress = async (options = {}) => {
+  const metas = await listInstitutionalMetasWithProgress(options);
+  const totalProgress = metas.length === 0
+    ? 0
+    : metas.reduce((sum, meta) => sum + meta.totalProgress, 0) / metas.length;
+  return { totalProgress };
+};
+
 module.exports = {
   STATUSES,
   buildIndicatorQuery,
@@ -261,5 +273,7 @@ module.exports = {
   determineStatus,
   calculateProgress,
   getMetaProgress,
-  listMetasWithProgress
+  listMetasWithProgress,
+  listInstitutionalMetasWithProgress,
+  getInstitutionalProgress
 };
