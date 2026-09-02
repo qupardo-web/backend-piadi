@@ -17,6 +17,7 @@ const {
 } = require('../models');
 
 const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio'];
+const INNOVATION_PROJECT_TYPES = ['Estudiantil', 'Institucional'];
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
 const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
 
@@ -338,6 +339,60 @@ const getVcmProyectoRows = async (filters = {}) => {
   });
 };
 
+// --- Datos de Innovación ---
+const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false } = {}) => {
+  const conditions = [{ tipoProyecto: buildCaseInsensitiveIn(INNOVATION_PROJECT_TYPES) }];
+  if (filters.tipo && filters.tipo.length) {
+    conditions.push({ tipoProyecto: buildCaseInsensitiveIn(filters.tipo) });
+  }
+  if (filters.estado && filters.estado.length) {
+    conditions.push({ estado: buildCaseInsensitiveIn(filters.estado) });
+  }
+
+  if (activeDuringYear) {
+    const referenceYear = filters.year !== null && filters.year !== undefined
+      ? filters.year
+      : new Date().getFullYear();
+    conditions.push({ anioInicio: { [Op.lte]: referenceYear } });
+    conditions.push({ anioTermino: { [Op.gte]: referenceYear } });
+  } else if (filters.year !== null && filters.year !== undefined) {
+    conditions.push({ anioInicio: filters.year });
+  }
+
+  return { [Op.and]: conditions };
+};
+
+const getInnovationProjectRows = async (filters = {}, options = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'innovacion') return [];
+  const projects = await Proyecto.findAll({
+    where: buildInnovationProjectWhere(filters, options)
+  });
+  return projects.map((project) => ({
+    idProyecto: project.idProyecto,
+    anio: Number(project.anioInicio),
+    tipoProyecto: project.tipoProyecto,
+    estado: project.estado
+  }));
+};
+
+const getInnovationFinancingRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'innovacion') return [];
+  const projects = await Proyecto.findAll({
+    where: buildInnovationProjectWhere(filters),
+    include: [{ model: Financiamiento, required: true }]
+  });
+  return projects
+    .filter((project) => project.Financiamiento && isTruthyFlag(project.Financiamiento.financiamientoExterno))
+    .map((project) => ({
+      idProyecto: project.idProyecto,
+      anio: Number(project.anioInicio),
+      tipoProyecto: project.tipoProyecto,
+      estado: project.estado,
+      fuente: project.Financiamiento.fuenteFinanciamiento,
+      montoAdjudicado: Number(project.Financiamiento.montoAdjudicado || 0)
+    }));
+};
+
 const distinctValues = (rows, key) => {
   const set = new Set();
   rows.forEach((r) => {
@@ -509,6 +564,8 @@ module.exports = {
   getVcmParticipacionRows,
   getVcmArticulacionRows,
   getVcmProyectoRows,
+  getInnovationProjectRows,
+  getInnovationFinancingRows,
   getFilterOptions,
   getDepartments,
   getDepartmentByKey,
