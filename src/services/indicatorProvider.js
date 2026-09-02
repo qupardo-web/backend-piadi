@@ -340,7 +340,7 @@ const getVcmProyectoRows = async (filters = {}) => {
 };
 
 // --- Datos de Innovación ---
-const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false } = {}) => {
+const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false, finalizedInYear = false } = {}) => {
   const conditions = [{ tipoProyecto: buildCaseInsensitiveIn(INNOVATION_PROJECT_TYPES) }];
   if (filters.tipo && filters.tipo.length) {
     conditions.push({ tipoProyecto: buildCaseInsensitiveIn(filters.tipo) });
@@ -349,7 +349,13 @@ const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false } 
     conditions.push({ estado: buildCaseInsensitiveIn(filters.estado) });
   }
 
-  if (activeDuringYear) {
+  if (finalizedInYear) {
+    const referenceYear = filters.year !== null && filters.year !== undefined
+      ? filters.year
+      : new Date().getFullYear();
+    conditions.push({ estado: buildCaseInsensitiveEquals('Finalizado') });
+    conditions.push({ anioTermino: referenceYear });
+  } else if (activeDuringYear) {
     const referenceYear = filters.year !== null && filters.year !== undefined
       ? filters.year
       : new Date().getFullYear();
@@ -369,7 +375,7 @@ const getInnovationProjectRows = async (filters = {}, options = {}) => {
   });
   return projects.map((project) => ({
     idProyecto: project.idProyecto,
-    anio: Number(project.anioInicio),
+    anio: Number(options.finalizedInYear ? project.anioTermino : project.anioInicio),
     tipoProyecto: project.tipoProyecto,
     estado: project.estado
   }));

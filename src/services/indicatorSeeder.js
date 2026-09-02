@@ -56,16 +56,17 @@ const INNOVACION_DEPARTMENT_SEED = {
   name: 'Innovación',
   description: 'Dirección de innovación, desarrollo y transferencia de conocimiento.',
   enabled: true,
-  hasData: false,
+  hasData: true,
   order: 4
 };
 
 const INNOVACION_KPI_SEED = [
-  { key: 'proyectos_innovacion', name: 'Proyectos de innovación', description: 'Cantidad de proyectos de innovación adjudicados o desarrollados.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_INNOVATION_PROJECTS', enabled: true },
-  { key: 'patentes_solicitadas', name: 'Patentes solicitadas', description: 'Cantidad de patentes, registros de propiedad intelectual o marcas solicitadas.', unit: 'registros', format: 'number', formulaKey: 'COUNT_PATENTS', enabled: true },
+  { key: 'proyectos_innovacion', name: 'Proyectos de innovación', description: 'Cantidad de proyectos de innovación adjudicados o desarrollados.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_INNOVATION_PROJECTS', enabled: false },
+  { key: 'patentes_solicitadas', name: 'Patentes solicitadas', description: 'Cantidad de patentes, registros de propiedad intelectual o marcas solicitadas.', unit: 'registros', format: 'number', formulaKey: 'COUNT_PATENTS', enabled: false },
   { key: 'proyectos_activos', name: 'Proyectos activos', description: 'Cantidad de proyectos de innovación activos durante el año consultado.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', enabled: true },
   { key: 'total_proyectos', name: 'Total de proyectos', description: 'Cantidad de proyectos de innovación iniciados en el período.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', enabled: true },
-  { key: 'financiamiento_obtenido', name: 'Financiamiento obtenido', description: 'Monto externo adjudicado a proyectos de innovación.', unit: 'CLP', format: 'currency', formulaKey: 'SUM_INNOVATION_FINANCING', enabled: true }
+  { key: 'financiamiento_obtenido', name: 'Financiamiento obtenido', description: 'Monto externo adjudicado a proyectos de innovación.', unit: 'CLP', format: 'currency', formulaKey: 'SUM_INNOVATION_FINANCING', enabled: true },
+  { key: 'proyectos_finalizados', name: 'Innovaciones implementadas', description: 'Cantidad de proyectos de innovación finalizados en el año consultado.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', enabled: true }
 ];
 
 const CURRICULAR_DEPARTMENT_SEED = {
@@ -111,12 +112,25 @@ async function seedIndicators() {
 
   // 4. Seed Innovación
   await Department.findOrCreate({ where: { key: INNOVACION_DEPARTMENT_SEED.key }, defaults: INNOVACION_DEPARTMENT_SEED });
+  await Department.update(
+    { hasData: true },
+    { where: { key: INNOVACION_DEPARTMENT_SEED.key } }
+  );
   for (const kpi of INNOVACION_KPI_SEED) {
     await IndicatorDefinition.findOrCreate({
       where: { departmentId: INNOVACION_DEPARTMENT_SEED.key, key: kpi.key },
       defaults: { ...kpi, departmentId: INNOVACION_DEPARTMENT_SEED.key }
     });
   }
+  await IndicatorDefinition.update(
+    { enabled: false },
+    {
+      where: {
+        departmentId: INNOVACION_DEPARTMENT_SEED.key,
+        key: ['proyectos_innovacion', 'patentes_solicitadas']
+      }
+    }
+  );
 
   // 5. Seed Desarrollo Curricular
   await Department.findOrCreate({ where: { key: CURRICULAR_DEPARTMENT_SEED.key }, defaults: CURRICULAR_DEPARTMENT_SEED });
