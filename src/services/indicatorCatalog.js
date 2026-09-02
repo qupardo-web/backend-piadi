@@ -18,6 +18,8 @@ const VCM_ARTICULACION_GROUP_BY = [
   'plataformaFoco', 'colegioLiceoTP'
 ];
 const VCM_PROYECTO_GROUP_BY = ['year'];
+const INNOVACION_PROJECT_GROUP_BY = ['year'];
+const INNOVACION_FINANCING_GROUP_BY = ['fuente'];
 
 const INDICATORS = {
   // Educación Continua
@@ -40,7 +42,12 @@ const INDICATORS = {
   participaciones: { kind: 'vcm_participacion', formulaKey: 'PARTICIPACIONES_SUM', allowedGroupBy: VCM_PARTICIPACION_GROUP_BY },
   articulaciones_tp: { kind: 'vcm_articulacion', formulaKey: 'COUNT_ARTICULACIONES', allowedGroupBy: VCM_ARTICULACION_GROUP_BY },
   proyectos_vcm: { kind: 'vcm_proyecto', formulaKey: 'COUNT_PROJECTS', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
-  financiamiento_vcm: { kind: 'vcm_proyecto', formulaKey: 'FINANCING_SUM', allowedGroupBy: VCM_PROYECTO_GROUP_BY }
+  financiamiento_vcm: { kind: 'vcm_proyecto', formulaKey: 'FINANCING_SUM', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
+
+  // Innovación (PIADI-253)
+  proyectos_activos: { kind: 'innovation_active_project', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
+  total_proyectos: { kind: 'innovation_project', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
+  financiamiento_obtenido: { kind: 'innovation_financing', formulaKey: 'SUM_INNOVATION_FINANCING', allowedGroupBy: INNOVACION_FINANCING_GROUP_BY }
 };
 
 const PARTICIPANT_FORMULAS = ['UNIQUE_PARTICIPANTS', 'PARTICIPANT_PROFILE', 'TRAINING_RECURRENCE'];

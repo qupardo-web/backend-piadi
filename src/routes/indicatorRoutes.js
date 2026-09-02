@@ -160,7 +160,10 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         schema: { type: string }
+ *         description: Innovación admite proyectos_activos, total_proyectos y financiamiento_obtenido.
+ *         schema:
+ *           type: string
+ *           example: proyectos_activos
  *       - in: query
  *         name: department
  *         required: true
@@ -188,7 +191,11 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
- *         description: En VCM se aplica a tipoConvenio o tipoActividad según el indicador.
+ *         description: En Innovación se aplica a tipoProyecto; en VCM depende del indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: estado
+ *         description: Estado del proyecto de Innovación.
  *         schema: { type: string }
  *       - in: query
  *         name: sector
@@ -225,8 +232,8 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Para este contrato VCM use convenios_activos.
- *         schema: { type: string, example: convenios_activos }
+ *         description: Clave del indicador. Innovación admite total_proyectos.
+ *         schema: { type: string, example: total_proyectos }
  *       - in: query
  *         name: department
  *         required: true
@@ -251,7 +258,11 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
- *         description: En VCM se aplica a tipoConvenio o tipoActividad según el indicador.
+ *         description: En Innovación se aplica a tipoProyecto; en VCM depende del indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: estado
+ *         description: Estado del proyecto de Innovación.
  *         schema: { type: string }
  *       - in: query
  *         name: sector
@@ -263,8 +274,8 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         name: groupBy
  *         schema:
  *           type: string
- *           description: anio es alias externo de year; tipo se resuelve según la entidad VCM.
- *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, sector]
+ *           description: anio es alias externo de year; Innovación usa anio para la serie total_proyectos.
+ *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, sector, fuente]
  *     responses:
  *       200:
  *         description: Serie simple (points) o segmentada (series) según groupBy.
@@ -281,8 +292,8 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Para este contrato VCM use actividades_realizadas.
- *         schema: { type: string, example: actividades_realizadas }
+ *         description: Clave del indicador. Innovación admite financiamiento_obtenido.
+ *         schema: { type: string, example: financiamiento_obtenido }
  *       - in: query
  *         name: department
  *         required: true
@@ -292,14 +303,18 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *         required: true
  *         schema:
  *           type: string
- *           description: anio es alias de year; para actividades VCM tipo representa tipoActividad.
- *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico, sector]
+ *           description: anio es alias de year; financiamiento_obtenido admite fuente.
+ *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico, sector, fuente]
  *       - in: query
  *         name: year
  *         schema: { type: integer }
  *       - in: query
  *         name: tipo
- *         description: En actividades VCM filtra tipoActividad.
+ *         description: En Innovación se aplica a tipoProyecto; en VCM depende del indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: estado
+ *         description: Estado del proyecto de Innovación.
  *         schema: { type: string }
  *       - in: query
  *         name: sector

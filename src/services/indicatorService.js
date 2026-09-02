@@ -116,6 +116,15 @@ const aggregateVcmProyecto = (rows) => ({
   financiamientoSum: rows.reduce((sum, r) => sum + (r.montoFinanciado || 0), 0)
 });
 
+const aggregateInnovationProject = (rows, active = false) => ({
+  proyectosCount: rows.length,
+  proyectosActivosCount: active ? rows.length : 0
+});
+
+const aggregateInnovationFinancing = (rows) => ({
+  financiamientoSum: rows.reduce((sum, row) => sum + (row.montoAdjudicado || 0), 0)
+});
+
 const aggregate = (config, rows) => {
   if (config.kind === 'participant') return aggregateParticipant(rows);
   if (config.kind === 'vcm_convenio') return aggregateVcmConvenio(rows);
@@ -123,6 +132,9 @@ const aggregate = (config, rows) => {
   if (config.kind === 'vcm_participacion') return aggregateVcmParticipacion(rows);
   if (config.kind === 'vcm_articulacion') return aggregateVcmArticulacion(rows);
   if (config.kind === 'vcm_proyecto') return aggregateVcmProyecto(rows);
+  if (config.kind === 'innovation_active_project') return aggregateInnovationProject(rows, true);
+  if (config.kind === 'innovation_project') return aggregateInnovationProject(rows);
+  if (config.kind === 'innovation_financing') return aggregateInnovationFinancing(rows);
   return aggregateProgram(rows);
 };
 
@@ -133,6 +145,9 @@ const getRows = (config, filters) => {
   if (config.kind === 'vcm_participacion') return provider.getVcmParticipacionRows(filters);
   if (config.kind === 'vcm_articulacion') return provider.getVcmArticulacionRows(filters);
   if (config.kind === 'vcm_proyecto') return provider.getVcmProyectoRows(filters);
+  if (config.kind === 'innovation_active_project') return provider.getInnovationProjectRows(filters, { activeDuringYear: true });
+  if (config.kind === 'innovation_project') return provider.getInnovationProjectRows(filters);
+  if (config.kind === 'innovation_financing') return provider.getInnovationFinancingRows(filters);
   return provider.getProgramRows(filters);
 };
 

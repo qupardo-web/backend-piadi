@@ -43,6 +43,11 @@ const COUNT_ARTICULACIONES = (m = {}) => ({ value: m.articulacionesCount || 0, h
 const COUNT_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
 const FINANCING_SUM = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: true });
 
+// --- Fórmulas de Innovación ---
+const COUNT_ACTIVE_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosActivosCount || 0, hasData: true });
+const COUNT_ALL_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
+const SUM_INNOVATION_FINANCING = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: true });
+
 const formulaRegistry = {
   COUNT_PROGRAMMED_OFFER,
   COUNT_COURSES_DICTATED,
@@ -62,7 +67,10 @@ const formulaRegistry = {
   PARTICIPACIONES_SUM,
   COUNT_ARTICULACIONES,
   COUNT_PROJECTS,
-  FINANCING_SUM
+  FINANCING_SUM,
+  COUNT_ACTIVE_INNOVATION_PROJECTS,
+  COUNT_ALL_INNOVATION_PROJECTS,
+  SUM_INNOVATION_FINANCING
 };
 
 const apply = (formulaKey, metrics) => {
