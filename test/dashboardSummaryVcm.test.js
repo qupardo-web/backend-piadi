@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const models = require('../src/models');
 const dashboardService = require('../src/services/dashboardService');
 const indicatorService = require('../src/services/indicatorService');
+const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 const provider = require('../src/services/indicatorProvider');
 
 const originals = [];
@@ -26,6 +27,9 @@ const vcmKpis = [
 ];
 
 const stubConnectedSummary = (departments, kpisByDepartment, values = {}) => {
+  stub(metaIndicatorIntegrationService, 'getDashboardMetaSummary', async () => ({
+    total: 0, cumplidas: 0, enRiesgo: 0, cumplimientoGlobal: 0
+  }));
   stub(indicatorService, 'isSourceConnected', async () => true);
   stub(indicatorService, 'listDepartments', async () => ({ data: departments }));
   stub(indicatorService, 'getEnabledKpis', async (department) => kpisByDepartment[department] || []);
