@@ -46,6 +46,7 @@ const FINANCING_SUM = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: t
 // --- Fórmulas de Innovación ---
 const COUNT_ACTIVE_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosActivosCount || 0, hasData: true });
 const COUNT_ALL_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
+const COUNT_FINALIZED_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
 const SUM_INNOVATION_FINANCING = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: true });
 
 const formulaRegistry = {
@@ -70,6 +71,7 @@ const formulaRegistry = {
   FINANCING_SUM,
   COUNT_ACTIVE_INNOVATION_PROJECTS,
   COUNT_ALL_INNOVATION_PROJECTS,
+  COUNT_FINALIZED_INNOVATION_PROJECTS,
   SUM_INNOVATION_FINANCING
 };
 

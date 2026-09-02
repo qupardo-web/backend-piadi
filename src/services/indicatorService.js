@@ -134,6 +134,7 @@ const aggregate = (config, rows) => {
   if (config.kind === 'vcm_proyecto') return aggregateVcmProyecto(rows);
   if (config.kind === 'innovation_active_project') return aggregateInnovationProject(rows, true);
   if (config.kind === 'innovation_project') return aggregateInnovationProject(rows);
+  if (config.kind === 'innovation_finalized_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_financing') return aggregateInnovationFinancing(rows);
   return aggregateProgram(rows);
 };
@@ -147,6 +148,7 @@ const getRows = (config, filters) => {
   if (config.kind === 'vcm_proyecto') return provider.getVcmProyectoRows(filters);
   if (config.kind === 'innovation_active_project') return provider.getInnovationProjectRows(filters, { activeDuringYear: true });
   if (config.kind === 'innovation_project') return provider.getInnovationProjectRows(filters);
+  if (config.kind === 'innovation_finalized_project') return provider.getInnovationProjectRows(filters, { finalizedInYear: true });
   if (config.kind === 'innovation_financing') return provider.getInnovationFinancingRows(filters);
   return provider.getProgramRows(filters);
 };

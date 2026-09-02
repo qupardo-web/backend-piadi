@@ -18,10 +18,11 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *       - in: query
  *         name: department
  *         required: false
- *         description: Filtra el resumen por departamento; use vinculacion_medio para obtener solo los KPIs VCM.
+ *         description: Filtra el resumen por departamento; use innovacion para obtener solo sus KPIs.
  *         schema:
  *           type: string
- *           example: vinculacion_medio
+ *           enum: [educacion_continua, vinculacion_medio, innovacion]
+ *           example: innovacion
  *       - in: query
  *         name: fromYear
  *         schema: { type: integer }
@@ -69,7 +70,7 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *           enum: [asc, desc]
  *     responses:
  *       200:
- *         description: Resumen genérico de tarjetas por departamento. Para VCM incluye convenios_activos, actividades_realizadas y proyectos_vcm (proyectos con estado En Curso).
+ *         description: Resumen genérico de tarjetas por departamento. Innovación incluye proyectos_activos, financiamiento_obtenido y proyectos_finalizados (innovaciones implementadas).
  *         content:
  *           application/json:
  *             schema:
@@ -93,8 +94,8 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *                       items:
  *                         type: object
  *                         properties:
- *                           departmentId: { type: string, example: vinculacion_medio }
- *                           name: { type: string, example: Vinculación con el Medio }
+ *                           departmentId: { type: string, example: innovacion }
+ *                           name: { type: string, example: Innovación }
  *                           hasIndicators: { type: boolean, example: true }
  *                           cards:
  *                             type: array
@@ -103,10 +104,10 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *                               properties:
  *                                 indicatorKey:
  *                                   type: string
- *                                   enum: [convenios_activos, actividades_realizadas, proyectos_vcm]
- *                                 title: { type: string, example: Proyectos vigentes }
- *                                 value: { type: number, example: 2 }
- *                                 formattedValue: { type: string, example: "2" }
+ *                                   enum: [convenios_activos, actividades_realizadas, proyectos_vcm, proyectos_activos, financiamiento_obtenido, proyectos_finalizados]
+ *                                 title: { type: string, example: Innovaciones implementadas }
+ *                                 value: { type: number, example: 3 }
+ *                                 formattedValue: { type: string, example: "3" }
  *                                 unit: { type: string, example: proyectos }
  *                                 format: { type: string, example: number }
  *                                 hasData: { type: boolean, example: true }

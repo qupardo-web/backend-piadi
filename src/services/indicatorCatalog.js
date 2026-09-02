@@ -47,7 +47,8 @@ const INDICATORS = {
   // Innovación (PIADI-253)
   proyectos_activos: { kind: 'innovation_active_project', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
   total_proyectos: { kind: 'innovation_project', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
-  financiamiento_obtenido: { kind: 'innovation_financing', formulaKey: 'SUM_INNOVATION_FINANCING', allowedGroupBy: INNOVACION_FINANCING_GROUP_BY }
+  financiamiento_obtenido: { kind: 'innovation_financing', formulaKey: 'SUM_INNOVATION_FINANCING', allowedGroupBy: INNOVACION_FINANCING_GROUP_BY },
+  proyectos_finalizados: { kind: 'innovation_finalized_project', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY }
 };
 
 const PARTICIPANT_FORMULAS = ['UNIQUE_PARTICIPANTS', 'PARTICIPANT_PROFILE', 'TRAINING_RECURRENCE'];
