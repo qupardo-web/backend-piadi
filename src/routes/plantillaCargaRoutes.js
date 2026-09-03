@@ -17,8 +17,8 @@ const { requireVcmUploadRole } = require('../middleware/vcmUploadAuthorization')
  * /api/plantillas/{id}/cargar:
  *   post:
  *     tags: [Plantillas]
- *     summary: Carga un archivo Excel y procesa los datos según la plantilla, incluida VCM
- *     description: El id corresponde a una plantilla registrada. Para VCM, use el id de la plantilla Vinculación Con El Medio; sus hojas y columnas se resuelven desde campos_plantilla.
+ *     summary: Carga un archivo Excel y procesa los datos según la plantilla, incluidas VCM e Innovación
+ *     description: El id corresponde a una plantilla registrada. La plantilla Innovación contiene las hojas Proyectos Innovación y Financiamiento. Sus participantes se registran en Proyectos Innovación mediante N° estudiantes, N° docentes y N° funcionarios; no existe una hoja Participantes.
  *     parameters:
  *       - in: path
  *         name: id
