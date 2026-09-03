@@ -6,7 +6,7 @@ const {
   requireRectoria,
   requireRectoriaForInstitutionalCreation
 } = require('../middleware/rectoriaAuthorization');
-const { auditRectoriaDepartmentalMetaUpdate } = require('../middleware/metaAudit');
+const { auditMetaOperation } = require('../middleware/metaAudit');
 
 const router = express.Router();
 
@@ -104,7 +104,7 @@ const router = express.Router();
  *       403: { description: Solo Rectoría puede crear una meta institucional. }
  *       404: { description: Departamento o indicador inexistente. }
  */
-router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, metaController.create);
+router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, auditMetaOperation('CREATE'), metaController.create);
 
 /**
  * @openapi
@@ -251,7 +251,7 @@ router.get('/:id/progress', metaController.getProgress);
  *       404: { description: Meta inexistente. }
  */
 router.get('/:id', metaController.getById);
-router.put('/:id', authenticateToken, requireMetaOwnership, auditRectoriaDepartmentalMetaUpdate, metaController.update);
-router.delete('/:id', authenticateToken, requireMetaOwnership, metaController.remove);
+router.put('/:id', authenticateToken, requireMetaOwnership, auditMetaOperation('UPDATE'), metaController.update);
+router.delete('/:id', authenticateToken, requireMetaOwnership, auditMetaOperation('DELETE'), metaController.remove);
 
 module.exports = router;
