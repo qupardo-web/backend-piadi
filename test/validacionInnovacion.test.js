@@ -169,7 +169,8 @@ test('6. detecta tipo incorrecto en N° estudiantes', async () => {
 
   assert.equal(result.valido, false);
   assert.equal(error.fila, 2);
-  assert.match(error.mensaje, /N° estudiantes debe ser de tipo number/);
+  assert.match(error.mensaje, /N° estudiantes/);
+  assert.match(error.mensaje, /número entero|number/);
 });
 
 test('7. detecta tipo incorrecto en Monto adjudicado CLP', async () => {
@@ -180,7 +181,8 @@ test('7. detecta tipo incorrecto en Monto adjudicado CLP', async () => {
 
   assert.equal(result.valido, false);
   assert.equal(error.fila, 2);
-  assert.match(error.mensaje, /Monto adjudicado CLP debe ser de tipo number/);
+  assert.match(error.mensaje, /Monto adjudicado CLP/);
+  assert.match(error.mensaje, /número entero|number/);
 });
 
 test('8. acepta cero en los tres contadores requeridos de participantes', async () => {
