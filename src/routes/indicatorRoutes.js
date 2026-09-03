@@ -160,7 +160,7 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Innovación admite proyectos_activos, total_proyectos y financiamiento_obtenido.
+ *         description: Innovación admite proyectos_activos, total_proyectos, proyectos_finalizados, financiamiento_obtenido, secciones_curso y docentes_involucrados.
  *         schema:
  *           type: string
  *           example: proyectos_activos
@@ -188,6 +188,7 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *         schema: { type: integer }
  *       - in: query
  *         name: area
+ *         description: En Innovación filtra Proyecto.areaTematica.
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
@@ -232,8 +233,8 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Innovación admite total_proyectos.
- *         schema: { type: string, example: total_proyectos }
+ *         description: Clave del indicador. Innovación admite series de proyectos, secciones_curso, docentes_involucrados y financiamiento_obtenido.
+ *         schema: { type: string, example: docentes_involucrados }
  *       - in: query
  *         name: department
  *         required: true
@@ -255,6 +256,7 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         schema: { type: integer }
  *       - in: query
  *         name: area
+ *         description: En Innovación filtra Proyecto.areaTematica y es alias público de groupBy=areaTematica.
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
@@ -274,8 +276,8 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         name: groupBy
  *         schema:
  *           type: string
- *           description: anio es alias externo de year; Innovación usa anio para la serie total_proyectos.
- *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, sector, fuente]
+ *           description: anio es alias externo de year. En Innovación, area es alias contextual de areaTematica; financiamiento anual usa Proyecto.anioInicio.
+ *           enum: [year, anio, area, areaTematica, semestre, tipo, modalidad, programa, sexo, rangoEdad, sector, fuente]
  *     responses:
  *       200:
  *         description: Serie simple (points) o segmentada (series) según groupBy. Si existe una única meta aplicable, incluye targetLine.
@@ -307,8 +309,8 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Innovación admite financiamiento_obtenido.
- *         schema: { type: string, example: financiamiento_obtenido }
+ *         description: Clave del indicador. Innovación admite proyectos, financiamiento_obtenido, secciones_curso y docentes_involucrados.
+ *         schema: { type: string, example: secciones_curso }
  *       - in: query
  *         name: department
  *         required: true
@@ -318,8 +320,8 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *         required: true
  *         schema:
  *           type: string
- *           description: anio es alias de year; financiamiento_obtenido admite fuente.
- *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico, sector, fuente]
+ *           description: anio es alias de year; area es alias contextual de areaTematica para proyectos de Innovación; secciones_curso admite semestre; financiamiento_obtenido admite fuente y year usando Proyecto.anioInicio.
+ *           enum: [year, anio, area, areaTematica, semestre, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico, sector, fuente]
  *       - in: query
  *         name: year
  *         schema: { type: integer }

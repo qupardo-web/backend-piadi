@@ -18,8 +18,9 @@ const VCM_ARTICULACION_GROUP_BY = [
   'plataformaFoco', 'colegioLiceoTP'
 ];
 const VCM_PROYECTO_GROUP_BY = ['year'];
-const INNOVACION_PROJECT_GROUP_BY = ['year'];
-const INNOVACION_FINANCING_GROUP_BY = ['fuente'];
+const INNOVACION_PROJECT_GROUP_BY = ['year', 'areaTematica'];
+const INNOVACION_SECTION_GROUP_BY = ['year', 'semestre'];
+const INNOVACION_FINANCING_GROUP_BY = ['fuente', 'year'];
 
 const INDICATORS = {
   // Educación Continua
@@ -48,7 +49,9 @@ const INDICATORS = {
   proyectos_activos: { kind: 'innovation_active_project', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
   total_proyectos: { kind: 'innovation_project', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
   financiamiento_obtenido: { kind: 'innovation_financing', formulaKey: 'SUM_INNOVATION_FINANCING', allowedGroupBy: INNOVACION_FINANCING_GROUP_BY },
-  proyectos_finalizados: { kind: 'innovation_finalized_project', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY }
+  proyectos_finalizados: { kind: 'innovation_finalized_project', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
+  secciones_curso: { kind: 'innovation_section', formulaKey: 'COUNT_INNOVATION_SECTIONS', allowedGroupBy: INNOVACION_SECTION_GROUP_BY },
+  docentes_involucrados: { kind: 'innovation_project', formulaKey: 'SUM_INNOVATION_TEACHERS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY }
 };
 
 const PARTICIPANT_FORMULAS = ['UNIQUE_PARTICIPANTS', 'PARTICIPANT_PROFILE', 'TRAINING_RECURRENCE'];

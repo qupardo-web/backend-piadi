@@ -13,11 +13,13 @@ const {
   Participacion,
   ArticulacionTP,
   Proyecto,
-  Financiamiento
+  Financiamiento,
+  Seccion
 } = require('../models');
 
 const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio', 'innovacion'];
 const INNOVATION_PROJECT_TYPES = ['Estudiantil', 'Institucional'];
+const INNOVATION_COURSE = 'Emprendimiento e Innovación';
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
 const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
 
@@ -340,6 +342,18 @@ const getVcmProyectoRows = async (filters = {}) => {
 };
 
 // --- Datos de Innovación ---
+const getFilterYearRange = (filters = {}) => {
+  if (filters.year !== null && filters.year !== undefined) {
+    return { from: filters.year, to: filters.year, singleYear: true };
+  }
+  const hasFrom = filters.fromYear !== null && filters.fromYear !== undefined;
+  const hasTo = filters.toYear !== null && filters.toYear !== undefined;
+  if (!hasFrom && !hasTo) return null;
+  const from = hasFrom ? filters.fromYear : filters.toYear;
+  const to = hasTo ? filters.toYear : filters.fromYear;
+  return { from, to, singleYear: from === to };
+};
+
 const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false, finalizedInYear = false } = {}) => {
   const conditions = [{ tipoProyecto: buildCaseInsensitiveIn(INNOVATION_PROJECT_TYPES) }];
   if (filters.tipo && filters.tipo.length) {
@@ -348,21 +362,28 @@ const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false, f
   if (filters.estado && filters.estado.length) {
     conditions.push({ estado: buildCaseInsensitiveIn(filters.estado) });
   }
+  if (filters.area && filters.area.length) {
+    conditions.push({ areaTematica: buildCaseInsensitiveIn(filters.area) });
+  }
+
+  const range = getFilterYearRange(filters);
 
   if (finalizedInYear) {
-    const referenceYear = filters.year !== null && filters.year !== undefined
-      ? filters.year
-      : new Date().getFullYear();
     conditions.push({ estado: buildCaseInsensitiveEquals('Finalizado') });
-    conditions.push({ anioTermino: referenceYear });
+    if (range) {
+      conditions.push({ anioTermino: range.singleYear ? range.from : { [Op.between]: [range.from, range.to] } });
+    } else {
+      conditions.push({ anioTermino: new Date().getFullYear() });
+    }
   } else if (activeDuringYear) {
-    const referenceYear = filters.year !== null && filters.year !== undefined
-      ? filters.year
-      : new Date().getFullYear();
-    conditions.push({ anioInicio: { [Op.lte]: referenceYear } });
-    conditions.push({ anioTermino: { [Op.gte]: referenceYear } });
-  } else if (filters.year !== null && filters.year !== undefined) {
-    conditions.push({ anioInicio: filters.year });
+    const activeRange = range || {
+      from: new Date().getFullYear(),
+      to: new Date().getFullYear()
+    };
+    conditions.push({ anioInicio: { [Op.lte]: activeRange.to } });
+    conditions.push({ anioTermino: { [Op.gte]: activeRange.from } });
+  } else if (range) {
+    conditions.push({ anioInicio: range.singleYear ? range.from : { [Op.between]: [range.from, range.to] } });
   }
 
   return { [Op.and]: conditions };
@@ -376,8 +397,31 @@ const getInnovationProjectRows = async (filters = {}, options = {}) => {
   return projects.map((project) => ({
     idProyecto: project.idProyecto,
     anio: Number(options.finalizedInYear ? project.anioTermino : project.anioInicio),
+    anioInicio: Number(project.anioInicio),
+    anioTermino: Number(project.anioTermino),
     tipoProyecto: project.tipoProyecto,
-    estado: project.estado
+    estado: project.estado,
+    areaTematica: project.areaTematica,
+    nDocentes: Number(project.nDocentes || 0)
+  }));
+};
+
+const getInnovationSectionRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'innovacion') return [];
+  const where = { curso: buildCaseInsensitiveEquals(INNOVATION_COURSE) };
+  const range = getFilterYearRange(filters);
+  if (range) {
+    where.anio = range.singleYear ? range.from : { [Op.between]: [range.from, range.to] };
+  }
+  if (filters.semesters && filters.semesters.length) {
+    where.semestre = buildCaseInsensitiveIn(filters.semesters);
+  }
+  const sections = await Seccion.findAll({ where });
+  return sections.map((section) => ({
+    idSeccion: section.idSeccion,
+    anio: Number(section.anio),
+    semestre: section.semestre,
+    curso: section.curso
   }));
 };
 
@@ -593,6 +637,7 @@ module.exports = {
   getVcmProyectoRows,
   getInnovationProjectRows,
   getInnovationFinancingRows,
+  getInnovationSectionRows,
   getFilterOptions,
   getDepartments,
   getDepartmentByKey,
