@@ -600,6 +600,133 @@ async function initDbConstraints() {
       COMMENT ON VIEW v_landing_metas IS 'Vista consolidada optimizada para la Landing Page, limitada a las 10 metas más recientes por departamento.';
     `);
 
+    // ══════════════════════════════════════════════════════════════
+    // PIADI-273: Restricciones de Integridad y Triggers para Innovación
+    // ══════════════════════════════════════════════════════════════
+    console.log('Applying database-level constraints, triggers, and SQL documentation for Innovación (PIADI-273)...');
+
+    // 1. Foreign Key: financiamientos.idProyecto -> proyectos.idProyecto
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_financiamientos_proyecto'
+        ) THEN
+          ALTER TABLE financiamientos
+            ADD CONSTRAINT fk_financiamientos_proyecto
+            FOREIGN KEY ("idProyecto")
+            REFERENCES proyectos("idProyecto")
+            ON UPDATE CASCADE
+            ON DELETE RESTRICT;
+        END IF;
+      END $$;
+    `);
+
+    // 2. CHECK Constraints en Proyectos
+    await sequelize.query(`
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_fechas;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_fechas CHECK ("fechaCierreEstimada" >= "fechaInicio");
+
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_anios;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_anios CHECK ("anioTermino" >= "anioInicio" AND "anioInicio" >= 1900 AND "anioTermino" >= 1900);
+
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_participantes;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_participantes CHECK ("nEstudiantes" >= 0 AND "nDocentes" >= 0 AND "nFuncionarios" >= 0);
+
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_tipo;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_tipo CHECK ("tipoProyecto" IN ('Estudiantil', 'Institucional'));
+    `);
+
+    // 3. CHECK Constraints en Financiamientos
+    await sequelize.query(`
+      ALTER TABLE financiamientos DROP CONSTRAINT IF EXISTS chk_financiamientos_montos;
+      ALTER TABLE financiamientos ADD CONSTRAINT chk_financiamientos_montos CHECK ("montoAdjudicado" >= 0 AND "montoEjecutadoEstimado" >= 0);
+    `);
+
+    // 4. Triggers de validación de integridad referencial y coherencia
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_proyecto_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW."fechaCierreEstimada" < NEW."fechaInicio" THEN
+          RAISE EXCEPTION 'La fecha de cierre estimada (%) no puede ser anterior a la fecha de inicio (%).',
+            NEW."fechaCierreEstimada", NEW."fechaInicio";
+        END IF;
+        IF NEW."anioTermino" < NEW."anioInicio" THEN
+          RAISE EXCEPTION 'El año de término (%) no puede ser menor al año de inicio (%).',
+            NEW."anioTermino", NEW."anioInicio";
+        END IF;
+        IF NEW."nEstudiantes" < 0 OR NEW."nDocentes" < 0 OR NEW."nFuncionarios" < 0 THEN
+          RAISE EXCEPTION 'Las cantidades de participantes no pueden ser negativas.';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_proyecto_integrity ON proyectos;
+      CREATE TRIGGER trg_check_proyecto_integrity
+      BEFORE INSERT OR UPDATE ON proyectos
+      FOR EACH ROW EXECUTE FUNCTION check_proyecto_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_financiamiento_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM proyectos WHERE "idProyecto" = NEW."idProyecto") THEN
+          RAISE EXCEPTION 'El proyecto asociado con ID "%" no existe en la tabla proyectos.', NEW."idProyecto";
+        END IF;
+        IF NEW."montoAdjudicado" < 0 THEN
+          RAISE EXCEPTION 'El monto adjudicado (%) no puede ser negativo.', NEW."montoAdjudicado";
+        END IF;
+        IF NEW."montoEjecutadoEstimado" < 0 THEN
+          RAISE EXCEPTION 'El monto ejecutado estimado (%) no puede ser negativo.', NEW."montoEjecutadoEstimado";
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_financiamiento_integrity ON financiamientos;
+      CREATE TRIGGER trg_check_financiamiento_integrity
+      BEFORE INSERT OR UPDATE ON financiamientos
+      FOR EACH ROW EXECUTE FUNCTION check_financiamiento_integrity();
+    `);
+
+    // 5. Documentación SQL: Comentarios en tablas y columnas
+    await sequelize.query(`
+      COMMENT ON TABLE proyectos IS 'Tabla de proyectos de innovación institucional y estudiantil.';
+      COMMENT ON COLUMN proyectos."idProyecto" IS 'Identificador único del proyecto de innovación.';
+      COMMENT ON COLUMN proyectos."nombreProyecto" IS 'Nombre del proyecto de innovación.';
+      COMMENT ON COLUMN proyectos."areaTematica" IS 'Área temática del proyecto.';
+      COMMENT ON COLUMN proyectos."cursoLinea" IS 'Curso o línea formativa asociada.';
+      COMMENT ON COLUMN proyectos.estado IS 'Estado del proyecto (ej. En Curso, Finalizado).';
+      COMMENT ON COLUMN proyectos."unidadResponsable" IS 'Unidad académica o administrativa responsable.';
+      COMMENT ON COLUMN proyectos."responsableDocente" IS 'Docente o responsable a cargo del proyecto.';
+      COMMENT ON COLUMN proyectos."socioContraparte" IS 'Socio o contraparte externa vinculada.';
+      COMMENT ON COLUMN proyectos."anioInicio" IS 'Año de inicio del proyecto.';
+      COMMENT ON COLUMN proyectos."anioTermino" IS 'Año de término del proyecto.';
+      COMMENT ON COLUMN proyectos."semestreInicio" IS 'Semestre de inicio (1 o 2).';
+      COMMENT ON COLUMN proyectos."fechaInicio" IS 'Fecha exacta de inicio.';
+      COMMENT ON COLUMN proyectos."fechaCierreEstimada" IS 'Fecha estimada de cierre.';
+      COMMENT ON COLUMN proyectos."tipoProyecto" IS 'Tipo de proyecto (Institucional o Estudiantil).';
+      COMMENT ON COLUMN proyectos."resultadoPrincipal" IS 'Resultado o producto principal obtenido.';
+      COMMENT ON COLUMN proyectos."nEstudiantes" IS 'Cantidad de estudiantes participantes.';
+      COMMENT ON COLUMN proyectos."nFuncionarios" IS 'Cantidad de funcionarios participantes.';
+      COMMENT ON COLUMN proyectos."nDocentes" IS 'Cantidad de docentes participantes.';
+      COMMENT ON COLUMN proyectos."evidenciaPrincipal" IS 'Evidencia o entregable principal.';
+      COMMENT ON COLUMN proyectos.observacion IS 'Observaciones adicionales del proyecto.';
+
+      COMMENT ON TABLE financiamientos IS 'Tabla de financiamiento y presupuestos de proyectos de innovación.';
+      COMMENT ON COLUMN financiamientos."idProyecto" IS 'Identificador foráneo del proyecto de innovación asociado.';
+      COMMENT ON COLUMN financiamientos."nombreProyecto" IS 'Nombre del proyecto financiado.';
+      COMMENT ON COLUMN financiamientos."montoAdjudicado" IS 'Monto adjudicado en pesos chilenos (CLP).';
+      COMMENT ON COLUMN financiamientos."montoEjecutadoEstimado" IS 'Monto ejecutado estimado en pesos chilenos (CLP).';
+      COMMENT ON COLUMN financiamientos."estadoFinanciero" IS 'Estado del financiamiento.';
+      COMMENT ON COLUMN financiamientos."financiamientoExterno" IS 'Indica si cuenta con financiamiento externo.';
+      COMMENT ON COLUMN financiamientos."fuenteFinanciamiento" IS 'Fuente o fondo otorgante del financiamiento.';
+      COMMENT ON COLUMN financiamientos.observacion IS 'Observaciones del financiamiento.';
+    `);
+
     console.log('Database-level constraints, triggers, and SQL documentation applied successfully.');
   } catch (error) {
     console.error('Error applying database constraints:', error);
