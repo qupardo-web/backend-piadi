@@ -47,7 +47,9 @@ test('una validación VCM responde 422, conserva el contrato público y elimina 
     hoja: 'Convenios',
     fila: 3,
     columna: 'nombre',
-    celda: 'B3'
+    celda: 'B3',
+    valor: '',
+    esperado: ''
   });
   assert.deepEqual(removed, ['uploads/temporal-vcm.xlsx']);
 });
@@ -85,7 +87,7 @@ test('una carga sin archivo se trata como validación 422', async () => {
   console.error = () => {};
   const res = response();
   try {
-    errorHandler(propagatedError, {}, res, () => {});
+    errorHandler(propagatedError, { method: 'POST', originalUrl: '/api/plantillas/2/cargar' }, res, () => {});
   } finally {
     console.error = originalConsoleError;
   }
@@ -119,7 +121,7 @@ test('un fallo inesperado se registra en backend y el cliente recibe un 500 sani
   console.error = (...args) => logs.push(args);
   const res = response();
   try {
-    errorHandler(propagatedError, {}, res, () => {});
+    errorHandler(propagatedError, { method: 'POST', originalUrl: '/api/plantillas/2/cargar' }, res, () => {});
   } finally {
     console.error = originalConsoleError;
   }
@@ -133,7 +135,11 @@ test('un fallo inesperado se registra en backend y el cliente recibe un 500 sani
   for (const forbidden of ['STACK_INTERNO', 'SELECT', 'Sequelize', 'audit_cargas', 'secret', 'errorType']) {
     assert.equal(publicResponse.includes(forbidden), false, `La respuesta expone ${forbidden}`);
   }
-  assert.equal(logs.some((entry) => entry.includes(technicalError)), true);
+  const logContext = logs.find((entry) => entry[0] === '[errorHandler]')?.[1];
+  assert.match(logContext.timestamp, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(logContext.operation, 'POST /api/plantillas/2/cargar');
+  assert.equal(logContext.message, technicalError.message);
+  assert.equal(logContext.stack, technicalError.stack);
   assert.deepEqual(removed, ['uploads/carga-fallida.xlsx']);
 });
 
