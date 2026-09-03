@@ -66,7 +66,9 @@ const INNOVACION_KPI_SEED = [
   { key: 'proyectos_activos', name: 'Proyectos activos', description: 'Cantidad de proyectos de innovación activos durante el año consultado.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', enabled: true },
   { key: 'total_proyectos', name: 'Total de proyectos', description: 'Cantidad de proyectos de innovación iniciados en el período.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', enabled: true },
   { key: 'financiamiento_obtenido', name: 'Financiamiento obtenido', description: 'Monto externo adjudicado a proyectos de innovación.', unit: 'CLP', format: 'currency', formulaKey: 'SUM_INNOVATION_FINANCING', enabled: true },
-  { key: 'proyectos_finalizados', name: 'Innovaciones implementadas', description: 'Cantidad de proyectos de innovación finalizados en el año consultado.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', enabled: true }
+  { key: 'proyectos_finalizados', name: 'Innovaciones implementadas', description: 'Cantidad de proyectos de innovación finalizados en el año consultado.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', enabled: true },
+  { key: 'secciones_curso', name: 'Secciones del curso de innovación', description: 'Cantidad de secciones del curso Emprendimiento e Innovación, agrupables por año y semestre.', unit: 'secciones', format: 'number', formulaKey: 'COUNT_INNOVATION_SECTIONS', enabled: true },
+  { key: 'docentes_involucrados', name: 'Docentes involucrados', description: 'Cantidad de docentes involucrados en proyectos de innovación iniciados en el período.', unit: 'docentes', format: 'number', formulaKey: 'SUM_INNOVATION_TEACHERS', enabled: true }
 ];
 
 const CURRICULAR_DEPARTMENT_SEED = {

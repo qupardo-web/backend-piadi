@@ -118,11 +118,16 @@ const aggregateVcmProyecto = (rows) => ({
 
 const aggregateInnovationProject = (rows, active = false) => ({
   proyectosCount: rows.length,
-  proyectosActivosCount: active ? rows.length : 0
+  proyectosActivosCount: active ? rows.length : 0,
+  docentesSum: rows.reduce((sum, row) => sum + (row.nDocentes || 0), 0)
 });
 
 const aggregateInnovationFinancing = (rows) => ({
   financiamientoSum: rows.reduce((sum, row) => sum + (row.montoAdjudicado || 0), 0)
+});
+
+const aggregateInnovationSection = (rows) => ({
+  seccionesCount: rows.length
 });
 
 const aggregate = (config, rows) => {
@@ -136,6 +141,7 @@ const aggregate = (config, rows) => {
   if (config.kind === 'innovation_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_finalized_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_financing') return aggregateInnovationFinancing(rows);
+  if (config.kind === 'innovation_section') return aggregateInnovationSection(rows);
   return aggregateProgram(rows);
 };
 
@@ -150,6 +156,7 @@ const getRows = (config, filters) => {
   if (config.kind === 'innovation_project') return provider.getInnovationProjectRows(filters);
   if (config.kind === 'innovation_finalized_project') return provider.getInnovationProjectRows(filters, { finalizedInYear: true });
   if (config.kind === 'innovation_financing') return provider.getInnovationFinancingRows(filters);
+  if (config.kind === 'innovation_section') return provider.getInnovationSectionRows(filters);
   return provider.getProgramRows(filters);
 };
 
@@ -183,6 +190,11 @@ const validateGroupBy = (config, groupBy) => {
   let resolvedGroupBy = groupBy;
   if (groupBy === 'tipo' && config.kind === 'vcm_actividad') resolvedGroupBy = 'tipoActividad';
   if (groupBy === 'tipo' && config.kind === 'vcm_convenio') resolvedGroupBy = 'tipoConvenio';
+  if (groupBy === 'area' && [
+    'innovation_project',
+    'innovation_active_project',
+    'innovation_finalized_project'
+  ].includes(config.kind)) resolvedGroupBy = 'areaTematica';
   if (!config.allowedGroupBy.includes(resolvedGroupBy)) {
     throw new ServiceError(400, 'INVALID_GROUP_BY', 'El groupBy solicitado no aplica para este indicador.', {
       groupBy,
@@ -191,6 +203,30 @@ const validateGroupBy = (config, groupBy) => {
   }
   return resolvedGroupBy;
 };
+
+const getRequestedYearRange = (filters) => {
+  if (filters.year !== null && filters.year !== undefined) return [filters.year];
+  const hasFrom = filters.fromYear !== null && filters.fromYear !== undefined;
+  const hasTo = filters.toYear !== null && filters.toYear !== undefined;
+  if (!hasFrom && !hasTo) return null;
+  const from = hasFrom ? filters.fromYear : filters.toYear;
+  const to = hasTo ? filters.toYear : filters.fromYear;
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+};
+
+const expandActiveRowsByYear = (rows, filters) => {
+  const selectedYears = getRequestedYearRange(filters) || [new Date().getFullYear()];
+  const firstYear = selectedYears[0];
+  const lastYear = selectedYears[selectedYears.length - 1];
+  return rows.flatMap((row) => {
+    const from = Math.max(Number(row.anioInicio), firstYear);
+    const to = Math.min(Number(row.anioTermino), lastYear);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from > to) return [];
+    return Array.from({ length: to - from + 1 }, (_, index) => ({ ...row, anio: from + index }));
+  });
+};
+
+const usesInnovationYearRange = (config) => String(config.kind).startsWith('innovation_');
 
 const resolveConfig = async (departmentKey, indicatorKey) => {
   const definition = await requireKpi(departmentKey, indicatorKey);
@@ -239,15 +275,26 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
   const { definition, config } = await resolveConfig(departmentId, key);
   const groupBy = validateGroupBy(config, filters.groupBy);
 
-  const rows = await getRows(config, filters);
+  let rows = await getRows(config, filters);
+  if (config.kind === 'innovation_active_project') {
+    rows = expandActiveRowsByYear(rows, filters);
+  }
   const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
   if (!groupBy || groupBy === 'year') {
     const byYear = groupRowsBy(rows, 'year');
     const points = [];
-    [...byYear.keys()]
+    const requestedYears = getRequestedYearRange(filters);
+    const years = requestedYears && usesInnovationYearRange(config)
+      ? requestedYears
+      : [...byYear.keys()].sort((a, b) => Number(a) - Number(b));
+    years
       .sort((a, b) => Number(a) - Number(b))
       .forEach((year) => {
+        if (!byYear.has(year) && requestedYears && usesInnovationYearRange(config)) {
+          points.push({ year: Number(year), value: 0 });
+          return;
+        }
         const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
         if (hasData) {
           points.push({ year: Number(year), value });
@@ -315,7 +362,10 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   const requestedGroupBy = filters.groupBy;
   const groupBy = validateGroupBy(config, filters.groupBy);
 
-  const rows = await getRows(config, filters);
+  let rows = await getRows(config, filters);
+  if (config.kind === 'innovation_active_project' && groupBy === 'year') {
+    rows = expandActiveRowsByYear(rows, filters);
+  }
   const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
   // Custom handler for VCM participaciones grouped by sex
