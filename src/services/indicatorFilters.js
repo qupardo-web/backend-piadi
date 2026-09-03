@@ -33,7 +33,9 @@ const GROUP_BY_DIMENSIONS = [
   'internosExternos',
 
   // Innovación
-  'fuente'
+  'fuente',
+  'areaTematica',
+  'semestre'
 ];
 
 class FilterError extends Error {

@@ -38,7 +38,44 @@ router.get('/', plantillaController.getPlantillas);
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Plantilla'
+ *               allOf:
+ *                 - $ref: '#/components/schemas/Plantilla'
+ *                 - type: object
+ *                   required: [hojas]
+ *                   properties:
+ *                     hojas:
+ *                       type: array
+ *                       description: Requisitos Excel configurados en CampoPlantilla. Si no hay campos configurados, se devuelve un arreglo vacío.
+ *                       items:
+ *                         type: object
+ *                         required: [nombre, campos]
+ *                         properties:
+ *                           nombre:
+ *                             type: string
+ *                             description: Nombre exacto de la hoja Excel.
+ *                           campos:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               required: [columna, requerido]
+ *                               properties:
+ *                                 columna:
+ *                                   type: string
+ *                                   description: Nombre exacto de la cabecera Excel.
+ *                                 requerido:
+ *                                   type: boolean
+ *                                   description: Indica si la columna es obligatoria.
+ *                       example:
+ *                         - nombre: Proyectos Innovación
+ *                           campos:
+ *                             - columna: ID Proyecto
+ *                               requerido: true
+ *                             - columna: N° estudiantes
+ *                               requerido: true
+ *                         - nombre: Financiamiento
+ *                           campos:
+ *                             - columna: Monto adjudicado CLP
+ *                               requerido: true
  *       404:
  *         description: Plantilla no encontrada.
  */

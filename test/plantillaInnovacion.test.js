@@ -43,7 +43,7 @@ test('Plantilla Innovación - Verificaciones de Base de Datos y Mapeo', async (t
     // Verificar orden de inserción (dependencia entre Proyecto y Financiamiento)
     camposProyectos.forEach(c => {
       assert.strictEqual(c.orden_insercion, 1, `Campo ${c.nombre_campo} debe tener orden_insercion = 1`);
-      assert.strictEqual(c.hoja_origen, 'Proyectos');
+      assert.strictEqual(c.hoja_origen, 'Proyectos Innovación');
     });
 
     camposFinanciamientos.forEach(c => {
@@ -62,16 +62,16 @@ test('Plantilla Innovación - Verificaciones de Base de Datos y Mapeo', async (t
   await t.test('La plantilla "Innovación" tiene archivoData binario Excel válido', async () => {
     const plantilla = await Plantilla.unscoped().findOne({ where: { name: 'Innovación' } });
     assert.ok(plantilla.archivoData, 'Debe contener el binario del archivo Excel');
-    assert.strictEqual(plantilla.archivoNombre, 'Plantilla_Innovación.xlsx');
+    assert.strictEqual(plantilla.archivoNombre, 'plantilla-innovacion.xlsx');
 
     const workbook = XLSX.read(plantilla.archivoData, { type: 'buffer' });
-    assert.ok(workbook.SheetNames.includes('Proyectos'), 'Debe incluir la hoja Proyectos');
+    assert.ok(workbook.SheetNames.includes('Proyectos Innovación'), 'Debe incluir la hoja Proyectos Innovación');
     assert.ok(workbook.SheetNames.includes('Financiamiento'), 'Debe incluir la hoja Financiamiento');
 
-    const sheetProyectos = workbook.Sheets['Proyectos'];
+    const sheetProyectos = workbook.Sheets['Proyectos Innovación'];
     const sheetFinanciamiento = workbook.Sheets['Financiamiento'];
 
-    assert.ok(sheetProyectos, 'Hoja Proyectos debe existir');
+    assert.ok(sheetProyectos, 'Hoja Proyectos Innovación debe existir');
     assert.ok(sheetFinanciamiento, 'Hoja Financiamiento debe existir');
   });
 });

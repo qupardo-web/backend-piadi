@@ -1,4 +1,27 @@
-const { Plantilla, Role } = require('../models');
+const { Plantilla, Role, CampoPlantilla } = require('../models');
+
+const buildRequirementSheets = (fields) => {
+  const sheets = new Map();
+
+  for (const field of fields) {
+    const sheetName = field.hoja_origen;
+    if (!sheets.has(sheetName)) {
+      sheets.set(sheetName, { nombre: sheetName, campos: [], seen: new Set() });
+    }
+
+    const sheet = sheets.get(sheetName);
+    const publicKey = JSON.stringify([field.columna_excel, field.requerido]);
+    if (sheet.seen.has(publicKey)) continue;
+
+    sheet.seen.add(publicKey);
+    sheet.campos.push({
+      columna: field.columna_excel,
+      requerido: field.requerido
+    });
+  }
+
+  return [...sheets.values()].map(({ nombre, campos }) => ({ nombre, campos }));
+};
 
 const getAllPlantillas = async () => {
   return await Plantilla.findAll({
@@ -14,7 +37,18 @@ const getPlantillaById = async (id) => {
   if (!plantilla) {
     throw new Error('Plantilla no encontrada');
   }
-  return plantilla;
+
+  const fields = await CampoPlantilla.findAll({
+    where: { plantillaId: id },
+    attributes: ['id', 'hoja_origen', 'columna_excel', 'requerido'],
+    order: [['id', 'ASC']]
+  });
+  const plantillaData = typeof plantilla.toJSON === 'function' ? plantilla.toJSON() : { ...plantilla };
+
+  return {
+    ...plantillaData,
+    hojas: buildRequirementSheets(fields)
+  };
 }
 
 const createNewPlantilla = async (plantillaData) => {
