@@ -9,6 +9,7 @@ const XLSX = require('xlsx');
 const { DataTypes } = require('sequelize');
 const models = require('../src/models');
 const { validarArchivo } = require('../src/services/carga/validacionService');
+const { createCargarArchivo } = require('../src/controllers/plantillaController');
 
 const MODEL_NAME = 'Piadi246ValidationFixture';
 const originalFindAll = models.CampoPlantilla.findAll;
@@ -17,6 +18,7 @@ if (!models.sequelize.models[MODEL_NAME]) {
   models.sequelize.define(MODEL_NAME, {
     idConvenio: DataTypes.STRING,
     anioFirma: DataTypes.INTEGER,
+    fechaFirma: DataTypes.DATEONLY,
     idActividad: DataTypes.STRING,
     horas: DataTypes.INTEGER,
     observacion: DataTypes.STRING,
@@ -41,6 +43,7 @@ const campo = (hoja, columnaExcel, columnaDestino, tipoDato, requerido = true) =
 const configuracionVcm = [
   campo('Convenios', 'ID Convenio', 'idConvenio', 'string'),
   campo('Convenios', 'Año firma', 'anioFirma', 'number'),
+  campo('Convenios', 'Fecha firma', 'fechaFirma', 'string'),
   campo('Actividades VcM', 'ID Actividad', 'idActividad', 'string'),
   campo('Actividades VcM', 'Horas', 'horas', 'number'),
   campo('Actividades VcM', 'Observación', 'observacion', 'string', false),
@@ -50,7 +53,7 @@ const configuracionVcm = [
 ];
 
 const hojasValidas = () => ({
-  Convenios: [['ID Convenio', 'Año firma'], ['CON-1', 2026]],
+  Convenios: [['ID Convenio', 'Año firma', 'Fecha firma'], ['CON-1', 2026, '2026-09-02']],
   'Actividades VcM': [['ID Actividad', 'Horas', 'Observación'], ['ACT-1', 8, null]],
   'Participacion detalle': [['ID Participación', 'Total personas'], ['PAR-1', 5]],
   'Articulaciones TP': [['ID Articulación'], ['ART-1']]
@@ -123,14 +126,116 @@ test('rechaza texto en un campo number e informa hoja, columna y fila', async ()
   const error = resultado.errores.find((item) => item.hoja === 'Actividades VcM' && item.campo === 'Horas');
   assert.equal(resultado.valido, false);
   assert.equal(error.fila, 2);
-  assert.match(error.mensaje, /tipo number/);
+  assert.equal(error.esperado, 'número entero');
+  assert.equal(error.valor, 'texto');
+  assert.equal(error.celda, 'B2');
+  assert.match(error.mensaje, /Ingrese un número sin decimales, texto ni símbolos/);
 });
 
-test('acepta una cadena numérica no vacía para un campo number', async () => {
+test('acepta una cadena que representa un número entero', async () => {
+  const hojas = hojasValidas();
+  hojas['Actividades VcM'][1][1] = '12';
+  const resultado = await validarHojas(hojas);
+  assert.equal(resultado.valido, true);
+});
+
+test('rechaza un decimal cuando el modelo espera un número entero', async () => {
   const hojas = hojasValidas();
   hojas['Actividades VcM'][1][1] = '12.5';
   const resultado = await validarHojas(hojas);
-  assert.equal(resultado.valido, true);
+  const error = resultado.errores.find((item) => item.hoja === 'Actividades VcM' && item.campo === 'Horas');
+  assert.equal(resultado.valido, false);
+  assert.equal(error.esperado, 'número entero');
+});
+
+test('convierte un valor con símbolo de porcentaje en un 422 accionable antes de persistir', async () => {
+  const hojas = hojasValidas();
+  hojas['Actividades VcM'][1][1] = '23%';
+  const resultado = await validarHojas(hojas);
+  const error = resultado.errores.find((item) => item.hoja === 'Actividades VcM' && item.campo === 'Horas');
+
+  assert.equal(resultado.valido, false);
+  assert.equal(error.fila, 2);
+  assert.equal(error.celda, 'B2');
+  assert.equal(error.valor, '23%');
+  assert.equal(error.esperado, 'número entero');
+  assert.match(error.mensaje, /sin decimales, texto ni símbolos/);
+  assert.doesNotMatch(error.mensaje, /PostgreSQL|Sequelize|22P02|numeric error/i);
+});
+
+test('el tipo INTEGER del modelo prevalece ante una configuración string desactualizada', async () => {
+  const configuracionDesactualizada = configuracionVcm.map((item) => (
+    item.columna_excel === 'Horas' ? { ...item, tipo_dato: 'string' } : item
+  ));
+  models.CampoPlantilla.findAll = async () => configuracionDesactualizada;
+  const hojas = hojasValidas();
+  hojas['Actividades VcM'][1][1] = '23%';
+  const resultado = await validarHojas(hojas);
+  const error = resultado.errores.find((item) => item.hoja === 'Actividades VcM' && item.campo === 'Horas');
+
+  assert.equal(resultado.valido, false);
+  assert.equal(error.esperado, 'número entero');
+  assert.equal(error.valor, '23%');
+});
+
+test('el POST traduce el caso numeric inválido a 422 y elimina el XLSX temporal', async () => {
+  const hojas = hojasValidas();
+  hojas['Actividades VcM'][1][1] = '23%';
+  const temporal = crearXlsxTemporal(hojas);
+  const handler = createCargarArchivo({
+    validateFile: validarArchivo,
+    processUpload: async () => assert.fail('El dato inválido no debe llegar a persistencia')
+  });
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) { this.statusCode = code; return this; },
+    json(body) { this.body = body; return this; }
+  };
+
+  try {
+    await handler(
+      { params: { id: '2' }, file: { path: temporal.filePath } },
+      res,
+      assert.fail
+    );
+
+    assert.equal(res.statusCode, 422);
+    const error = res.body.errores.find((item) => item.hoja === 'Actividades VcM' && item.columna === 'Horas');
+    assert.equal(error.fila, 2);
+    assert.equal(error.celda, 'B2');
+    assert.equal(error.valor, '23%');
+    assert.equal(error.esperado, 'número entero');
+    assert.equal(fs.existsSync(temporal.filePath), false);
+    assert.doesNotMatch(JSON.stringify(res.body), /PostgreSQL|Sequelize|22P02|query|stack/i);
+  } finally {
+    fs.rmSync(temporal.dir, { recursive: true, force: true });
+  }
+});
+
+test('rechaza una fecha inexistente usando el tipo DATEONLY real del modelo', async () => {
+  const hojas = hojasValidas();
+  hojas.Convenios[1][2] = '31/02/2026';
+  const resultado = await validarHojas(hojas);
+  const error = resultado.errores.find((item) => item.hoja === 'Convenios' && item.campo === 'Fecha firma');
+
+  assert.equal(resultado.valido, false);
+  assert.equal(error.esperado, 'fecha válida');
+  assert.equal(error.valor, '31/02/2026');
+  assert.match(error.mensaje, /YYYY-MM-DD/);
+});
+
+test('acumula errores obligatorios, numéricos y de fecha en una sola validación', async () => {
+  const hojas = hojasValidas();
+  hojas.Convenios[1] = ['', 'año', 'fecha inválida'];
+  hojas['Actividades VcM'][1][1] = '23%';
+  const resultado = await validarHojas(hojas);
+
+  assert.equal(resultado.valido, false);
+  assert.ok(resultado.errores.length >= 4);
+  assert.ok(resultado.errores.some((error) => error.esperado === 'campo obligatorio'));
+  assert.ok(resultado.errores.some((error) => error.esperado === 'número entero'));
+  assert.ok(resultado.errores.some((error) => error.esperado === 'fecha válida'));
 });
 
 test('un campo string opcional vacío no genera error de tipo', async () => {

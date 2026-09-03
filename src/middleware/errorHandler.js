@@ -40,10 +40,14 @@ const translateValidationError = (e) => {
  * Intercepta errores operativos, de Sequelize y de servidor genéricos.
  */
 const errorHandler = (err, req, res, next) => {
-  // 1. Logs de error detallados en consola para desarrollo
-  console.error('--- ERROR DETECTADO ---');
-  console.error(err);
-  console.error('----------------------');
+  // Log técnico sin incluir headers, tokens, body ni parámetros de la solicitud.
+  console.error('[errorHandler]', {
+    timestamp: new Date().toISOString(),
+    operation: `${req.method || 'UNKNOWN'} ${req.originalUrl || req.path || 'UNKNOWN'}`,
+    name: err.name || 'Error',
+    message: err.message || '',
+    stack: err.stack || ''
+  });
 
   const declaredStatus = Number(err.statusCode || err.status);
   let statusCode = Number.isInteger(declaredStatus) && declaredStatus >= 400 && declaredStatus < 500

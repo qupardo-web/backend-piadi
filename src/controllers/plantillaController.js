@@ -107,7 +107,9 @@ const createCargarArchivo = ({
           hoja: e.hoja || 'General',
           fila: e.fila || '',
           columna: e.campo || '',
-          celda: e.celda || ''
+          celda: e.celda || '',
+          valor: e.valor ?? '',
+          esperado: e.esperado || ''
         })),
         success: false
       });

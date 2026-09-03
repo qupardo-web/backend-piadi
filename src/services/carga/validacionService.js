@@ -5,23 +5,112 @@ const estaVacio = (valor) => valor === null ||
   valor === undefined ||
   (typeof valor === 'string' && valor.trim() === '');
 
-const esTipoCompatible = (valor, tipoDato) => {
-  const tipo = String(tipoDato || '').trim().toLowerCase();
+const TIPOS_NUMERICOS = new Set(['INTEGER', 'BIGINT', 'FLOAT', 'REAL', 'DOUBLE PRECISION', 'DECIMAL']);
+const TIPOS_ENTEROS = new Set(['INTEGER', 'BIGINT']);
 
+const tipoModelo = (Model, campo) => {
+  const attr = Model && Model.rawAttributes[campo.columna_destino];
+  return attr && attr.type && (attr.type.key || attr.type.constructor?.name);
+};
+
+const resolverTipoEsperado = (campo, Model) => {
+  const modelType = tipoModelo(Model, campo);
+  if (TIPOS_ENTEROS.has(modelType)) return 'integer';
+  if (TIPOS_NUMERICOS.has(modelType)) return 'number';
+  if (modelType === 'DATE' || modelType === 'DATEONLY') return 'date';
+  if (modelType === 'BOOLEAN') return 'boolean';
+
+  const configuredType = String(campo.tipo_dato || '').trim().toLowerCase();
+  if (['integer', 'number', 'date', 'boolean', 'string'].includes(configuredType)) {
+    return configuredType;
+  }
+  return 'string';
+};
+
+const serializarValorSeguro = (valor) => {
+  if (valor === null || valor === undefined) return '';
+  const text = valor instanceof Date ? valor.toISOString() : String(valor);
+  const clean = text.replace(/[\r\n\t]/g, ' ').trim();
+  return clean.length > 80 ? `${clean.slice(0, 77)}...` : clean;
+};
+
+const normalizarFecha = (valor) => {
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    return { valido: true, valor: valor.toISOString().split('T')[0] };
+  }
+
+  if (typeof valor === 'number') {
+    const parsed = XLSX.SSF.parse_date_code(valor);
+    if (parsed) {
+      return {
+        valido: true,
+        valor: `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+      };
+    }
+    return { valido: false, valor };
+  }
+
+  if (typeof valor !== 'string') return { valido: false, valor };
+  const text = valor.trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$|^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
+  if (!match) return { valido: false, valor };
+
+  const year = Number(match[1] || match[6]);
+  const month = Number(match[2] || match[5]);
+  const day = Number(match[3] || match[4]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return { valido: false, valor };
+  }
+  return { valido: true, valor: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` };
+};
+
+const validarTipo = (valor, tipo) => {
+  if (tipo === 'integer' || tipo === 'number') {
+    const numericValue = typeof valor === 'string' ? Number(valor.trim()) : valor;
+    const valido = typeof numericValue === 'number' && Number.isFinite(numericValue) &&
+      (tipo !== 'integer' || Number.isInteger(numericValue));
+    return { valido, valor: numericValue };
+  }
+
+  if (tipo === 'date') return normalizarFecha(valor);
+  if (tipo === 'boolean') return { valido: typeof valor === 'boolean', valor };
+  return {
+    valido: typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean' ||
+      (valor instanceof Date && !Number.isNaN(valor.getTime())),
+    valor
+  };
+};
+
+const detalleTipo = (tipo) => {
+  if (tipo === 'integer') {
+    return { esperado: 'número entero', correccion: 'Ingrese un número sin decimales, texto ni símbolos.' };
+  }
   if (tipo === 'number') {
-    if (typeof valor === 'number') return Number.isFinite(valor);
-    if (typeof valor !== 'string' || valor.trim() === '') return false;
-    return Number.isFinite(Number(valor.trim()));
+    return { esperado: 'valor numérico', correccion: 'Ingrese solo un número, sin texto ni símbolos.' };
   }
-
-  if (tipo === 'string') {
-    return typeof valor === 'string' ||
-      typeof valor === 'number' ||
-      typeof valor === 'boolean' ||
-      (valor instanceof Date && !Number.isNaN(valor.getTime()));
+  if (tipo === 'date') {
+    return { esperado: 'fecha válida', correccion: 'Use una fecha de Excel o el formato YYYY-MM-DD, DD-MM-YYYY o DD/MM/YYYY.' };
   }
+  if (tipo === 'boolean') {
+    return { esperado: 'valor booleano', correccion: 'Ingrese un valor booleano válido.' };
+  }
+  return { esperado: 'texto', correccion: 'Ingrese un valor de texto válido.' };
+};
 
-  return true;
+const crearErrorTipo = ({ hoja, fila, columna, celda, valor, tipo }) => {
+  const { esperado, correccion } = detalleTipo(tipo);
+  const valorSeguro = serializarValorSeguro(valor);
+  return {
+    hoja,
+    campo: columna,
+    fila,
+    celda,
+    valor: valorSeguro,
+    esperado,
+    mensaje: `Formato inválido en la hoja "${hoja}", fila ${fila}, columna "${columna}". ` +
+      `Se esperaba ${esperado}, pero se recibió "${valorSeguro}". ${correccion}`
+  };
 };
 
 const validarArchivo = async (filePath, plantillaId) => {
@@ -75,6 +164,8 @@ const validarArchivo = async (filePath, plantillaId) => {
         errores.push({
           hoja: nombreHoja,
           campo: campo.columna_excel,
+          valor: '',
+          esperado: 'columna obligatoria',
           mensaje: `La columna requerida ${campo.columna_excel} no existe en la hoja ${nombreHoja}`
         });
       }
@@ -94,6 +185,8 @@ const validarArchivo = async (filePath, plantillaId) => {
       const numeroFilaExcel = index + 2; // Fila 1 es el encabezado en Excel
       for (const campo of columnasRequeridasPresentes) {
         const valorCelda = fila[campo.columna_excel];
+        const columnaIndex = columnasArchivo.indexOf(campo.columna_excel);
+        const celda = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
         
         // Comprobar si el valor es null, undefined, o un string vacío tras hacer trim
         if (estaVacio(valorCelda)) {
@@ -101,6 +194,9 @@ const validarArchivo = async (filePath, plantillaId) => {
             hoja: nombreHoja,
             campo: campo.columna_excel,
             fila: numeroFilaExcel,
+            celda,
+            valor: '',
+            esperado: 'campo obligatorio',
             mensaje: `Fila ${numeroFilaExcel}: El campo requerido ${campo.columna_excel} está vacío en la hoja ${nombreHoja}`
           });
         }
@@ -109,27 +205,37 @@ const validarArchivo = async (filePath, plantillaId) => {
       // Validar las reglas del modelo en memoria (ej: formato RUT, formato email, fechas, etc.)
       const dataByTable = {};
       const tiposValidados = new Set();
+      const tablasConTipoInvalido = new Set();
       for (const campo of camposDeHoja) {
         if (!dataByTable[campo.tabla_destino]) {
           dataByTable[campo.tabla_destino] = {};
         }
         let valor = fila[campo.columna_excel];
+        const columnaIndex = columnasArchivo.indexOf(campo.columna_excel);
+        const celda = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
+        const Model = sequelize.models[campo.tabla_destino];
+        const tipoEsperado = resolverTipoEsperado(campo, Model);
 
-        const tipoKey = `${campo.columna_excel}:${campo.tipo_dato}`;
+        const tipoKey = `${campo.columna_excel}:${tipoEsperado}`;
         if (!estaVacio(valor) && !tiposValidados.has(tipoKey)) {
           tiposValidados.add(tipoKey);
-          if (!esTipoCompatible(valor, campo.tipo_dato)) {
-            errores.push({
+          const validacionTipo = validarTipo(valor, tipoEsperado);
+          if (!validacionTipo.valido) {
+            tablasConTipoInvalido.add(campo.tabla_destino);
+            errores.push(crearErrorTipo({
               hoja: nombreHoja,
-              campo: campo.columna_excel,
               fila: numeroFilaExcel,
-              mensaje: `Fila ${numeroFilaExcel}: El campo ${campo.columna_excel} debe ser de tipo ${campo.tipo_dato} en la hoja ${nombreHoja}`
-            });
+              columna: campo.columna_excel,
+              celda,
+              valor,
+              tipo: tipoEsperado
+            }));
+          } else {
+            valor = validacionTipo.valor;
           }
         }
 
         // Normalizar fechas antes de la validación en memoria
-        const Model = sequelize.models[campo.tabla_destino];
         if (Model) {
           const attrType = Model.rawAttributes[campo.columna_destino];
           if (attrType) {
@@ -156,7 +262,7 @@ const validarArchivo = async (filePath, plantillaId) => {
 
       for (const [tabla, registro] of Object.entries(dataByTable)) {
         const Model = sequelize.models[tabla];
-        if (!Model) continue;
+        if (!Model || tablasConTipoInvalido.has(tabla)) continue;
 
         const instance = Model.build(registro);
         try {
@@ -166,6 +272,12 @@ const validarArchivo = async (filePath, plantillaId) => {
             for (const errItem of err.errors) {
               const campoConfig = camposDeHoja.find(c => c.columna_destino === errItem.path && c.tabla_destino === tabla);
               const campoExcel = campoConfig ? campoConfig.columna_excel : errItem.path;
+              const columnaIndex = columnasArchivo.indexOf(campoExcel);
+              const celdaExcel = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
+              const tipoEsperado = resolverTipoEsperado(
+                campoConfig || { columna_destino: errItem.path, tipo_dato: 'string' },
+                Model
+              );
 
               let cleanMsg = errItem.message;
               if (cleanMsg.includes('cannot be null')) {
@@ -193,6 +305,9 @@ const validarArchivo = async (filePath, plantillaId) => {
                   hoja: nombreHoja,
                   campo: campoExcel,
                   fila: numeroFilaExcel,
+                  celda: celdaExcel,
+                  valor: serializarValorSeguro(fila[campoExcel]),
+                  esperado: detalleTipo(tipoEsperado).esperado,
                   mensaje: `Fila ${numeroFilaExcel}: ${cleanMsg}`
                 });
               }
@@ -212,4 +327,9 @@ const validarArchivo = async (filePath, plantillaId) => {
   };
 };
 
-module.exports = { validarArchivo };
+module.exports = {
+  validarArchivo,
+  resolverTipoEsperado,
+  validarTipo,
+  serializarValorSeguro
+};
