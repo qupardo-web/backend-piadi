@@ -1,4 +1,9 @@
 const { User, Role, Plantilla, CampoPlantilla } = require('../models');
+const {
+  INNOVACION_TEMPLATE_NAME,
+  createInnovationPlantilla,
+  createInnovationFields
+} = require('../config/plantillaInnovacion');
 
 async function seedDatabase() {
   try {
@@ -80,7 +85,8 @@ async function seedDatabase() {
         roleId: roleMap['Dirección de Vinculación con el Medio'] || roleMap['Vinculación Con El Medio'],
         archivoData: null,
         archivoNombre: null
-      }
+      },
+      createInnovationPlantilla(roleMap[INNOVACION_TEMPLATE_NAME])
     ];
 
     for (const data of plantillasToSeed) {
@@ -244,7 +250,10 @@ async function seedDatabase() {
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Responsable ECAS',   columna_excel: 'Responsable ECAS',   hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'responsableEcas', tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'ID Actividad',      columna_excel: 'ID Actividad asociada', hoja_origen: 'Articulaciones TP',   tabla_destino: 'ArticulacionTP', columna_destino: 'idActividad',   tipo_dato: 'string', requerido: false, orden_insercion: 3, campo_lookup_tabla: 'Actividad', campo_lookup_columna_db: 'idActividad', campo_lookup_retorno: 'idActividad' },
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Evidencia',          columna_excel: 'Producto / evidencia', hoja_origen: 'Articulaciones TP',   tabla_destino: 'ArticulacionTP', columna_destino: 'evidencia',         tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
-      { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 }
+      { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
+
+      // INNOVACIÓN — Proyecto (orden 1) y Financiamiento (orden 2)
+      ...createInnovationFields(plantillaMap[INNOVACION_TEMPLATE_NAME])
     ];
 
     for (const data of camposToSeed) {
