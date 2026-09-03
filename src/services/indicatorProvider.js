@@ -16,7 +16,7 @@ const {
   Financiamiento
 } = require('../models');
 
-const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio'];
+const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio', 'innovacion'];
 const INNOVATION_PROJECT_TYPES = ['Estudiantil', 'Institucional'];
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
 const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
@@ -486,6 +486,27 @@ const getFilterOptions = async (department, filters = {}) => {
         ...articulaciones.map(ar => ar.comuna)
       ]),
       sectores: distinctValues(convenios, 'sector').sort()
+    };
+  } else if (deptKey === 'innovacion') {
+    const proyectos = await Proyecto.findAll({ raw: true });
+    const financiamientos = await Financiamiento.findAll({ raw: true });
+
+    const years = new Set([
+      ...proyectos.map(p => Number(p.anioInicio)).filter(Boolean),
+      ...proyectos.map(p => Number(p.anioTermino)).filter(Boolean)
+    ]);
+
+    return {
+      years: [...years].sort((a, b) => a - b),
+      semesters: distinctValues(proyectos, 'semestreInicio').sort(),
+      startMonths: [],
+      areas: distinctTextValues(proyectos, 'areaTematica'),
+      tipos: distinctValues(proyectos, 'tipoProyecto').sort(),
+      modalidades: [],
+      sexos: [],
+      rangosEdad: [],
+      estados: distinctValues(proyectos, 'estado').sort(),
+      fuentes: distinctValues(financiamientos, 'fuenteFinanciamiento').sort()
     };
   }
 

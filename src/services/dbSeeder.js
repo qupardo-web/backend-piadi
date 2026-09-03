@@ -1,4 +1,4 @@
-const { User, Role, Plantilla, CampoPlantilla } = require('../models');
+const { User, Role, Plantilla, CampoPlantilla, Proyecto, Financiamiento } = require('../models');
 
 async function seedDatabase() {
   try {
@@ -14,6 +14,7 @@ async function seedDatabase() {
       { name: 'Desarrollo Curricular', group: 'Direccion', description: 'Dirección de desarrollo curricular.' },
       { name: 'Vicerrectoria de Desarrollo Institucional', group: 'Direccion', description: 'Vicerrectoría de desarrollo institucional' },
       { name: 'Innovación', group: 'Direccion', description: 'Dirección de innovación y desarrollo' },
+      { name: 'Dirección de Desarrollo e Innovación', group: 'Direccion', description: 'Dirección de desarrollo e innovación' },
       { name: 'Educación Continua', group: 'Direccion', description: 'Dirección de educación continua' },
       { name: 'Vinculación Con El Medio', group: 'Direccion', description: 'Dirección de vinculación con el medio' },
       { name: 'Dirección de Vinculación con el Medio', group: 'Direccion', description: 'Dirección de vinculación con el medio' },
@@ -78,6 +79,13 @@ async function seedDatabase() {
         name: 'Vinculación Con El Medio', 
         description: 'Plantilla para carga de convenios, actividades y articulaciones de VCM', 
         roleId: roleMap['Dirección de Vinculación con el Medio'] || roleMap['Vinculación Con El Medio'],
+        archivoData: null,
+        archivoNombre: null
+      },
+      { 
+        name: 'Innovación', 
+        description: 'Plantilla para carga de proyectos y financiamiento de innovación', 
+        roleId: roleMap['Dirección de Desarrollo e Innovación'] || roleMap['Innovación'],
         archivoData: null,
         archivoNombre: null
       }
@@ -154,19 +162,36 @@ async function seedDatabase() {
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Edad',               columna_excel: 'Edad',               hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'edadAlumno',          tipo_dato: 'number', requerido: false, orden_insercion: 2 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Rango Edad',         columna_excel: 'Rango Edad',         hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'rangoEdadAlumno',     tipo_dato: 'string', requerido: false, orden_insercion: 2 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'N° cursos del participant', columna_excel: 'N° cursos del participante', hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'nCursos',      tipo_dato: 'number', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Tiene más cursos',    columna_excel: 'Tiene más cursos',    hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'tieneMasCursos',     tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Año',                columna_excel: 'Año',                hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'anio',               tipo_dato: 'number', requerido: true,  orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Semestre',           columna_excel: 'Semestre',           hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'semestre',           tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Mes inicio',         columna_excel: 'Mes inicio',         hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'mesInicio',          tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Fecha matrícula',    columna_excel: 'Fecha matrícula',    hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'fechaMatricula',     tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Valor lista CLP',    columna_excel: 'Valor lista CLP',    hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'valorListaCLP',      tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Descuento aplicado', columna_excel: 'Descuento aplicado', hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'descuentoAplicado',  tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Monto pagado CLP',   columna_excel: 'Monto pagado CLP',   hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'montoPagadoCLP',    tipo_dato: 'string', requerido: false, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Participante',   columna_excel: 'ID Participante',   hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'idParticipante',     tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'RUT',               columna_excel: 'RUT',               hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'rut',                tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Nombre',            columna_excel: 'Nombre',            hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'nombre',             tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Sexo',              columna_excel: 'Sexo',              hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'sexo',               tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Fecha nacimiento',  columna_excel: 'Fecha nacimiento',  hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'fechaNacimiento',    tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Email',             columna_excel: 'Email',             hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'email',              tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Teléfono',          columna_excel: 'Teléfono',          hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'telefono',           tipo_dato: 'string', requerido: false, orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Región',            columna_excel: 'Región',            hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'region',             tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Comuna',            columna_excel: 'Comuna',            hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'comuna',             tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Nivel de estudio',  columna_excel: 'Nivel de estudio',  hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'nivelDeEstudio',     tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Profesión / Ocupación', columna_excel: 'Profesión / Ocupación', hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'profesionUOcupacion', tipo_dato: 'string', requerido: true, orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Tipo participante', columna_excel: 'Tipo participante', hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'tipoParticipante',   tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Empresa / Institución', columna_excel: 'Empresa / Institución', hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'empresaOInstitucion', tipo_dato: 'string', requerido: false, orden_insercion: 1 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Sector económico',  columna_excel: 'Sector económico',  hoja_origen: 'Participantes Detalle', tabla_destino: 'AlumnoExterno', columna_destino: 'sectorEconomico',    tipo_dato: 'string', requerido: false, orden_insercion: 1 },
 
-      // EDUCACIÓN CONTINUA - ORDEN 3 — Hoja Participantes Detalle → EstadoMatricula
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Inscripción',   columna_excel: 'ID Inscripción',   hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'idInscripcion',    tipo_dato: 'string', requerido: true,  orden_insercion: 3, campo_lookup_tabla: 'MatriculaPrograma', campo_lookup_columna_db: 'idInscripcion', campo_lookup_retorno: 'idInscripcion' },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Estado académico', columna_excel: 'Estado académico', hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'estadoAcademico',  tipo_dato: 'string', requerido: false, orden_insercion: 3 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Aprobó',           columna_excel: 'Aprobó',           hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'aprobo',            tipo_dato: 'string', requerido: false, orden_insercion: 3 },
+      // EDUCACIÓN CONTINUA - ORDEN 2 — Hoja Participantes Detalle → MatriculaPrograma (lookup: Programa, AlumnoExterno)
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Inscripción',   columna_excel: 'ID Inscripción',   hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'idInscripcion',     tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Programa',      columna_excel: 'ID Programa',      hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'idPrograma',        tipo_dato: 'string', requerido: true,  orden_insercion: 2, campo_lookup_tabla: 'Programa', campo_lookup_columna_db: 'idPrograma', campo_lookup_retorno: 'idPrograma' },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Participante',  columna_excel: 'ID Participante',  hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'idParticipante',    tipo_dato: 'string', requerido: true,  orden_insercion: 2, campo_lookup_tabla: 'AlumnoExterno', campo_lookup_columna_db: 'idParticipante', campo_lookup_retorno: 'idParticipante' },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Año',               columna_excel: 'Año',               hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'anio',              tipo_dato: 'number', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Semestre',          columna_excel: 'Semestre',          hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'semestre',          tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Edad alumno',       columna_excel: 'Edad al momento de la matrícula', hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'edadAlumno', tipo_dato: 'number', requerido: true, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Rango de edad',     columna_excel: 'Rango de edad',     hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'rangoEdadAlumno',  tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'N° Cursos alumno',  columna_excel: 'N° cursos alumno',  hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'nCursos',          tipo_dato: 'number', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Tiene más cursos',  columna_excel: 'Tiene más cursos',  hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'tieneMasCursos',   tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+
+      // EDUCACIÓN CONTINUA - ORDEN 3 — Hoja Participantes Detalle → EstadoMatricula (lookup: MatriculaPrograma)
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Inscripción',   columna_excel: 'ID Inscripción',   hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'idInscripcion',       tipo_dato: 'string', requerido: true,  orden_insercion: 3, campo_lookup_tabla: 'MatriculaPrograma', campo_lookup_columna_db: 'idInscripcion', campo_lookup_retorno: 'idInscripcion' },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Estado académico', columna_excel: 'Estado académico', hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'estadoAcademico',   tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Aprobó',           columna_excel: 'Aprobó',           hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'aprobo',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Nota final',       columna_excel: 'Nota final',       hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'notaFinal',         tipo_dato: 'string', requerido: false, orden_insercion: 3 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Asistencia %',     columna_excel: 'Asistencia %',     hoja_origen: 'Participantes Detalle', tabla_destino: 'EstadoMatricula', columna_destino: 'asistencia',        tipo_dato: 'string', requerido: false, orden_insercion: 3 },
 
@@ -244,7 +269,41 @@ async function seedDatabase() {
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Responsable ECAS',   columna_excel: 'Responsable ECAS',   hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'responsableEcas', tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'ID Actividad',      columna_excel: 'ID Actividad asociada', hoja_origen: 'Articulaciones TP',   tabla_destino: 'ArticulacionTP', columna_destino: 'idActividad',   tipo_dato: 'string', requerido: false, orden_insercion: 3, campo_lookup_tabla: 'Actividad', campo_lookup_columna_db: 'idActividad', campo_lookup_retorno: 'idActividad' },
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Evidencia',          columna_excel: 'Producto / evidencia', hoja_origen: 'Articulaciones TP',   tabla_destino: 'ArticulacionTP', columna_destino: 'evidencia',         tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
-      { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 }
+      { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
+
+      // ═══════════════════════════════════════════════════════
+      // INNOVACIÓN - ORDEN 1 — Hoja Proyectos → Proyecto
+      // ═══════════════════════════════════════════════════════
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'ID Proyecto',           columna_excel: 'ID Proyecto',           hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'idProyecto',          tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Nombre Proyecto',       columna_excel: 'Nombre proyecto',       hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'nombreProyecto',      tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Área Temática',         columna_excel: 'Área temática',         hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'areaTematica',        tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Curso / Línea',         columna_excel: 'Curso / línea',         hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'cursoLinea',          tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Estado',                columna_excel: 'Estado',                hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'estado',              tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Unidad Responsable',    columna_excel: 'Unidad responsable',    hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'unidadResponsable',   tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Responsable Docente',   columna_excel: 'Responsable docente',   hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'responsableDocente',  tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Socio / Contraparte',   columna_excel: 'Socio / contraparte',   hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'socioContraparte',    tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Año Inicio',            columna_excel: 'Año inicio',            hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'anioInicio',         tipo_dato: 'number', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Año Término',           columna_excel: 'Año término',           hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'anioTermino',        tipo_dato: 'number', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Semestre Inicio',       columna_excel: 'Semestre inicio',       hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'semestreInicio',      tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Fecha Inicio',          columna_excel: 'Fecha inicio',          hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'fechaInicio',         tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Fecha Cierre Estimada', columna_excel: 'Fecha cierre estimada', hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'fechaCierreEstimada', tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Tipo Proyecto',        columna_excel: 'Tipo proyecto',        hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'tipoProyecto',        tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Resultado Principal',  columna_excel: 'Resultado principal',  hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'resultadoPrincipal',  tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'N° Estudiantes',        columna_excel: 'N° estudiantes',        hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'nEstudiantes',        tipo_dato: 'number', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'N° Funcionarios',       columna_excel: 'N° funcionarios',       hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'nFuncionarios',       tipo_dato: 'number', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'N° Docentes',           columna_excel: 'N° docentes',           hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'nDocentes',           tipo_dato: 'number', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Evidencia Principal',   columna_excel: 'Evidencia principal',   hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'evidenciaPrincipal',  tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Observación',            columna_excel: 'Observación',            hoja_origen: 'Proyectos', tabla_destino: 'Proyecto', columna_destino: 'observacion',         tipo_dato: 'string', requerido: true,  orden_insercion: 1 },
+
+      // INNOVACIÓN - ORDEN 2 — Hoja Financiamiento → Financiamiento (lookup: Proyecto)
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'ID Proyecto',           columna_excel: 'ID Proyecto',           hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'idProyecto',          tipo_dato: 'string', requerido: true,  orden_insercion: 2, campo_lookup_tabla: 'Proyecto', campo_lookup_columna_db: 'idProyecto', campo_lookup_retorno: 'idProyecto' },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Nombre Proyecto',       columna_excel: 'Nombre proyecto',       hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'nombreProyecto',      tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Monto Adjudicado',      columna_excel: 'Monto adjudicado',      hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'montoAdjudicado',     tipo_dato: 'number', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Monto Ejecutado Estimado', columna_excel: 'Monto ejecutado estimado', hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'montoEjecutadoEstimado', tipo_dato: 'number', requerido: true, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Estado Financiero',    columna_excel: 'Estado financiero',    hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'estadoFinanciero',     tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Financiamiento Externo',columna_excel: 'Financiamiento externo',hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'financiamientoExterno', tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Fuente Financiamiento', columna_excel: 'Fuente financiamiento', hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'fuenteFinanciamiento',  tipo_dato: 'string', requerido: true,  orden_insercion: 2 },
+      { plantillaId: plantillaMap['Innovación'], nombre_campo: 'Observación',            columna_excel: 'Observación',            hoja_origen: 'Financiamiento', tabla_destino: 'Financiamiento', columna_destino: 'observacion',         tipo_dato: 'string', requerido: true,  orden_insercion: 2 }
     ];
 
     for (const data of camposToSeed) {
@@ -262,8 +321,40 @@ async function seedDatabase() {
     }
     console.log('Campos plantilla ensured in database.');
 
-    // 5. Seed VCM transactional mock data (only if empty)
-    console.log('Skipping VCM mock data seeding (removed).');
+    // Auto-generar y guardar el binario Excel para plantillas sin archivoData
+    const XLSX = require('xlsx');
+    for (const [plantillaName, plantillaId] of Object.entries(plantillaMap)) {
+      const p = await Plantilla.findByPk(plantillaId);
+      if (p && !p.archivoData) {
+        const camposDePlantilla = camposToSeed.filter(c => c.plantillaId === plantillaId);
+        if (camposDePlantilla.length > 0) {
+          const wb = XLSX.utils.book_new();
+          const sheets = {};
+          for (const c of camposDePlantilla) {
+            if (!sheets[c.hoja_origen]) {
+              sheets[c.hoja_origen] = [];
+            }
+            if (!sheets[c.hoja_origen].includes(c.columna_excel)) {
+              sheets[c.hoja_origen].push(c.columna_excel);
+            }
+          }
+          for (const [sheetName, headers] of Object.entries(sheets)) {
+            const ws = XLSX.utils.aoa_to_sheet([headers]);
+            XLSX.utils.book_append_sheet(wb, ws, sheetName);
+          }
+          const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+          const fileName = `Plantilla_${plantillaName.replace(/\s+/g, '_')}.xlsx`;
+          await p.update({
+            archivoData: buffer,
+            archivoNombre: fileName
+          });
+          console.log(`Plantilla binaria generada para ${plantillaName}.`);
+        }
+      }
+    }
+
+    // 5. Seed transactional mock data (removed - user will upload/test)
+    console.log('Skipping transactional mock data seeding.');
   } catch (error) {
     console.error('Error seeding database:', error);
   }
