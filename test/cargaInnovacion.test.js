@@ -50,6 +50,7 @@ const projectRows = [
     'Responsable/Docente': 'Ana Pérez',
     'Unidad responsable': 'Dirección de Innovación',
     'Socio/contraparte': 'CORFO',
+    'Financiamiento Externo': 'Fondo concursable externo',
     'Resultado principal': 'Prototipo validado',
     'Evidencia principal': 'informe-a.pdf',
     'N° estudiantes': 4,
@@ -72,6 +73,7 @@ const projectRows = [
     'Responsable/Docente': 'Luis Soto',
     'Unidad responsable': 'Dirección de Innovación',
     'Socio/contraparte': 'ECAS',
+    'Financiamiento Externo': 'Recursos internos',
     'Resultado principal': 'Proceso implementado',
     'Evidencia principal': 'informe-b.pdf',
     'N° estudiantes': 6,
@@ -249,7 +251,7 @@ test('1. Plantilla Innovación queda configurada por el seeder con archivo y cam
   assert.equal(fields.length, projectFields.length + financingFields.length + sectionFields.length);
   assert.ok(fields.every((field) => field.requerido));
   assert.equal(sectionConfig.length, 11);
-  assert.ok(sectionConfig.every((field) => field.hoja_origen === SECCIONES_SHEET && field.orden_insercion === 1));
+  assert.ok(sectionConfig.every((field) => field.hoja_origen === SECCIONES_SHEET && field.orden_insercion === 3));
   assert.ok(updatedTemplates.some(({ archivoData }) => Buffer.isBuffer(archivoData)));
   assert.deepEqual(
     [lookup.campo_lookup_tabla, lookup.campo_lookup_columna_db, lookup.campo_lookup_retorno],
@@ -390,11 +392,11 @@ test('7. hace rollback total cuando falla Financiamiento', async () => {
   assert.ok(persistence.operations.every((operation) => operation.transaction === persistence.transaction));
 });
 
-test('8. hace commit y procesa Proyecto antes de Financiamiento', async () => {
+test('8. hace commit y procesa Proyecto antes de Financiamiento y Seccion', async () => {
   const { transaction, operations } = await processWorkbook();
   const bulkModels = operations.filter((operation) => operation.type === 'bulkCreate').map((operation) => operation.model);
 
-  assert.deepEqual(bulkModels, ['Proyecto', 'Seccion', 'Financiamiento']);
+  assert.deepEqual(bulkModels, ['Proyecto', 'Financiamiento', 'Seccion']);
   assert.equal(transaction.commitCalls, 1);
   assert.equal(transaction.rollbackCalls, 0);
   assert.ok(operations.every((operation) => operation.transaction === transaction));

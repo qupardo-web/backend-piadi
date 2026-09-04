@@ -637,10 +637,13 @@ async function initDbConstraints() {
       ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_tipo CHECK ("tipoProyecto" IN ('Estudiantil', 'Institucional'));
     `);
 
-    // 3. CHECK Constraints en Financiamientos
+    // 3. CHECK Constraints en Financiamientos y Secciones
     await sequelize.query(`
       ALTER TABLE financiamientos DROP CONSTRAINT IF EXISTS chk_financiamientos_montos;
       ALTER TABLE financiamientos ADD CONSTRAINT chk_financiamientos_montos CHECK ("montoAdjudicado" >= 0 AND "montoEjecutadoEstimado" >= 0);
+
+      ALTER TABLE secciones DROP CONSTRAINT IF EXISTS chk_secciones_valores;
+      ALTER TABLE secciones ADD CONSTRAINT chk_secciones_valores CHECK ("anio" >= 1900 AND "nProyectos" >= 0 AND "nEstudiantes" >= 0);
     `);
 
     // 4. Triggers de validación de integridad referencial y coherencia

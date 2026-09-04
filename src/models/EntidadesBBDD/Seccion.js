@@ -51,8 +51,7 @@ const Seccion = sequelize.define('Seccion', {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
-      notEmpty: true,
-      is: /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'\-]+$/i
+      notEmpty: true
     }
   },
   observacion: {
