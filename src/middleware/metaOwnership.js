@@ -1,4 +1,4 @@
-const { Meta } = require('../models');
+const { Meta, MetaMetric } = require('../models');
 const { ValidationError, UnauthorizedError, ForbiddenError, NotFoundError } = require('../utils/errors');
 const { isRectoria } = require('./rectoriaAuthorization');
 
@@ -11,7 +11,9 @@ const requireMetaOwnership = async (req, res, next) => {
     if (!Number.isInteger(id) || id <= 0) {
       throw new ValidationError('El id de la meta debe ser un entero positivo');
     }
-    const meta = await Meta.findByPk(id);
+    const meta = await Meta.findByPk(id, {
+      include: [{ model: MetaMetric, as: 'metrics' }]
+    });
     if (!meta) {
       throw new NotFoundError('La meta solicitada no existe');
     }
