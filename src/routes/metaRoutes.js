@@ -112,6 +112,7 @@ router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, aud
  *   get:
  *     tags: [Metas]
  *     summary: Lista metas enriquecidas con progreso ponderado y estado calculado
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: query
  *         name: departmentId
@@ -136,8 +137,9 @@ router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, aud
  *                   type: array
  *                   items: { $ref: '#/components/schemas/MetaProgress' }
  *       400: { description: Filtro status inválido o periodo de meta no reconocido. }
+ *       401: { description: Token ausente, inválido o expirado. }
  */
-router.get('/', metaController.listWithProgress);
+router.get('/', authenticateToken, metaController.listWithProgress);
 
 /**
  * @openapi
@@ -173,6 +175,7 @@ router.get('/institucional', authenticateToken, requireRectoria, metaController.
  *   get:
  *     tags: [Metas]
  *     summary: Obtiene el detalle de progreso ponderado de una meta
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
  *         name: id
@@ -189,9 +192,10 @@ router.get('/institucional', authenticateToken, requireRectoria, metaController.
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/MetaProgress' }
  *       400: { description: ID o periodo inválido. }
+ *       401: { description: Token ausente, inválido o expirado. }
  *       404: { description: Meta o indicador inexistente. }
  */
-router.get('/:id/progress', metaController.getProgress);
+router.get('/:id/progress', authenticateToken, metaController.getProgress);
 
 /**
  * @openapi
@@ -199,6 +203,7 @@ router.get('/:id/progress', metaController.getProgress);
  *   get:
  *     tags: [Metas]
  *     summary: Obtiene una meta con todas sus métricas
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
  *         name: id
@@ -215,6 +220,7 @@ router.get('/:id/progress', metaController.getProgress);
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/Meta' }
  *       404: { description: Meta inexistente. }
+ *       401: { description: Token ausente, inválido o expirado. }
  *   put:
  *     tags: [Metas]
  *     summary: Actualiza una meta y reemplaza completamente sus métricas
@@ -250,7 +256,7 @@ router.get('/:id/progress', metaController.getProgress);
  *       403: { description: El usuario no es creador ni pertenece a Rectoría. }
  *       404: { description: Meta inexistente. }
  */
-router.get('/:id', metaController.getById);
+router.get('/:id', authenticateToken, metaController.getById);
 router.put('/:id', authenticateToken, requireMetaOwnership, auditMetaOperation('UPDATE'), metaController.update);
 router.delete('/:id', authenticateToken, requireMetaOwnership, auditMetaOperation('DELETE'), metaController.remove);
 
