@@ -21,8 +21,31 @@ const requireRectoriaForInstitutionalCreation = (req, res, next) => {
   return requireRectoria(req, res, next);
 };
 
+const requireMetaDepartmentAccess = (req, res, next) => {
+  if (!req.user) {
+    return next(new UnauthorizedError('Usuario no autenticado'));
+  }
+  if (isRectoria(req.user)) {
+    return next();
+  }
+
+  const userDepartmentId = req.user.departmentId;
+  const hasRequestedDepartment = Object.prototype.hasOwnProperty.call(req.body || {}, 'departmentId');
+  const requestedDepartmentId = hasRequestedDepartment ? req.body.departmentId : undefined;
+  const currentDepartmentId = req.meta ? req.meta.departmentId : requestedDepartmentId;
+
+  if (!userDepartmentId || currentDepartmentId !== userDepartmentId) {
+    return next(new ForbiddenError('Solo puedes operar metas de tu departamento'));
+  }
+  if (hasRequestedDepartment && requestedDepartmentId !== userDepartmentId) {
+    return next(new ForbiddenError('No puedes trasladar una meta a otro departamento'));
+  }
+  return next();
+};
+
 module.exports = {
   isRectoria,
   requireRectoria,
-  requireRectoriaForInstitutionalCreation
+  requireRectoriaForInstitutionalCreation,
+  requireMetaDepartmentAccess
 };
