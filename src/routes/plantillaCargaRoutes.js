@@ -18,7 +18,7 @@ const { requireVcmUploadRole } = require('../middleware/vcmUploadAuthorization')
  *   post:
  *     tags: [Plantillas]
  *     summary: Carga un archivo Excel y procesa los datos según la plantilla, incluidas VCM e Innovación
- *     description: El id corresponde a una plantilla registrada. La plantilla Innovación contiene las hojas Proyectos Innovación y Financiamiento. Sus participantes se registran en Proyectos Innovación mediante N° estudiantes, N° docentes y N° funcionarios; no existe una hoja Participantes.
+ *     description: El id corresponde a una plantilla registrada. La plantilla Innovación contiene las hojas Proyectos Innovación, Financiamiento y Secciones Cursos. Sus participantes se registran en Proyectos Innovación mediante N° estudiantes, N° docentes y N° funcionarios; no existe una hoja Participantes.
  *     parameters:
  *       - in: path
  *         name: id

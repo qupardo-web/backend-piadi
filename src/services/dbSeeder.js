@@ -95,6 +95,15 @@ async function seedDatabase() {
         defaults: data
       });
       plantillaMap[data.name] = created.id;
+
+      if (data.name === INNOVACION_TEMPLATE_NAME) {
+        await created.update({
+          description: data.description,
+          roleId: data.roleId,
+          archivoData: data.archivoData,
+          archivoNombre: data.archivoNombre
+        });
+      }
     }
     console.log('Plantillas ensured in database.');
 
@@ -252,7 +261,7 @@ async function seedDatabase() {
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Evidencia',          columna_excel: 'Producto / evidencia', hoja_origen: 'Articulaciones TP',   tabla_destino: 'ArticulacionTP', columna_destino: 'evidencia',         tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
 
-      // INNOVACIÓN — Proyecto (orden 1) y Financiamiento (orden 2)
+      // INNOVACIÓN — Proyecto/Seccion (orden 1) y Financiamiento (orden 2)
       ...createInnovationFields(plantillaMap[INNOVACION_TEMPLATE_NAME])
     ];
 

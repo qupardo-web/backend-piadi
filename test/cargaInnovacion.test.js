@@ -12,13 +12,17 @@ const plantillaController = require('../src/controllers/plantillaController');
 const { procesarCarga } = require('../src/services/carga/cargaService');
 const { validarArchivo } = require('../src/services/carga/validacionService');
 const { seedDatabase } = require('../src/services/dbSeeder');
+const indicatorService = require('../src/services/indicatorService');
+const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 const {
   INNOVACION_TEMPLATE_NAME,
   INNOVACION_TEMPLATE_FILENAME,
   PROYECTOS_SHEET,
   FINANCIAMIENTO_SHEET,
+  SECCIONES_SHEET,
   projectFields,
   financingFields,
+  sectionFields,
   createInnovationTemplateBuffer,
   createInnovationFields
 } = require('../src/config/plantillaInnovacion');
@@ -102,10 +106,32 @@ const financingRows = [
   }
 ];
 
+const sectionRows = [
+  {
+    'ID Sección': 'SEC-TEST-001', Año: 2026, Semestre: 'Otoño',
+    Curso: 'Emprendimiento e Innovación', 'Carrera/Programa': 'Contador Auditor',
+    Jornada: 'Diurna', 'N° Estudiantes': 25, 'N° Grupos/Proyectos': 5,
+    Docente: 'Docente Uno', Modalidad: 'Presencial', Observación: 'Prueba'
+  },
+  {
+    'ID Sección': 'SEC-TEST-002', Año: 2026, Semestre: 'Otoño',
+    Curso: 'Emprendimiento e Innovación', 'Carrera/Programa': 'Contador Auditor',
+    Jornada: 'Vespertina', 'N° Estudiantes': 20, 'N° Grupos/Proyectos': 4,
+    Docente: 'Docente Dos', Modalidad: 'Híbrida', Observación: 'Prueba'
+  },
+  {
+    'ID Sección': 'SEC-TEST-003', Año: 2026, Semestre: 'Primavera',
+    Curso: 'Emprendimiento e Innovación', 'Carrera/Programa': 'Contador Auditor',
+    Jornada: 'Diurna', 'N° Estudiantes': 30, 'N° Grupos/Proyectos': 6,
+    Docente: 'Docente Tres', Modalidad: 'Presencial', Observación: 'Prueba'
+  }
+];
+
 const createLoadWorkbook = () => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(projectRows), PROYECTOS_SHEET);
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(financingRows), FINANCIAMIENTO_SHEET);
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(sectionRows), SECCIONES_SHEET);
   return workbook;
 };
 
@@ -124,7 +150,7 @@ const preparePersistence = ({ failOn } = {}) => {
     async commit() { this.commitCalls += 1; },
     async rollback() { this.rollbackCalls += 1; }
   };
-  const inserted = { Proyecto: [], Financiamiento: [] };
+  const inserted = { Proyecto: [], Financiamiento: [], Seccion: [] };
   const operations = [];
 
   stub(models.sequelize, 'transaction', async () => transaction);
@@ -191,6 +217,7 @@ test.afterEach(() => {
 test('1. Plantilla Innovación queda configurada por el seeder con archivo y campos reales', async () => {
   const plantillas = [];
   const seededFields = [];
+  const updatedTemplates = [];
   let nextRoleId = 1;
   let nextPlantillaId = 1;
 
@@ -198,7 +225,10 @@ test('1. Plantilla Innovación queda configurada por el seeder con archivo y cam
   stub(models.User, 'count', async () => 1);
   stub(models.Plantilla, 'findOrCreate', async (options) => {
     plantillas.push(options.defaults);
-    return [{ id: nextPlantillaId++ }];
+    return [{
+      id: nextPlantillaId++,
+      async update(values) { updatedTemplates.push(values); }
+    }];
   });
   stub(models.CampoPlantilla, 'findOrCreate', async (options) => {
     seededFields.push(options.defaults);
@@ -215,15 +245,60 @@ test('1. Plantilla Innovación queda configurada por el seeder con archivo y cam
   assert.ok(Number.isInteger(plantilla.roleId));
   assert.equal(plantilla.archivoNombre, 'plantilla-innovacion.xlsx');
   assert.ok(Buffer.isBuffer(plantilla.archivoData));
-  assert.equal(fields.length, projectFields.length + financingFields.length);
+  const sectionConfig = fields.filter(({ tabla_destino }) => tabla_destino === 'Seccion');
+  assert.equal(fields.length, projectFields.length + financingFields.length + sectionFields.length);
   assert.ok(fields.every((field) => field.requerido));
+  assert.equal(sectionConfig.length, 11);
+  assert.ok(sectionConfig.every((field) => field.hoja_origen === SECCIONES_SHEET && field.orden_insercion === 1));
+  assert.ok(updatedTemplates.some(({ archivoData }) => Buffer.isBuffer(archivoData)));
   assert.deepEqual(
     [lookup.campo_lookup_tabla, lookup.campo_lookup_columna_db, lookup.campo_lookup_retorno],
     ['Proyecto', 'idProyecto', 'idProyecto']
   );
 });
 
-test('2. genera y valida un XLSX temporal con 2 proyectos y 2 financiamientos', async () => {
+test('1.1 el seeder actualiza la plantilla existente y no duplica CampoPlantilla', async () => {
+  const roles = new Map();
+  const templates = new Map();
+  const fields = new Map();
+  let nextRoleId = 1;
+  let nextTemplateId = 1;
+
+  stub(models.Role, 'findOrCreate', async ({ where }) => {
+    if (!roles.has(where.name)) roles.set(where.name, { id: nextRoleId++ });
+    return [roles.get(where.name)];
+  });
+  stub(models.User, 'count', async () => 1);
+  stub(models.Plantilla, 'findOrCreate', async ({ where, defaults }) => {
+    if (!templates.has(where.name)) {
+      templates.set(where.name, {
+        id: nextTemplateId++,
+        values: { ...defaults },
+        async update(values) { Object.assign(this.values, values); }
+      });
+    }
+    return [templates.get(where.name)];
+  });
+  stub(models.CampoPlantilla, 'findOrCreate', async ({ where, defaults }) => {
+    const key = JSON.stringify(where);
+    if (!fields.has(key)) fields.set(key, { ...defaults });
+    return [fields.get(key)];
+  });
+
+  await seedDatabase();
+  await seedDatabase();
+
+  const innovation = templates.get(INNOVACION_TEMPLATE_NAME);
+  const innovationFields = [...fields.values()].filter(({ plantillaId }) => plantillaId === innovation.id);
+  assert.equal(templates.has(INNOVACION_TEMPLATE_NAME), true);
+  assert.equal(innovationFields.length, projectFields.length + financingFields.length + sectionFields.length);
+  assert.equal(innovationFields.filter(({ tabla_destino }) => tabla_destino === 'Seccion').length, 11);
+  assert.deepEqual(XLSX.read(innovation.values.archivoData, { type: 'buffer' }).SheetNames, [
+    PROYECTOS_SHEET, FINANCIAMIENTO_SHEET, SECCIONES_SHEET
+  ]);
+});
+
+test('2. genera y valida un XLSX temporal con proyectos, financiamientos y secciones', async () => {
   const filePath = saveTemporaryWorkbook();
   stub(models.CampoPlantilla, 'findAll', async () => createInnovationFields(TEMPLATE_ID));
   try {
@@ -231,6 +306,7 @@ test('2. genera y valida un XLSX temporal con 2 proyectos y 2 financiamientos', 
     assert.equal(valido, true, JSON.stringify(errores));
     assert.equal(XLSX.utils.sheet_to_json(workbook.Sheets[PROYECTOS_SHEET]).length, 2);
     assert.equal(XLSX.utils.sheet_to_json(workbook.Sheets[FINANCIAMIENTO_SHEET]).length, 2);
+    assert.equal(XLSX.utils.sheet_to_json(workbook.Sheets[SECCIONES_SHEET]).length, 3);
   } finally {
     fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
     temporaryDirs.splice(temporaryDirs.indexOf(path.dirname(filePath)), 1);
@@ -238,7 +314,7 @@ test('2. genera y valida un XLSX temporal con 2 proyectos y 2 financiamientos', 
   assert.equal(fs.existsSync(filePath), false);
 });
 
-test('3. POST /cargar procesa exactamente 2 proyectos de Innovación', async () => {
+test('3. POST /cargar procesa proyectos, financiamientos y 3 secciones', async () => {
   const persistence = preparePersistence();
   const filePath = saveTemporaryWorkbook();
   let response;
@@ -250,8 +326,9 @@ test('3. POST /cargar procesa exactamente 2 proyectos de Innovación', async () 
   );
 
   assert.equal(response.success, true);
-  assert.deepEqual(response.resumen, { Proyecto: 2, Financiamiento: 2 });
+  assert.deepEqual(response.resumen, { Proyecto: 2, Seccion: 3, Financiamiento: 2 });
   assert.equal(persistence.inserted.Proyecto.length, 2);
+  assert.equal(persistence.inserted.Seccion.length, 3);
 });
 
 test('4. conserva los contadores de participantes leídos desde Excel', async () => {
@@ -278,6 +355,29 @@ test('6. resuelve el lookup Proyecto-Financiamiento mediante ID Proyecto', async
   assert.deepEqual(inserted.Financiamiento.map((row) => row.idProyecto), ['INN-TEST-001', 'INN-TEST-002']);
 });
 
+test('6.1 mapea encabezados y números de Secciones Cursos al modelo Seccion', async () => {
+  const { inserted } = await processWorkbook();
+  assert.deepEqual(inserted.Seccion[0], {
+    idSeccion: 'SEC-TEST-001',
+    anio: 2026,
+    semestre: 'Otoño',
+    curso: 'Emprendimiento e Innovación',
+    carreraPrograma: 'Contador Auditor',
+    jornada: 'Diurna',
+    nEstudiantes: 25,
+    nProyectos: 5,
+    docente: 'Docente Uno',
+    modalidad: 'Presencial',
+    observacion: 'Prueba',
+    dataValues: {
+      idSeccion: 'SEC-TEST-001', anio: 2026, semestre: 'Otoño',
+      curso: 'Emprendimiento e Innovación', carreraPrograma: 'Contador Auditor',
+      jornada: 'Diurna', nEstudiantes: 25, nProyectos: 5,
+      docente: 'Docente Uno', modalidad: 'Presencial', observacion: 'Prueba'
+    }
+  });
+});
+
 test('7. hace rollback total cuando falla Financiamiento', async () => {
   const persistence = preparePersistence({ failOn: 'Financiamiento' });
   await assert.rejects(
@@ -294,7 +394,7 @@ test('8. hace commit y procesa Proyecto antes de Financiamiento', async () => {
   const { transaction, operations } = await processWorkbook();
   const bulkModels = operations.filter((operation) => operation.type === 'bulkCreate').map((operation) => operation.model);
 
-  assert.deepEqual(bulkModels, ['Proyecto', 'Financiamiento']);
+  assert.deepEqual(bulkModels, ['Proyecto', 'Seccion', 'Financiamiento']);
   assert.equal(transaction.commitCalls, 1);
   assert.equal(transaction.rollbackCalls, 0);
   assert.ok(operations.every((operation) => operation.transaction === transaction));
@@ -308,10 +408,17 @@ test('9. GET /descargar retorna el XLSX funcional y sus headers', async () => {
   assert.ok(body.length > 0);
 });
 
-test('10. el XLSX descargado contiene las dos hojas de Innovación', async () => {
+test('10. el XLSX descargado contiene las tres hojas de Innovación', async () => {
   const { body } = await downloadTemplate();
   const workbook = XLSX.read(body, { type: 'buffer' });
-  assert.deepEqual(workbook.SheetNames, [PROYECTOS_SHEET, FINANCIAMIENTO_SHEET]);
+  assert.deepEqual(workbook.SheetNames, [PROYECTOS_SHEET, FINANCIAMIENTO_SHEET, SECCIONES_SHEET]);
+});
+
+test('10.1 Secciones Cursos conserva exactamente los 11 encabezados oficiales', async () => {
+  const { body } = await downloadTemplate();
+  const workbook = XLSX.read(body, { type: 'buffer' });
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[SECCIONES_SHEET], { header: 1 });
+  assert.deepEqual(rows[0], sectionFields.map(([column]) => column));
 });
 
 test('11. la hoja descargada de proyectos contiene las columnas de participantes', async () => {
@@ -330,10 +437,36 @@ test('12. Swagger documenta las hojas y participantes agregados de Innovación',
 
   assert.match(post.description, /Proyectos Innovación/);
   assert.match(post.description, /Financiamiento/);
+  assert.match(post.description, /Secciones Cursos/);
   assert.match(post.description, /N° estudiantes/);
   assert.doesNotMatch(post.description, /hoja Participantes[^.]*existe/i);
   assert.match(download.description, /Innovación/);
   assert.match(download.description, /Proyectos Innovación/);
+  assert.match(download.description, /Secciones Cursos/);
+});
+
+test('12.1 la carga alimenta el breakdown secciones_curso por semestre', async () => {
+  const { inserted } = await processWorkbook();
+  stub(models.Department, 'findOne', async () => ({ toJSON: () => ({ key: 'innovacion' }) }));
+  stub(models.IndicatorDefinition, 'findOne', async () => ({
+    toJSON: () => ({
+      key: 'secciones_curso', departmentId: 'innovacion', name: 'Secciones del curso de innovación',
+      formulaKey: 'COUNT_INNOVATION_SECTIONS', unit: 'secciones', format: 'number', enabled: true
+    })
+  }));
+  stub(models.Seccion, 'findAll', async () => [
+    ...inserted.Seccion,
+    { idSeccion: 'OTRA', anio: 2026, semestre: 'Otoño', curso: 'Otra asignatura' }
+  ].filter(({ curso }) => curso.toLocaleLowerCase('es') === 'emprendimiento e innovación'.toLocaleLowerCase('es')));
+  stub(metaIndicatorIntegrationService, 'getIndicatorMetaContext', async () => null);
+
+  const { data } = await indicatorService.getIndicatorBreakdown('secciones_curso', {
+    department: 'innovacion', year: '2026', groupBy: 'semestre'
+  });
+  assert.deepEqual(data.items, [
+    { label: 'Otoño', value: 2 },
+    { label: 'Primavera', value: 1 }
+  ]);
 });
 
 test('13. el XLSX temporal de carga se elimina incluso al completar el endpoint', async () => {

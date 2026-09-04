@@ -11,8 +11,10 @@ const { validarArchivo } = require('../src/services/carga/validacionService');
 const {
   PROYECTOS_SHEET,
   FINANCIAMIENTO_SHEET,
+  SECCIONES_SHEET,
   projectFields,
   financingFields,
+  sectionFields,
   createInnovationFields
 } = require('../src/config/plantillaInnovacion');
 
@@ -53,6 +55,20 @@ const financingValues = {
   Observación: 'Financiamiento válido'
 };
 
+const sectionValues = {
+  'ID Sección': 'SEC-VAL-001',
+  Año: 2026,
+  Semestre: 'Otoño',
+  Curso: 'Emprendimiento e Innovación',
+  'Carrera/Programa': 'Contador Auditor',
+  Jornada: 'Diurna',
+  'N° Estudiantes': 25,
+  'N° Grupos/Proyectos': 5,
+  Docente: 'Docente Uno',
+  Modalidad: 'Presencial',
+  Observación: 'Sección válida'
+};
+
 const sheetRows = (fields, values) => {
   const headers = fields.map(([column]) => column);
   return [headers, headers.map((header) => values[header])];
@@ -60,7 +76,8 @@ const sheetRows = (fields, values) => {
 
 const validSheets = () => ({
   [PROYECTOS_SHEET]: sheetRows(projectFields, projectValues),
-  [FINANCIAMIENTO_SHEET]: sheetRows(financingFields, financingValues)
+  [FINANCIAMIENTO_SHEET]: sheetRows(financingFields, financingValues),
+  [SECCIONES_SHEET]: sheetRows(sectionFields, sectionValues)
 });
 
 const removeColumn = (rows, column) => {
@@ -104,11 +121,11 @@ test.after(() => {
   models.CampoPlantilla.findAll = originalFindAll;
 });
 
-test('1. archivo correcto de Innovación valida ambas hojas sin errores', async () => {
+test('1. archivo correcto de Innovación valida las tres hojas sin errores', async () => {
   const { result, filePath } = await validateSheets(validSheets());
   assert.equal(result.valido, true);
   assert.deepEqual(result.errores, []);
-  assert.deepEqual(Object.keys(result.hojasEsperadas), [PROYECTOS_SHEET, FINANCIAMIENTO_SHEET]);
+  assert.deepEqual(Object.keys(result.hojasEsperadas), [PROYECTOS_SHEET, FINANCIAMIENTO_SHEET, SECCIONES_SHEET]);
   assert.equal(fs.existsSync(filePath), false);
 });
 
@@ -134,6 +151,17 @@ test('3. detecta que falta la hoja Financiamiento', async () => {
   assert.equal(error.hoja, FINANCIAMIENTO_SHEET);
   assert.match(error.mensaje, /no existe en el archivo/);
   assert.equal(error.campo, undefined);
+});
+
+test('3.1 detecta que falta la hoja Secciones Cursos', async () => {
+  const sheets = validSheets();
+  delete sheets[SECCIONES_SHEET];
+  const { result } = await validateSheets(sheets);
+  const error = findError(result, SECCIONES_SHEET);
+
+  assert.equal(result.valido, false);
+  assert.equal(error.hoja, SECCIONES_SHEET);
+  assert.match(error.mensaje, /no existe en el archivo/);
 });
 
 test('4. detecta una columna requerida faltante en Proyectos Innovación', async () => {
@@ -217,4 +245,27 @@ test('10. detecta una columna requerida faltante en Financiamiento', async () =>
   assert.equal(error.hoja, FINANCIAMIENTO_SHEET);
   assert.equal(error.campo, 'Monto adjudicado CLP');
   assert.match(error.mensaje, /columna requerida Monto adjudicado CLP no existe/);
+});
+
+test('11. detecta una columna requerida faltante en Secciones Cursos', async () => {
+  const sheets = validSheets();
+  sheets[SECCIONES_SHEET] = removeColumn(sheets[SECCIONES_SHEET], 'ID Sección');
+  const { result } = await validateSheets(sheets);
+  const error = findError(result, SECCIONES_SHEET, 'ID Sección');
+
+  assert.equal(result.valido, false);
+  assert.equal(error.hoja, SECCIONES_SHEET);
+  assert.equal(error.campo, 'ID Sección');
+  assert.match(error.mensaje, /columna requerida ID Sección no existe/);
+});
+
+test('12. valida como enteros Año, N° Estudiantes y N° Grupos/Proyectos', async () => {
+  for (const column of ['Año', 'N° Estudiantes', 'N° Grupos/Proyectos']) {
+    const sheets = validSheets();
+    setCell(sheets[SECCIONES_SHEET], column, 'texto-invalido');
+    const { result } = await validateSheets(sheets);
+    const error = findError(result, SECCIONES_SHEET, column);
+    assert.equal(result.valido, false);
+    assert.match(error.mensaje, /número entero|number/);
+  }
 });

@@ -25,20 +25,22 @@ test('Plantilla Innovación - Verificaciones de Base de Datos y Mapeo', async (t
     );
   });
 
-  await t.test('La plantilla "Innovación" contiene los 28 campos configurados', async () => {
+  await t.test('La plantilla "Innovación" contiene los 39 campos configurados', async () => {
     const plantilla = await Plantilla.findOne({ where: { name: 'Innovación' } });
     const campos = await CampoPlantilla.findAll({
       where: { plantillaId: plantilla.id },
       order: [['orden_insercion', 'ASC'], ['id', 'ASC']]
     });
 
-    assert.strictEqual(campos.length, 28, 'Debe tener exactamente 28 campos');
+    assert.strictEqual(campos.length, 39, 'Debe tener exactamente 39 campos');
 
     const camposProyectos = campos.filter(c => c.tabla_destino === 'Proyecto');
     const camposFinanciamientos = campos.filter(c => c.tabla_destino === 'Financiamiento');
+    const camposSecciones = campos.filter(c => c.tabla_destino === 'Seccion');
 
     assert.strictEqual(camposProyectos.length, 20, 'Hoja Proyectos debe mapear 20 campos a tabla Proyecto');
     assert.strictEqual(camposFinanciamientos.length, 8, 'Hoja Financiamiento debe mapear 8 campos a tabla Financiamiento');
+    assert.strictEqual(camposSecciones.length, 11, 'Hoja Secciones Cursos debe mapear 11 campos a tabla Seccion');
 
     // Verificar orden de inserción (dependencia entre Proyecto y Financiamiento)
     camposProyectos.forEach(c => {
@@ -49,6 +51,11 @@ test('Plantilla Innovación - Verificaciones de Base de Datos y Mapeo', async (t
     camposFinanciamientos.forEach(c => {
       assert.strictEqual(c.orden_insercion, 2, `Campo ${c.nombre_campo} debe tener orden_insercion = 2`);
       assert.strictEqual(c.hoja_origen, 'Financiamiento');
+    });
+
+    camposSecciones.forEach(c => {
+      assert.strictEqual(c.orden_insercion, 1, `Campo ${c.nombre_campo} debe tener orden_insercion = 1`);
+      assert.strictEqual(c.hoja_origen, 'Secciones Cursos');
     });
 
     // Verificar lookup en Financiamiento
@@ -67,11 +74,14 @@ test('Plantilla Innovación - Verificaciones de Base de Datos y Mapeo', async (t
     const workbook = XLSX.read(plantilla.archivoData, { type: 'buffer' });
     assert.ok(workbook.SheetNames.includes('Proyectos Innovación'), 'Debe incluir la hoja Proyectos Innovación');
     assert.ok(workbook.SheetNames.includes('Financiamiento'), 'Debe incluir la hoja Financiamiento');
+    assert.ok(workbook.SheetNames.includes('Secciones Cursos'), 'Debe incluir la hoja Secciones Cursos');
 
     const sheetProyectos = workbook.Sheets['Proyectos Innovación'];
     const sheetFinanciamiento = workbook.Sheets['Financiamiento'];
+    const sheetSecciones = workbook.Sheets['Secciones Cursos'];
 
     assert.ok(sheetProyectos, 'Hoja Proyectos Innovación debe existir');
     assert.ok(sheetFinanciamiento, 'Hoja Financiamiento debe existir');
+    assert.ok(sheetSecciones, 'Hoja Secciones Cursos debe existir');
   });
 });
