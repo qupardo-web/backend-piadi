@@ -22,6 +22,7 @@ const INNOVATION_PROJECT_TYPES = ['Estudiantil', 'Institucional'];
 const INNOVATION_COURSE = 'Emprendimiento e Innovación';
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
 const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
+const EXTERNAL_FINANCING_VALUES = [...TRUTHY_VALUES, 'fondo concursable externo'];
 
 const buildCaseInsensitiveEquals = (value) => ({
   [Op.iLike]: value
@@ -47,6 +48,11 @@ const isTruthyFlag = (value) => {
     return false;
   }
   return TRUTHY_VALUES.includes(String(value).trim().toLowerCase());
+};
+
+const isExternalFinancing = (value) => {
+  if (value === null || value === undefined) return false;
+  return EXTERNAL_FINANCING_VALUES.includes(String(value).trim().toLowerCase());
 };
 
 const isConnected = async () => {
@@ -432,7 +438,7 @@ const getInnovationFinancingRows = async (filters = {}) => {
     include: [{ model: Financiamiento, required: true }]
   });
   return projects
-    .filter((project) => project.Financiamiento && isTruthyFlag(project.Financiamiento.financiamientoExterno))
+    .filter((project) => project.Financiamiento && isExternalFinancing(project.Financiamiento.financiamientoExterno))
     .map((project) => ({
       idProyecto: project.idProyecto,
       anio: Number(project.anioInicio),
@@ -627,6 +633,7 @@ const deleteKpi = async (departmentId, indicatorKey) => {
 };
 
 module.exports = {
+  isExternalFinancing,
   isConnected,
   getProgramRows,
   getParticipantRows,

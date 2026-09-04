@@ -4,7 +4,8 @@ const { authenticateToken } = require('../middleware/authMiddleware');
 const { requireMetaOwnership } = require('../middleware/metaOwnership');
 const {
   requireRectoria,
-  requireRectoriaForInstitutionalCreation
+  requireRectoriaForInstitutionalCreation,
+  requireMetaDepartmentAccess
 } = require('../middleware/rectoriaAuthorization');
 const { auditMetaOperation } = require('../middleware/metaAudit');
 
@@ -27,7 +28,7 @@ const router = express.Router();
  *         upperLimit: { type: number, nullable: true, example: 80 }
  *     MetaInput:
  *       type: object
- *       required: [anio, periodo, metrics]
+ *       required: [anio, periodo, nombre, fechaInicio, fechaLimite, metrics]
  *       properties:
  *         departmentId:
  *           type: string
@@ -35,6 +36,9 @@ const router = express.Router();
  *           example: educacion-continua
  *         anio: { type: integer, minimum: 1900, example: 2026 }
  *         periodo: { type: string, example: Anual }
+ *         nombre: { type: string, example: Aumentar participación institucional }
+ *         fechaInicio: { type: string, format: date-time }
+ *         fechaLimite: { type: string, format: date-time }
  *         metrics:
  *           type: array
  *           minItems: 1
@@ -104,7 +108,7 @@ const router = express.Router();
  *       403: { description: Solo Rectoría puede crear una meta institucional. }
  *       404: { description: Departamento o indicador inexistente. }
  */
-router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, auditMetaOperation('CREATE'), metaController.create);
+router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, requireMetaDepartmentAccess, auditMetaOperation('CREATE'), metaController.create);
 
 /**
  * @openapi
@@ -257,7 +261,7 @@ router.get('/:id/progress', authenticateToken, metaController.getProgress);
  *       404: { description: Meta inexistente. }
  */
 router.get('/:id', authenticateToken, metaController.getById);
-router.put('/:id', authenticateToken, requireMetaOwnership, auditMetaOperation('UPDATE'), metaController.update);
-router.delete('/:id', authenticateToken, requireMetaOwnership, auditMetaOperation('DELETE'), metaController.remove);
+router.put('/:id', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, auditMetaOperation('UPDATE'), metaController.update);
+router.delete('/:id', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, auditMetaOperation('DELETE'), metaController.remove);
 
 module.exports = router;

@@ -3,6 +3,7 @@ const plantillaService = require('../services/plantillaService');
 const { validarArchivo } = require('../services/carga/validacionService');
 const { procesarCarga } = require('../services/carga/cargaService');
 const { NotFoundError, ValidationError, ConflictError, UnprocessableEntityError } = require('../utils/errors');
+const { normalizeUploadedFilename } = require('../utils/filenameEncoding');
 
 const getPlantillas = async (req, res, next) => {
   try {
@@ -149,7 +150,8 @@ const subirTemplate = async (req, res, next) => {
       throw new ValidationError('Debe enviar un archivo Excel');
     }
 
-    const plantilla = await plantillaService.guardarArchivoTemplate(id, req.file.buffer, req.file.originalname);
+    const originalname = normalizeUploadedFilename(req.file.originalname);
+    const plantilla = await plantillaService.guardarArchivoTemplate(id, req.file.buffer, originalname);
     res.json({
       success: true,
       message: 'Archivo de plantilla guardado exitosamente en base de datos',

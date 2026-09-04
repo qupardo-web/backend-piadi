@@ -4,6 +4,26 @@ async function initDbConstraints() {
   try {
     console.log('Applying database-level constraints, triggers, and SQL documentation for VCM...');
 
+    // Identidad departamental nullable: no se infieren asignaciones para usuarios históricos.
+    await sequelize.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "departmentId" VARCHAR(255);
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_department ON users ("departmentId");
+    `);
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_department'
+        ) THEN
+          ALTER TABLE users
+            ADD CONSTRAINT fk_users_department FOREIGN KEY ("departmentId")
+            REFERENCES departments(key) ON UPDATE CASCADE ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+
     // Compatibilidad PIADI-198: sequelize.sync() no agrega columnas a tablas existentes.
     await sequelize.query(`
       ALTER TABLE metas ADD COLUMN IF NOT EXISTS "creatorId" INTEGER;

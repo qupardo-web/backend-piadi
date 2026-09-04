@@ -23,6 +23,13 @@ const requireFiniteNumber = (value, field) => {
   return value;
 };
 
+const requirePresentValue = (value, field) => {
+  if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+    throw new ValidationError(`El campo ${field} es obligatorio y no puede estar vacío`);
+  }
+  return value;
+};
+
 const normalizeMetrics = (metrics) => {
   if (!Array.isArray(metrics) || metrics.length === 0) {
     throw new ValidationError('metrics debe contener al menos una métrica');
@@ -125,15 +132,15 @@ const normalizeMetaFields = async (payload, transaction, { partial = false } = {
   }
   
   if (!partial || payload.nombre !== undefined) {
-    data.nombre = payload.nombre === null || payload.nombre === undefined ? null : String(payload.nombre).trim();
+    data.nombre = requireNonEmptyString(payload.nombre, 'nombre');
   }
   if (!partial || payload.inicio !== undefined || payload.fechaInicio !== undefined) {
     const val = payload.inicio !== undefined ? payload.inicio : payload.fechaInicio;
-    data.fechaInicio = val === null || val === undefined || val === '' ? null : val;
+    data.fechaInicio = requirePresentValue(val, 'fechaInicio');
   }
   if (!partial || payload.limite !== undefined || payload.fechaLimite !== undefined) {
     const val = payload.limite !== undefined ? payload.limite : payload.fechaLimite;
-    data.fechaLimite = val === null || val === undefined || val === '' ? null : val;
+    data.fechaLimite = requirePresentValue(val, 'fechaLimite');
   }
   if (!partial || payload.prioridad !== undefined) {
     data.prioridad = payload.prioridad === null || payload.prioridad === undefined ? null : String(payload.prioridad).trim();

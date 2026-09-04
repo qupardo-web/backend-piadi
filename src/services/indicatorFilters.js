@@ -86,7 +86,7 @@ const normalizeGroupBy = (value) => {
     return null;
   }
   const g = String(value).trim();
-  if (g === 'anio') return 'year';
+  if (g === 'anio' || g === 'periodo') return 'year';
   return g === 'ageRange' ? 'rangoEdad' : g;
 };
 
@@ -95,6 +95,8 @@ const isFourDigitYear = (value) => /^\d{4}$/.test(String(value));
 const uniq = (arr) => [...new Set(arr)];
 
 const parseIndicatorFilters = (query = {}) => {
+  const requestedYear = query.year !== undefined ? query.year
+    : (query.anio !== undefined ? query.anio : query['año']);
   const filters = {
     department: query.department ? String(query.department).trim() : null,
     year: null,
@@ -140,11 +142,11 @@ const parseIndicatorFilters = (query = {}) => {
     region: normalizeArrayParam(query.region)
   };
 
-  if (query.year !== undefined && query.year !== '') {
-    if (!isFourDigitYear(query.year)) {
-      throw new FilterError('INVALID_YEAR', 'El parámetro "year" debe ser un año numérico de 4 dígitos', { year: query.year });
+  if (requestedYear !== undefined && requestedYear !== '') {
+    if (!isFourDigitYear(requestedYear)) {
+      throw new FilterError('INVALID_YEAR', 'El parámetro de año debe ser un año numérico de 4 dígitos', { year: requestedYear });
     }
-    filters.year = Number(query.year);
+    filters.year = Number(requestedYear);
   } else {
     if (query.fromYear !== undefined && query.fromYear !== '') {
       if (!isFourDigitYear(query.fromYear)) {
@@ -166,7 +168,11 @@ const parseIndicatorFilters = (query = {}) => {
     }
   }
 
-  const semesterTokens = uniq([...normalizeArrayParam(query.semester), ...normalizeArrayParam(query.semesters)]);
+  const semesterTokens = uniq([
+    ...normalizeArrayParam(query.semester),
+    ...normalizeArrayParam(query.semesters),
+    ...normalizeArrayParam(query.semestre)
+  ]);
   filters.semesterLabels = semesterTokens;
   filters.semesters = uniq(semesterTokens.flatMap((t) => normalizeSemester(t)));
 

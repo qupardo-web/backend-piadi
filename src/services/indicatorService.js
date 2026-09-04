@@ -126,6 +126,12 @@ const aggregateInnovationFinancing = (rows) => ({
   financiamientoSum: rows.reduce((sum, row) => sum + (row.montoAdjudicado || 0), 0)
 });
 
+const aggregateExternalFinancingProjects = (rows) => ({
+  proyectosExternosCount: new Set(
+    rows.map((row) => row.idProyecto).filter((id) => id !== null && id !== undefined)
+  ).size
+});
+
 const aggregateInnovationSection = (rows) => ({
   seccionesCount: rows.length
 });
@@ -141,6 +147,7 @@ const aggregate = (config, rows) => {
   if (config.kind === 'innovation_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_finalized_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_financing') return aggregateInnovationFinancing(rows);
+  if (config.kind === 'innovation_external_financing_projects') return aggregateExternalFinancingProjects(rows);
   if (config.kind === 'innovation_section') return aggregateInnovationSection(rows);
   return aggregateProgram(rows);
 };
@@ -156,6 +163,7 @@ const getRows = (config, filters) => {
   if (config.kind === 'innovation_project') return provider.getInnovationProjectRows(filters);
   if (config.kind === 'innovation_finalized_project') return provider.getInnovationProjectRows(filters, { finalizedInYear: true });
   if (config.kind === 'innovation_financing') return provider.getInnovationFinancingRows(filters);
+  if (config.kind === 'innovation_external_financing_projects') return provider.getInnovationFinancingRows(filters);
   if (config.kind === 'innovation_section') return provider.getInnovationSectionRows(filters);
   return provider.getProgramRows(filters);
 };
@@ -540,24 +548,22 @@ const getEnabledKpis = async (departmentKey) => {
   return kpis.filter((kpi) => kpi.enabled !== false);
 };
 
-const getIndicatorDetail = async (indicatorKey) => {
+const getIndicatorDetail = async (indicatorKey, query = {}) => {
   const key = ensureIndicatorKey(indicatorKey);
   const kpi = await provider.getKpi('institucional', key);
   if (!kpi) {
     throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe', { indicatorKey: key });
   }
+  const seriesResult = await module.exports.getIndicatorSeries(key, {
+    ...query,
+    department: kpi.departmentId,
+    groupBy: 'periodo'
+  });
+  const points = seriesResult?.data?.points || [];
   return {
-    data: {
-      key: kpi.key,
-      name: kpi.name,
-      title: kpi.name,
-      description: kpi.description,
-      unit: kpi.unit,
-      format: kpi.format,
-      formulaKey: kpi.formulaKey,
-      departmentId: kpi.departmentId,
-      enabled: kpi.enabled
-    }
+    title: kpi.name,
+    description: kpi.description,
+    data: points.map((point) => ({ period: point.year, value: point.value }))
   };
 };
 

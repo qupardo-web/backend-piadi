@@ -1,4 +1,5 @@
 const auditService = require('../services/auditService');
+const { normalizeUploadedFilename } = require('../utils/filenameEncoding');
 
 const auditLogger = (meta = {}) => (req, res, next) => {
   res.on('finish', async () => {
@@ -30,7 +31,9 @@ const auditLogger = (meta = {}) => (req, res, next) => {
         } catch (e) { /* usa el ID como fallback */ }
       }
       payload.plantilla = plantillaNombre;
-      payload.archivo = req.file && req.file.originalname ? req.file.originalname : null;
+      payload.archivo = req.file && req.file.originalname
+        ? normalizeUploadedFilename(req.file.originalname)
+        : null;
     } else {
       payload.detalles = JSON.stringify({
         usuario: user.email || username || null,

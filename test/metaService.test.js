@@ -19,6 +19,9 @@ const metaPayload = (metrics = [metric()]) => ({
   departmentId: 'calidad',
   anio: 2026,
   periodo: 'Anual',
+  nombre: 'Meta de prueba',
+  fechaInicio: '2026-01-01T00:00:00Z',
+  fechaLimite: '2026-12-31T23:59:59Z',
   metrics
 });
 
@@ -115,6 +118,49 @@ test('POST responde 201 con el contrato success/data', async () => {
 test('rechaza la creación cuando un indicatorKey no existe', async () => {
   setupPersistence([]);
   await assert.rejects(metaService.create(metaPayload(), 9), /No existen los siguientes indicadores/);
+});
+
+test('CREATE exige nombre, fechaInicio y fechaLimite no vacíos', async () => {
+  setupPersistence();
+  const invalidCases = [
+    ['nombre', undefined],
+    ['nombre', null],
+    ['nombre', ''],
+    ['nombre', '   '],
+    ['fechaInicio', undefined],
+    ['fechaInicio', null],
+    ['fechaLimite', undefined],
+    ['fechaLimite', null]
+  ];
+
+  for (const [field, value] of invalidCases) {
+    const candidate = metaPayload();
+    if (value === undefined) delete candidate[field];
+    else candidate[field] = value;
+    await assert.rejects(metaService.create(candidate, 9), (error) => error.statusCode === 400);
+  }
+
+  const missingAll = metaPayload();
+  delete missingAll.nombre;
+  delete missingAll.fechaInicio;
+  delete missingAll.fechaLimite;
+  await assert.rejects(metaService.create(missingAll, 9), (error) => error.statusCode === 400);
+});
+
+test('UPDATE parcial conserva campos omitidos pero rechaza campos obligatorios nulos', async () => {
+  setupPersistence();
+  const instance = { id: 3, update: async () => {} };
+  stub(models.Meta, 'findByPk', async () => instance);
+  stub(models.MetaMetric, 'destroy', async () => {});
+  stub(models.MetaMetric, 'bulkCreate', async () => {});
+
+  await metaService.update(3, { metrics: [metric()], prioridad: 'Alta' });
+  for (const field of ['nombre', 'fechaInicio', 'fechaLimite']) {
+    await assert.rejects(
+      metaService.update(3, { metrics: [metric()], [field]: null }),
+      (error) => error.statusCode === 400
+    );
+  }
 });
 
 test('GET devuelve una meta existente con metrics', async () => {

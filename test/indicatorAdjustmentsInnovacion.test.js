@@ -29,6 +29,7 @@ const definitions = {
   total_proyectos: ['COUNT_ALL_INNOVATION_PROJECTS', 'proyectos'],
   proyectos_finalizados: ['COUNT_FINALIZED_INNOVATION_PROJECTS', 'proyectos'],
   financiamiento_obtenido: ['SUM_INNOVATION_FINANCING', 'CLP'],
+  proyectos_con_financiamiento_externo: ['COUNT_EXTERNAL_FINANCED_PROJECTS', 'proyectos'],
   secciones_curso: ['COUNT_INNOVATION_SECTIONS', 'secciones'],
   docentes_involucrados: ['SUM_INNOVATION_TEACHERS', 'docentes']
 };
@@ -267,10 +268,45 @@ test('financiamiento conserva fuente y agrega agrupación anual por Proyecto.ani
   assert.deepEqual(getIndicatorConfig('financiamiento_obtenido').allowedGroupBy, ['fuente', 'year']);
 });
 
+test('proyectos con financiamiento externo reconoce valores oficiales, deduplica y genera rango anual', async () => {
+  setupData({ projects: [
+    project({ idProyecto: 'SI', anioInicio: 2023, Financiamiento: { financiamientoExterno: 'Sí', montoAdjudicado: 10 } }),
+    project({ idProyecto: 'si', anioInicio: 2023, Financiamiento: { financiamientoExterno: 'si', montoAdjudicado: 20 } }),
+    project({ idProyecto: 'TRUE', anioInicio: 2024, Financiamiento: { financiamientoExterno: 'true', montoAdjudicado: 30 } }),
+    project({ idProyecto: 'ONE', anioInicio: 2024, Financiamiento: { financiamientoExterno: '1', montoAdjudicado: 40 } }),
+    project({ idProyecto: 'X', anioInicio: 2024, Financiamiento: { financiamientoExterno: 'x', montoAdjudicado: 50 } }),
+    project({ idProyecto: 'VERDADERO', anioInicio: 2024, Financiamiento: { financiamientoExterno: 'verdadero', montoAdjudicado: 60 } }),
+    project({ idProyecto: 'FONDO', anioInicio: 2025, Financiamiento: { financiamientoExterno: 'Fondo concursable externo', montoAdjudicado: 70 } }),
+    project({ idProyecto: 'FONDO', anioInicio: 2025, Financiamiento: { financiamientoExterno: 'Fondo concursable externo', montoAdjudicado: 70 } }),
+    project({ idProyecto: 'NO', anioInicio: 2025, Financiamiento: { financiamientoExterno: 'No', montoAdjudicado: 80 } }),
+    project({ idProyecto: 'INTERNO', anioInicio: 2025, Financiamiento: { financiamientoExterno: 'Recursos internos', montoAdjudicado: 90 } })
+  ] });
+
+  const value = await indicatorService.getIndicatorValue('proyectos_con_financiamiento_externo', { department: 'innovacion' });
+  const series = await indicatorService.getIndicatorSeries('proyectos_con_financiamiento_externo', {
+    department: 'innovacion', fromYear: '2023', toYear: '2026'
+  });
+  const financingAmount = await indicatorService.getIndicatorValue('financiamiento_obtenido', { department: 'innovacion' });
+
+  assert.equal(value.data.value, 7);
+  assert.deepEqual(series.data.points, [
+    { year: 2023, value: 2 },
+    { year: 2024, value: 4 },
+    { year: 2025, value: 1 },
+    { year: 2026, value: 0 }
+  ]);
+  assert.equal(financingAmount.data.value, 350);
+  assert.deepEqual(formulaService.apply('COUNT_EXTERNAL_FINANCED_PROJECTS', { proyectosExternosCount: 2 }), {
+    value: 2, hasData: true
+  });
+});
+
 test('catálogo registra ambos indicadores nuevos con sus fórmulas', () => {
   assert.equal(getIndicatorConfig('secciones_curso').formulaKey, 'COUNT_INNOVATION_SECTIONS');
   assert.equal(getIndicatorConfig('docentes_involucrados').formulaKey, 'SUM_INNOVATION_TEACHERS');
   assert.deepEqual(getIndicatorConfig('secciones_curso').allowedGroupBy, ['year', 'semestre']);
+  assert.equal(getIndicatorConfig('proyectos_con_financiamiento_externo').formulaKey, 'COUNT_EXTERNAL_FINANCED_PROJECTS');
+  assert.deepEqual(getIndicatorConfig('proyectos_con_financiamiento_externo').allowedGroupBy, ['year']);
 });
 
 test('seeder registra secciones_curso y docentes_involucrados una sola vez por clave', async () => {
@@ -287,10 +323,13 @@ test('seeder registra secciones_curso y docentes_involucrados una sola vez por c
 
   const sections = seeded.filter((definition) => definition.key === 'secciones_curso');
   const teachers = seeded.filter((definition) => definition.key === 'docentes_involucrados');
+  const externallyFinanced = seeded.filter((definition) => definition.key === 'proyectos_con_financiamiento_externo');
   assert.equal(sections.length, 1);
   assert.equal(sections[0].formulaKey, 'COUNT_INNOVATION_SECTIONS');
   assert.equal(teachers.length, 1);
   assert.equal(teachers[0].formulaKey, 'SUM_INNOVATION_TEACHERS');
+  assert.equal(externallyFinanced.length, 1);
+  assert.equal(externallyFinanced[0].formulaKey, 'COUNT_EXTERNAL_FINANCED_PROJECTS');
 });
 
 test('Swagger documenta indicadores, dimensiones y año financiero de Innovación', () => {

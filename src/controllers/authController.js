@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User, Role } = require('../models');
+const { User, Role, Department } = require('../models');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
 const { ValidationError, UnauthorizedError } = require('../utils/errors');
 const auditService = require('../services/auditService');
@@ -33,7 +33,10 @@ const login = async (req, res, next) => {
           { username: username }
         ]
       },
-      include: [{ model: Role, as: 'role' }]
+      include: [
+        { model: Role, as: 'role' },
+        { model: Department, as: 'department' }
+      ]
     });
 
     if (!user) {
@@ -72,7 +75,8 @@ const login = async (req, res, next) => {
       email: user.email,
       name: user.name,
       role: user.role ? user.role.name : null,
-      roleGroup: user.role ? user.role.group : null
+      roleGroup: user.role ? user.role.group : null,
+      departmentId: user.department ? user.department.key : null
     };
 
     // Sign the token with an expiration of 2 hours

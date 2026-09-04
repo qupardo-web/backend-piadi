@@ -15,12 +15,14 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *   post:
  *     tags: [Departamentos]
  *     summary: Crea un departamento
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       201:
  *         description: Departamento creado.
  */
 router.get('/departments', authenticateToken, indicatorController.listDepartments);
-router.post('/departments', indicatorController.createDepartment);
+router.post('/departments', authenticateToken, indicatorController.createDepartment);
 
 /**
  * @openapi
@@ -28,6 +30,8 @@ router.post('/departments', indicatorController.createDepartment);
  *   put:
  *     tags: [Departamentos]
  *     summary: Actualiza un departamento por su key
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -39,6 +43,8 @@ router.post('/departments', indicatorController.createDepartment);
  *   delete:
  *     tags: [Departamentos]
  *     summary: Elimina un departamento por su key
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -48,8 +54,8 @@ router.post('/departments', indicatorController.createDepartment);
  *       200:
  *         description: Departamento eliminado.
  */
-router.put('/departments/:departmentKey', indicatorController.updateDepartment);
-router.delete('/departments/:departmentKey', indicatorController.deleteDepartment);
+router.put('/departments/:departmentKey', authenticateToken, indicatorController.updateDepartment);
+router.delete('/departments/:departmentKey', authenticateToken, indicatorController.deleteDepartment);
 
 /**
  * @openapi
@@ -100,6 +106,8 @@ router.get('/departments/:departmentKey/filters', authenticateToken, indicatorCo
  *   post:
  *     tags: [Departamentos]
  *     summary: Crea una definición de KPI para un departamento
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -110,7 +118,7 @@ router.get('/departments/:departmentKey/filters', authenticateToken, indicatorCo
  *         description: KPI creado.
  */
 router.get('/departments/:departmentKey/kpis', authenticateToken, indicatorController.listDepartmentKpis);
-router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
+router.post('/departments/:departmentKey/kpis', authenticateToken, indicatorController.createKpi);
 
 /**
  * @openapi
@@ -118,6 +126,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *   put:
  *     tags: [Departamentos]
  *     summary: Actualiza una definición de KPI
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -134,6 +144,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *   delete:
  *     tags: [Departamentos]
  *     summary: Elimina una definición de KPI
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -147,8 +159,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *       200:
  *         description: KPI eliminado.
  */
-router.put('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.updateKpi);
-router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.deleteKpi);
+router.put('/departments/:departmentKey/kpis/:indicatorKey', authenticateToken, indicatorController.updateKpi);
+router.delete('/departments/:departmentKey/kpis/:indicatorKey', authenticateToken, indicatorController.deleteKpi);
 
 /**
  * @openapi
@@ -160,7 +172,7 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Innovación admite proyectos_activos, total_proyectos, proyectos_finalizados, financiamiento_obtenido, secciones_curso y docentes_involucrados.
+ *         description: Innovación admite proyectos_activos, total_proyectos, proyectos_finalizados, financiamiento_obtenido, proyectos_con_financiamiento_externo, secciones_curso y docentes_involucrados.
  *         schema:
  *           type: string
  *           example: proyectos_activos
@@ -233,7 +245,7 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Innovación admite series de proyectos, secciones_curso, docentes_involucrados y financiamiento_obtenido.
+ *         description: Clave del indicador. Innovación admite series de proyectos, secciones_curso, docentes_involucrados, financiamiento_obtenido y proyectos_con_financiamiento_externo.
  *         schema: { type: string, example: docentes_involucrados }
  *       - in: query
  *         name: department
@@ -309,7 +321,7 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Innovación admite proyectos, financiamiento_obtenido, secciones_curso y docentes_involucrados.
+ *         description: Clave del indicador. Innovación admite proyectos, financiamiento_obtenido, proyectos_con_financiamiento_externo, secciones_curso y docentes_involucrados.
  *         schema: { type: string, example: secciones_curso }
  *       - in: query
  *         name: department
@@ -370,16 +382,58 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  * /api/indicators/{indicatorKey}/detail:
  *   get:
  *     tags: [Indicadores]
- *     summary: Obtiene el detalle (título y descripción) de un indicador desde la base de datos
+ *     summary: Obtiene metadata y serie temporal de un indicador
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: indicatorKey
  *         required: true
  *         schema: { type: string }
+ *       - in: query
+ *         name: year
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: anio
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: año
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: semester
+ *         schema: { type: string }
+ *       - in: query
+ *         name: semestre
+ *         schema: { type: string }
+ *       - in: query
+ *         name: tipo
+ *         schema: { type: string }
+ *       - in: query
+ *         name: modalidad
+ *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Detalle del indicador.
+ *         description: Detalle del indicador con puntos temporales.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [title, description, data]
+ *               properties:
+ *                 title: { type: string }
+ *                 description: { type: string }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     required: [period, value]
+ *                     properties:
+ *                       period: { type: integer, example: 2026 }
+ *                       value: { type: number, example: 10 }
+ *       400: { description: Filtros inválidos. }
+ *       401: { description: Token ausente o inválido. }
+ *       404: { description: Indicador inexistente. }
  */
-router.get('/indicators/:indicatorKey/detail', indicatorController.getIndicatorDetail);
+router.get('/indicators/:indicatorKey/detail', authenticateToken, indicatorController.getIndicatorDetail);
 
 module.exports = router;

@@ -48,6 +48,7 @@ const COUNT_ACTIVE_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosActivo
 const COUNT_ALL_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
 const COUNT_FINALIZED_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
 const SUM_INNOVATION_FINANCING = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: true });
+const COUNT_EXTERNAL_FINANCED_PROJECTS = (m = {}) => ({ value: m.proyectosExternosCount || 0, hasData: true });
 const COUNT_INNOVATION_SECTIONS = (m = {}) => ({ value: m.seccionesCount || 0, hasData: true });
 const SUM_INNOVATION_TEACHERS = (m = {}) => ({ value: m.docentesSum || 0, hasData: true });
 
@@ -75,6 +76,7 @@ const formulaRegistry = {
   COUNT_ALL_INNOVATION_PROJECTS,
   COUNT_FINALIZED_INNOVATION_PROJECTS,
   SUM_INNOVATION_FINANCING,
+  COUNT_EXTERNAL_FINANCED_PROJECTS,
   COUNT_INNOVATION_SECTIONS,
   SUM_INNOVATION_TEACHERS
 };
