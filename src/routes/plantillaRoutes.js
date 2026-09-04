@@ -76,6 +76,10 @@ router.get('/', plantillaController.getPlantillas);
  *                           campos:
  *                             - columna: Monto adjudicado CLP
  *                               requerido: true
+ *                         - nombre: Secciones Cursos
+ *                           campos:
+ *                             - columna: ID Sección
+ *                               requerido: true
  *       404:
  *         description: Plantilla no encontrada.
  */
@@ -178,7 +182,7 @@ router.delete('/:id', plantillaController.deletePlantilla);
  *   get:
  *     tags: [Plantillas]
  *     summary: Descarga el archivo Excel asociado a una plantilla, incluidas VCM e Innovación
- *     description: Para Innovación, use el id de la plantilla Innovación registrada. El XLSX contiene las hojas Proyectos Innovación y Financiamiento, con los participantes agregados en la hoja de proyectos.
+ *     description: Para Innovación, use el id de la plantilla Innovación registrada. El XLSX contiene las hojas Proyectos Innovación, Financiamiento y Secciones Cursos, con los participantes agregados en la hoja de proyectos.
  *     parameters:
  *       - in: path
  *         name: id

@@ -3,6 +3,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const models = require('../src/models');
 const plantillaService = require('../src/services/plantillaService');
+const {
+  SECCIONES_SHEET,
+  sectionFields,
+  createInnovationFields
+} = require('../src/config/plantillaInnovacion');
 
 const originals = [];
 const stub = (object, key, value) => {
@@ -20,7 +25,7 @@ test.afterEach(() => {
 const plantillaData = {
   id: 3,
   name: 'Innovación',
-  description: 'Plantilla para carga de proyectos y financiamiento de innovación',
+  description: 'Plantilla para carga de proyectos, financiamiento y secciones de cursos de innovación',
   roleId: 5,
   archivoNombre: 'plantilla-innovacion.xlsx',
   createdAt: '2026-09-03T00:00:00.000Z',
@@ -53,7 +58,8 @@ test('detalle conserva el contrato y agrega requisitos agrupados desde CampoPlan
         tipo_dato: 'number',
         requerido: true
       },
-      { id: 3, hoja_origen: 'Financiamiento', columna_excel: 'Monto adjudicado CLP', requerido: false }
+      { id: 3, hoja_origen: 'Financiamiento', columna_excel: 'Monto adjudicado CLP', requerido: false },
+      { id: 4, hoja_origen: 'Secciones Cursos', columna_excel: 'ID Sección', requerido: true }
     ];
   });
 
@@ -73,6 +79,10 @@ test('detalle conserva el contrato y agrega requisitos agrupados desde CampoPlan
     {
       nombre: 'Financiamiento',
       campos: [{ columna: 'Monto adjudicado CLP', requerido: false }]
+    },
+    {
+      nombre: 'Secciones Cursos',
+      campos: [{ columna: 'ID Sección', requerido: true }]
     }
   ]);
   assert.deepEqual(query, {
@@ -158,4 +168,22 @@ test('Swagger documenta hojas, campos, columna, requerido y el ejemplo de Innova
   assert.match(documentation, /Proyectos Innovación/);
   assert.match(documentation, /N° estudiantes/);
   assert.match(documentation, /Financiamiento/);
+  assert.match(documentation, /Secciones Cursos/);
+  assert.match(documentation, /ID Sección/);
+});
+
+test('detalle proyecta automáticamente los 11 requisitos de Secciones Cursos', async () => {
+  stub(models.Plantilla, 'findByPk', async () => plantillaInstance());
+  stub(models.CampoPlantilla, 'findAll', async () => createInnovationFields(3).map((field, index) => ({
+    id: index + 1,
+    ...field
+  })));
+
+  const result = await plantillaService.getPlantillaById(3);
+  const sections = result.hojas.find(({ nombre }) => nombre === SECCIONES_SHEET);
+
+  assert.deepEqual(sections, {
+    nombre: SECCIONES_SHEET,
+    campos: sectionFields.map(([column]) => ({ columna: column, requerido: true }))
+  });
 });
