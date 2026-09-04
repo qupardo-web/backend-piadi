@@ -113,14 +113,19 @@ const crearErrorTipo = ({ hoja, fila, columna, celda, valor, tipo }) => {
   };
 };
 
+const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const encontrarNombreHoja = (workbook, nombreEsperado) => {
+  if (workbook.SheetNames.includes(nombreEsperado)) return nombreEsperado;
+  const esperadoNorm = normalizarTexto(nombreEsperado);
+  return workbook.SheetNames.find(name => normalizarTexto(name) === esperadoNorm) || null;
+};
+
 const validarArchivo = async (filePath, plantillaId) => {
   const campos = await CampoPlantilla.findAll({
-    where: { plantillaId }
+    where: { plantillaId },
+    order: [['orden_insercion', 'ASC'], ['id', 'ASC']]
   });
-
-  if (campos.length === 0) {
-    throw new Error('No hay campos configurados para esta plantilla');
-  }
 
   const workbook = XLSX.readFile(filePath);
   const errores = [];
@@ -136,7 +141,8 @@ const validarArchivo = async (filePath, plantillaId) => {
 
   // Validar cada hoja esperada
   for (const [nombreHoja, camposDeHoja] of Object.entries(hojasEsperadas)) {
-    if (!workbook.SheetNames.includes(nombreHoja)) {
+    const hojaReal = encontrarNombreHoja(workbook, nombreHoja);
+    if (!hojaReal) {
       errores.push({
         hoja: nombreHoja,
         mensaje: `La hoja "${nombreHoja}" no existe en el archivo`
@@ -144,7 +150,7 @@ const validarArchivo = async (filePath, plantillaId) => {
       continue;
     }
 
-    const hoja = workbook.Sheets[nombreHoja];
+    const hoja = workbook.Sheets[hojaReal];
     const datos = XLSX.utils.sheet_to_json(hoja, { defval: null });
 
     if (datos.length === 0) {
@@ -158,9 +164,15 @@ const validarArchivo = async (filePath, plantillaId) => {
     const columnasArchivo = Object.keys(datos[0]);
     const columnasPresentes = new Set(columnasArchivo);
 
+    const resolverColumnaReal = (colEsperada) => {
+      if (columnasPresentes.has(colEsperada)) return colEsperada;
+      const norm = normalizarTexto(colEsperada);
+      return columnasArchivo.find(c => normalizarTexto(c) === norm) || null;
+    };
+
     // 1. Validar la existencia de las columnas requeridas
     for (const campo of camposDeHoja) {
-      if (campo.requerido && !columnasPresentes.has(campo.columna_excel)) {
+      if (campo.requerido && !resolverColumnaReal(campo.columna_excel)) {
         errores.push({
           hoja: nombreHoja,
           campo: campo.columna_excel,

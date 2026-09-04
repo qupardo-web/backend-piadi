@@ -84,6 +84,7 @@ test('CREATE registra un único META_CREATED con actor, Meta y cantidad de métr
   assert.equal(records[0].payload.role, 'Vinculación Con El Medio');
   const details = JSON.parse(records[0].payload.detalles);
   assert.equal(details.metaId, 15);
+  assert.equal(details.metaName, 'Convenios vigentes');
   assert.equal(details.departmentId, 'vinculacion_medio');
   assert.equal(details.metricCount, 2);
 });
@@ -122,6 +123,7 @@ test('UPDATE registra META_UPDATED con diff seguro de Meta y métricas persistid
   assert.equal(records.length, 1);
   assert.equal(records[0].payload.action, 'META_UPDATED');
   const details = JSON.parse(records[0].payload.detalles);
+  assert.equal(details.metaName, 'Meta ajustada');
   assert.deepEqual(details.changes.nombre, { before: 'Meta inicial', after: 'Meta ajustada' });
   assert.deepEqual(details.changes.valorMeta, { before: '75.00', after: '80.00' });
   assert.equal(details.changes.metrics.before[0].targetValue, 75);
@@ -158,6 +160,7 @@ test('DELETE registra la referencia mínima solo después de eliminar correctame
   assert.equal(records[0].payload.action, 'META_DELETED');
   const details = JSON.parse(records[0].payload.detalles);
   assert.equal(details.metaId, 15);
+  assert.equal(details.metaName, 'Meta a eliminar');
   assert.equal(details.departmentId, 'vinculacion_medio');
   assert.deepEqual(details.reference, { nombre: 'Meta a eliminar', anio: 2026, periodo: 'Anual' });
 });
@@ -181,7 +184,9 @@ test('Rectoría conserva UPDATE_DEPARTMENTAL_META sin duplicar META_UPDATED', as
 
   assert.equal(records.length, 1);
   assert.equal(records[0].payload.action, 'UPDATE_DEPARTMENTAL_META');
-  assert.equal(JSON.parse(records[0].payload.detalles).changes.nombre.after, 'Nueva');
+  const details = JSON.parse(records[0].payload.detalles);
+  assert.equal(details.metaName, 'Nueva');
+  assert.equal(details.changes.nombre.after, 'Nueva');
 });
 
 test('una operación fallida no se registra como éxito', async () => {

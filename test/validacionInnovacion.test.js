@@ -34,6 +34,7 @@ const projectValues = {
   'Responsable/Docente': 'Ana Pérez',
   'Unidad responsable': 'Dirección de Innovación',
   'Socio/contraparte': 'CORFO',
+  'Financiamiento Externo': 'Fondo concursable externo',
   'Resultado principal': 'Prototipo validado',
   'Evidencia principal': 'informe-validacion.pdf',
   'N° estudiantes': 4,
@@ -56,17 +57,17 @@ const financingValues = {
 };
 
 const sectionValues = {
-  'ID Sección': 'SEC-VAL-001',
-  Año: 2026,
-  Semestre: 'Otoño',
-  Curso: 'Emprendimiento e Innovación',
-  'Carrera/Programa': 'Contador Auditor',
-  Jornada: 'Diurna',
+  'ID Sección': 'SEC-INN-001',
+  'Año': 2026,
+  'Semestre': '1',
+  'Curso': 'Emprendimiento e Innovación',
+  'Carrera/Programa': 'Ingeniería Comercial',
+  'Jornada': 'Diurna',
   'N° Estudiantes': 25,
   'N° Grupos/Proyectos': 5,
-  Docente: 'Docente Uno',
-  Modalidad: 'Presencial',
-  Observación: 'Sección válida'
+  'Docente': 'Prof. Juan Pérez',
+  'Modalidad': 'Presencial',
+  'Observación': 'Sección regular'
 };
 
 const sheetRows = (fields, values) => {
@@ -153,7 +154,7 @@ test('3. detecta que falta la hoja Financiamiento', async () => {
   assert.equal(error.campo, undefined);
 });
 
-test('3.1 detecta que falta la hoja Secciones Cursos', async () => {
+test('3.1 detecta que falta la hoja Secciones cursos', async () => {
   const sheets = validSheets();
   delete sheets[SECCIONES_SHEET];
   const { result } = await validateSheets(sheets);
@@ -162,6 +163,7 @@ test('3.1 detecta que falta la hoja Secciones Cursos', async () => {
   assert.equal(result.valido, false);
   assert.equal(error.hoja, SECCIONES_SHEET);
   assert.match(error.mensaje, /no existe en el archivo/);
+  assert.equal(error.campo, undefined);
 });
 
 test('4. detecta una columna requerida faltante en Proyectos Innovación', async () => {

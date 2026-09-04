@@ -20,7 +20,7 @@ if (!models.sequelize.models[MODEL_NAME]) {
     anioFirma: DataTypes.INTEGER,
     fechaFirma: DataTypes.DATEONLY,
     idActividad: DataTypes.STRING,
-    horas: DataTypes.INTEGER,
+    horas: DataTypes.FLOAT,
     observacion: DataTypes.STRING,
     idParticipacion: DataTypes.STRING,
     totalPersonas: DataTypes.INTEGER,
@@ -126,24 +126,32 @@ test('rechaza texto en un campo number e informa hoja, columna y fila', async ()
   const error = resultado.errores.find((item) => item.hoja === 'Actividades VcM' && item.campo === 'Horas');
   assert.equal(resultado.valido, false);
   assert.equal(error.fila, 2);
-  assert.equal(error.esperado, 'número entero');
+  assert.equal(error.esperado, 'valor numérico');
   assert.equal(error.valor, 'texto');
   assert.equal(error.celda, 'B2');
-  assert.match(error.mensaje, /Ingrese un número sin decimales, texto ni símbolos/);
+  assert.match(error.mensaje, /Ingrese solo un número, sin texto ni símbolos/);
 });
 
-test('acepta una cadena que representa un número entero', async () => {
+test('acepta una cadena que representa un número', async () => {
   const hojas = hojasValidas();
   hojas['Actividades VcM'][1][1] = '12';
   const resultado = await validarHojas(hojas);
   assert.equal(resultado.valido, true);
 });
 
+test('acepta un decimal cuando el modelo espera un número (horas)', async () => {
+  const hojas = hojasValidas();
+  hojas['Actividades VcM'][1][1] = 2.5;
+  const resultado = await validarHojas(hojas);
+  assert.equal(resultado.valido, true);
+  assert.deepEqual(resultado.errores, []);
+});
+
 test('rechaza un decimal cuando el modelo espera un número entero', async () => {
   const hojas = hojasValidas();
-  hojas['Actividades VcM'][1][1] = '12.5';
+  hojas['Convenios'][1][1] = '2026.5';
   const resultado = await validarHojas(hojas);
-  const error = resultado.errores.find((item) => item.hoja === 'Actividades VcM' && item.campo === 'Horas');
+  const error = resultado.errores.find((item) => item.hoja === 'Convenios' && item.campo === 'Año firma');
   assert.equal(resultado.valido, false);
   assert.equal(error.esperado, 'número entero');
 });
@@ -158,12 +166,12 @@ test('convierte un valor con símbolo de porcentaje en un 422 accionable antes d
   assert.equal(error.fila, 2);
   assert.equal(error.celda, 'B2');
   assert.equal(error.valor, '23%');
-  assert.equal(error.esperado, 'número entero');
-  assert.match(error.mensaje, /sin decimales, texto ni símbolos/);
+  assert.equal(error.esperado, 'valor numérico');
+  assert.match(error.mensaje, /sin texto ni símbolos/);
   assert.doesNotMatch(error.mensaje, /PostgreSQL|Sequelize|22P02|numeric error/i);
 });
 
-test('el tipo INTEGER del modelo prevalece ante una configuración string desactualizada', async () => {
+test('el tipo numérico del modelo prevalece ante una configuración string desactualizada', async () => {
   const configuracionDesactualizada = configuracionVcm.map((item) => (
     item.columna_excel === 'Horas' ? { ...item, tipo_dato: 'string' } : item
   ));
@@ -174,7 +182,7 @@ test('el tipo INTEGER del modelo prevalece ante una configuración string desact
   const error = resultado.errores.find((item) => item.hoja === 'Actividades VcM' && item.campo === 'Horas');
 
   assert.equal(resultado.valido, false);
-  assert.equal(error.esperado, 'número entero');
+  assert.equal(error.esperado, 'valor numérico');
   assert.equal(error.valor, '23%');
 });
 
@@ -205,7 +213,7 @@ test('el POST traduce el caso numeric inválido a 422 y elimina el XLSX temporal
     assert.equal(error.fila, 2);
     assert.equal(error.celda, 'B2');
     assert.equal(error.valor, '23%');
-    assert.equal(error.esperado, 'número entero');
+    assert.equal(error.esperado, 'valor numérico');
     assert.equal(fs.existsSync(temporal.filePath), false);
     assert.doesNotMatch(JSON.stringify(res.body), /PostgreSQL|Sequelize|22P02|query|stack/i);
   } finally {
