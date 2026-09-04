@@ -15,12 +15,14 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *   post:
  *     tags: [Departamentos]
  *     summary: Crea un departamento
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       201:
  *         description: Departamento creado.
  */
 router.get('/departments', authenticateToken, indicatorController.listDepartments);
-router.post('/departments', indicatorController.createDepartment);
+router.post('/departments', authenticateToken, indicatorController.createDepartment);
 
 /**
  * @openapi
@@ -28,6 +30,8 @@ router.post('/departments', indicatorController.createDepartment);
  *   put:
  *     tags: [Departamentos]
  *     summary: Actualiza un departamento por su key
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -39,6 +43,8 @@ router.post('/departments', indicatorController.createDepartment);
  *   delete:
  *     tags: [Departamentos]
  *     summary: Elimina un departamento por su key
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -48,8 +54,8 @@ router.post('/departments', indicatorController.createDepartment);
  *       200:
  *         description: Departamento eliminado.
  */
-router.put('/departments/:departmentKey', indicatorController.updateDepartment);
-router.delete('/departments/:departmentKey', indicatorController.deleteDepartment);
+router.put('/departments/:departmentKey', authenticateToken, indicatorController.updateDepartment);
+router.delete('/departments/:departmentKey', authenticateToken, indicatorController.deleteDepartment);
 
 /**
  * @openapi
@@ -100,6 +106,8 @@ router.get('/departments/:departmentKey/filters', authenticateToken, indicatorCo
  *   post:
  *     tags: [Departamentos]
  *     summary: Crea una definición de KPI para un departamento
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -110,7 +118,7 @@ router.get('/departments/:departmentKey/filters', authenticateToken, indicatorCo
  *         description: KPI creado.
  */
 router.get('/departments/:departmentKey/kpis', authenticateToken, indicatorController.listDepartmentKpis);
-router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
+router.post('/departments/:departmentKey/kpis', authenticateToken, indicatorController.createKpi);
 
 /**
  * @openapi
@@ -118,6 +126,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *   put:
  *     tags: [Departamentos]
  *     summary: Actualiza una definición de KPI
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -134,6 +144,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *   delete:
  *     tags: [Departamentos]
  *     summary: Elimina una definición de KPI
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -147,8 +159,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *       200:
  *         description: KPI eliminado.
  */
-router.put('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.updateKpi);
-router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.deleteKpi);
+router.put('/departments/:departmentKey/kpis/:indicatorKey', authenticateToken, indicatorController.updateKpi);
+router.delete('/departments/:departmentKey/kpis/:indicatorKey', authenticateToken, indicatorController.deleteKpi);
 
 /**
  * @openapi
