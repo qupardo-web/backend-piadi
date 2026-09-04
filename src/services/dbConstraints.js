@@ -453,7 +453,225 @@ async function initDbConstraints() {
         COALESCE(SUM(f."montoAdjudicado"), 0)::numeric AS value
       FROM proyectos p
       LEFT JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
-      GROUP BY p."anioInicio";
+      GROUP BY p."anioInicio"
+
+      -- --- 3. INNOVACION INDICATORS ---
+      UNION ALL
+
+      -- 18. Innovación - secciones_curso
+      SELECT 
+        'secciones_curso'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        anio AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM secciones
+      WHERE LOWER(curso) = 'emprendimiento e innovacion' OR LOWER(curso) = 'emprendimiento e innovación'
+      GROUP BY anio
+
+      UNION ALL
+
+      SELECT 
+        'secciones_curso'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        anio AS anio,
+        CASE WHEN LOWER(semestre) IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM secciones
+      WHERE LOWER(curso) = 'emprendimiento e innovacion' OR LOWER(curso) = 'emprendimiento e innovación'
+      GROUP BY anio, CASE WHEN LOWER(semestre) IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 19. Innovación - proyectos_activos
+      SELECT 
+        'proyectos_activos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        y.anio AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(p."idProyecto")::numeric AS value
+      FROM (
+        SELECT DISTINCT "anioInicio" AS anio FROM proyectos WHERE "anioInicio" IS NOT NULL
+        UNION
+        SELECT DISTINCT "anioTermino" AS anio FROM proyectos WHERE "anioTermino" IS NOT NULL
+        UNION
+        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL
+        UNION
+        SELECT generate_series(2020, 2030) AS anio
+      ) y
+      LEFT JOIN proyectos p ON LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND p."anioInicio" <= y.anio AND p."anioTermino" >= y.anio
+      GROUP BY y.anio
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_activos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        y.anio AS anio,
+        sem.periodo::varchar AS periodo,
+        COUNT(p."idProyecto")::numeric AS value
+      FROM (
+        SELECT DISTINCT "anioInicio" AS anio FROM proyectos WHERE "anioInicio" IS NOT NULL
+        UNION
+        SELECT DISTINCT "anioTermino" AS anio FROM proyectos WHERE "anioTermino" IS NOT NULL
+        UNION
+        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL
+        UNION
+        SELECT generate_series(2020, 2030) AS anio
+      ) y
+      CROSS JOIN (VALUES ('Semestre 1'), ('Semestre 2')) AS sem(periodo)
+      LEFT JOIN proyectos p ON LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND p."anioInicio" <= y.anio AND p."anioTermino" >= y.anio
+      GROUP BY y.anio, sem.periodo
+
+      UNION ALL
+
+      -- 20. Innovación - total_proyectos
+      SELECT 
+        'total_proyectos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'total_proyectos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio", CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 21. Innovación - financiamiento_obtenido
+      SELECT 
+        'financiamiento_obtenido'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COALESCE(SUM(f."montoAdjudicado"), 0)::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'financiamiento_obtenido'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COALESCE(SUM(f."montoAdjudicado"), 0)::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio", CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 22. Innovación - proyectos_con_financiamiento_externo
+      SELECT 
+        'proyectos_con_financiamiento_externo'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(DISTINCT p."idProyecto")::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_con_financiamiento_externo'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(DISTINCT p."idProyecto")::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio", CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 23. Innovación - proyectos_finalizados
+      SELECT 
+        'proyectos_finalizados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioTermino" AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(estado) = 'finalizado'
+      GROUP BY "anioTermino"
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_finalizados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioTermino" AS anio,
+        'Semestre 1'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(estado) = 'finalizado'
+      GROUP BY "anioTermino"
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_finalizados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioTermino" AS anio,
+        'Semestre 2'::varchar AS periodo,
+        0::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(estado) = 'finalizado'
+      GROUP BY "anioTermino"
+
+      UNION ALL
+
+      -- 24. Innovación - docentes_involucrados
+      SELECT 
+        'docentes_involucrados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COALESCE(SUM("nDocentes"), 0)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'docentes_involucrados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COALESCE(SUM("nDocentes"), 0)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio", CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END;
     `);
 
     await sequelize.query(`
@@ -468,7 +686,7 @@ async function initDbConstraints() {
         p_end_date DATE
       ) RETURNS NUMERIC AS $$
       DECLARE
-        v_value NUMERIC := 0;
+        v_value NUMERIC := NULL;
         v_year INT := EXTRACT(YEAR FROM p_start_date);
         v_period VARCHAR := 'Anual';
       BEGIN
@@ -484,7 +702,7 @@ async function initDbConstraints() {
           AND anio = v_year 
           AND periodo = v_period;
           
-        RETURN COALESCE(v_value, 0);
+        RETURN v_value;
       END;
       $$ LANGUAGE plpgsql;
     `);

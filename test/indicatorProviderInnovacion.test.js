@@ -32,6 +32,22 @@ const definitions = {
   financiamiento_obtenido: {
     key: 'financiamiento_obtenido', departmentId: 'innovacion', name: 'Financiamiento obtenido',
     unit: 'CLP', format: 'currency', formulaKey: 'SUM_INNOVATION_FINANCING', enabled: true
+  },
+  secciones_curso: {
+    key: 'secciones_curso', departmentId: 'innovacion', name: 'Secciones del curso de innovación',
+    unit: 'secciones', format: 'number', formulaKey: 'COUNT_INNOVATION_SECTIONS', enabled: true
+  },
+  proyectos_con_financiamiento_externo: {
+    key: 'proyectos_con_financiamiento_externo', departmentId: 'innovacion', name: 'Proyectos con financiamiento externo',
+    unit: 'proyectos', format: 'number', formulaKey: 'COUNT_EXTERNAL_FINANCED_PROJECTS', enabled: true
+  },
+  proyectos_finalizados: {
+    key: 'proyectos_finalizados', departmentId: 'innovacion', name: 'Innovaciones implementadas',
+    unit: 'proyectos', format: 'number', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', enabled: true
+  },
+  docentes_involucrados: {
+    key: 'docentes_involucrados', departmentId: 'innovacion', name: 'Docentes involucrados',
+    unit: 'docentes', format: 'number', formulaKey: 'SUM_INNOVATION_TEACHERS', enabled: true
   }
 };
 

@@ -6,11 +6,28 @@ const isRectoria = (user) => Boolean(user)
 const isMetaReadOnlyUser = (user) => Boolean(user)
   && user.roleGroup === 'Calidad';
 
+const resolveUserDepartmentId = (user) => {
+  if (!user) return null;
+  if (user.departmentId) return user.departmentId;
+  const roleLower = (user.role || '').toLowerCase();
+  if (roleLower.includes('innovación') || roleLower.includes('innovacion')) {
+    return 'innovacion';
+  }
+  if (roleLower.includes('vinculación') || roleLower.includes('vinculacion') || roleLower.includes('vcm')) {
+    return 'vinculacion_medio';
+  }
+  if (roleLower.includes('continua') || roleLower.includes('académico') || roleLower.includes('academico')) {
+    return 'educacion_continua';
+  }
+  return null;
+};
+
 const canManageMeta = (user, meta) => {
   if (isRectoria(user)) return true;
   if (!user || !meta || isMetaReadOnlyUser(user)) return false;
-  return Boolean(user.departmentId)
-    && user.departmentId === meta.departmentId
+  const userDepartmentId = resolveUserDepartmentId(user);
+  return Boolean(userDepartmentId)
+    && userDepartmentId === meta.departmentId
     && Number(user.id) === Number(meta.creatorId);
 };
 
@@ -43,7 +60,7 @@ const requireMetaDepartmentAccess = (req, res, next) => {
     return next(new ForbiddenError('Tu rol tiene acceso de solo lectura a las metas'));
   }
 
-  const userDepartmentId = req.user.departmentId;
+  const userDepartmentId = resolveUserDepartmentId(req.user);
   const hasRequestedDepartment = Object.prototype.hasOwnProperty.call(req.body || {}, 'departmentId');
   const requestedDepartmentId = hasRequestedDepartment ? req.body.departmentId : undefined;
   const currentDepartmentId = req.meta ? req.meta.departmentId : requestedDepartmentId;

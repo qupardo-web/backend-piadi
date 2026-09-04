@@ -69,6 +69,19 @@ const login = async (req, res, next) => {
       throw new UnauthorizedError('Usuario o contraseña incorrectos');
     }
 
+    // Resolve departmentId
+    let departmentId = user.department ? user.department.key : user.departmentId;
+    if (!departmentId && user.role) {
+      const roleLower = (user.role.name || '').toLowerCase();
+      if (roleLower.includes('innovación') || roleLower.includes('innovacion')) {
+        departmentId = 'innovacion';
+      } else if (roleLower.includes('vinculación') || roleLower.includes('vinculacion') || roleLower.includes('vcm')) {
+        departmentId = 'vinculacion_medio';
+      } else if (roleLower.includes('continua')) {
+        departmentId = 'educacion_continua';
+      }
+    }
+
     // Generate JWT token
     const payload = {
       id: user.id,
@@ -76,7 +89,7 @@ const login = async (req, res, next) => {
       name: user.name,
       role: user.role ? user.role.name : null,
       roleGroup: user.role ? user.role.group : null,
-      departmentId: user.department ? user.department.key : null
+      departmentId: departmentId || null
     };
 
     // Sign the token with an expiration of 2 hours
