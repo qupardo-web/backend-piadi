@@ -28,7 +28,7 @@ const router = express.Router();
  *         upperLimit: { type: number, nullable: true, example: 80 }
  *     MetaInput:
  *       type: object
- *       required: [anio, periodo, metrics]
+ *       required: [anio, periodo, nombre, fechaInicio, fechaLimite, metrics]
  *       properties:
  *         departmentId:
  *           type: string
@@ -36,6 +36,9 @@ const router = express.Router();
  *           example: educacion-continua
  *         anio: { type: integer, minimum: 1900, example: 2026 }
  *         periodo: { type: string, example: Anual }
+ *         nombre: { type: string, example: Aumentar participación institucional }
+ *         fechaInicio: { type: string, format: date-time }
+ *         fechaLimite: { type: string, format: date-time }
  *         metrics:
  *           type: array
  *           minItems: 1

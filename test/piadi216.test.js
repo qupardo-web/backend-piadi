@@ -45,6 +45,9 @@ const payload = (departmentId = null) => ({
   departmentId,
   anio: 2026,
   periodo: 'Anual',
+  nombre: 'Meta institucional',
+  fechaInicio: '2026-01-01T00:00:00Z',
+  fechaLimite: '2026-12-31T23:59:59Z',
   metrics: [
     metric({ weight: 60 }),
     metric({ id: 2, indicatorKey: 'kpi-b', weight: 40, indicator: { key: 'kpi-b', departmentId: 'calidad' } })
