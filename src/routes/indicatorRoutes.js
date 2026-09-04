@@ -382,16 +382,58 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  * /api/indicators/{indicatorKey}/detail:
  *   get:
  *     tags: [Indicadores]
- *     summary: Obtiene el detalle (título y descripción) de un indicador desde la base de datos
+ *     summary: Obtiene metadata y serie temporal de un indicador
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: indicatorKey
  *         required: true
  *         schema: { type: string }
+ *       - in: query
+ *         name: year
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: anio
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: año
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: semester
+ *         schema: { type: string }
+ *       - in: query
+ *         name: semestre
+ *         schema: { type: string }
+ *       - in: query
+ *         name: tipo
+ *         schema: { type: string }
+ *       - in: query
+ *         name: modalidad
+ *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Detalle del indicador.
+ *         description: Detalle del indicador con puntos temporales.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [title, description, data]
+ *               properties:
+ *                 title: { type: string }
+ *                 description: { type: string }
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     required: [period, value]
+ *                     properties:
+ *                       period: { type: integer, example: 2026 }
+ *                       value: { type: number, example: 10 }
+ *       400: { description: Filtros inválidos. }
+ *       401: { description: Token ausente o inválido. }
+ *       404: { description: Indicador inexistente. }
  */
-router.get('/indicators/:indicatorKey/detail', indicatorController.getIndicatorDetail);
+router.get('/indicators/:indicatorKey/detail', authenticateToken, indicatorController.getIndicatorDetail);
 
 module.exports = router;

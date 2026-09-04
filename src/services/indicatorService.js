@@ -540,24 +540,22 @@ const getEnabledKpis = async (departmentKey) => {
   return kpis.filter((kpi) => kpi.enabled !== false);
 };
 
-const getIndicatorDetail = async (indicatorKey) => {
+const getIndicatorDetail = async (indicatorKey, query = {}) => {
   const key = ensureIndicatorKey(indicatorKey);
   const kpi = await provider.getKpi('institucional', key);
   if (!kpi) {
     throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe', { indicatorKey: key });
   }
+  const seriesResult = await module.exports.getIndicatorSeries(key, {
+    ...query,
+    department: kpi.departmentId,
+    groupBy: 'periodo'
+  });
+  const points = seriesResult?.data?.points || [];
   return {
-    data: {
-      key: kpi.key,
-      name: kpi.name,
-      title: kpi.name,
-      description: kpi.description,
-      unit: kpi.unit,
-      format: kpi.format,
-      formulaKey: kpi.formulaKey,
-      departmentId: kpi.departmentId,
-      enabled: kpi.enabled
-    }
+    title: kpi.name,
+    description: kpi.description,
+    data: points.map((point) => ({ period: point.year, value: point.value }))
   };
 };
 
