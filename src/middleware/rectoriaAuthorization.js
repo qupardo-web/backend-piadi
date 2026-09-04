@@ -3,6 +3,17 @@ const { UnauthorizedError, ForbiddenError } = require('../utils/errors');
 const isRectoria = (user) => Boolean(user)
   && (user.role === 'Rector' || user.roleGroup === 'Rectoria');
 
+const isMetaReadOnlyUser = (user) => Boolean(user)
+  && user.roleGroup === 'Calidad';
+
+const canManageMeta = (user, meta) => {
+  if (isRectoria(user)) return true;
+  if (!user || !meta || isMetaReadOnlyUser(user)) return false;
+  return Boolean(user.departmentId)
+    && user.departmentId === meta.departmentId
+    && Number(user.id) === Number(meta.creatorId);
+};
+
 const requireRectoria = (req, res, next) => {
   if (!req.user) {
     return next(new UnauthorizedError('Usuario no autenticado'));
@@ -28,6 +39,9 @@ const requireMetaDepartmentAccess = (req, res, next) => {
   if (isRectoria(req.user)) {
     return next();
   }
+  if (isMetaReadOnlyUser(req.user)) {
+    return next(new ForbiddenError('Tu rol tiene acceso de solo lectura a las metas'));
+  }
 
   const userDepartmentId = req.user.departmentId;
   const hasRequestedDepartment = Object.prototype.hasOwnProperty.call(req.body || {}, 'departmentId');
@@ -45,6 +59,8 @@ const requireMetaDepartmentAccess = (req, res, next) => {
 
 module.exports = {
   isRectoria,
+  isMetaReadOnlyUser,
+  canManageMeta,
   requireRectoria,
   requireRectoriaForInstitutionalCreation,
   requireMetaDepartmentAccess

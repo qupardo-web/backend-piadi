@@ -1,5 +1,6 @@
 const metaService = require('../services/metaService');
 const metaProgressService = require('../services/metaProgressService');
+const { canManageMeta } = require('../middleware/rectoriaAuthorization');
 
 const META_PUBLIC_FIELDS = [
   'id', 'indicatorKey', 'departmentId', 'anio', 'valorMeta', 'periodo', 'nombre',
@@ -24,9 +25,11 @@ const pickPublicFields = (source, fields) => fields.reduce((result, field) => {
   return result;
 }, {});
 
-const serializeMeta = (value) => {
+const serializeMeta = (value, user) => {
   const meta = toPlain(value);
   const result = pickPublicFields(meta, META_PUBLIC_FIELDS);
+  const canManage = canManageMeta(user, meta);
+  result.permissions = { canEdit: canManage, canDelete: canManage };
   result.metrics = Array.isArray(meta.metrics)
     ? meta.metrics.map((metric) => pickPublicFields(toPlain(metric), METRIC_PUBLIC_FIELDS))
     : [];
@@ -51,7 +54,7 @@ const create = async (req, res, next) => {
 const getById = async (req, res, next) => {
   try {
     const meta = await metaService.getById(req.params.id);
-    res.status(200).json({ success: true, data: serializeMeta(meta) });
+    res.status(200).json({ success: true, data: serializeMeta(meta, req.user) });
   } catch (error) {
     next(error);
   }
@@ -81,7 +84,7 @@ const remove = async (req, res, next) => {
 const getProgress = async (req, res, next) => {
   try {
     const meta = await metaProgressService.getMetaProgress(req.params.id);
-    res.status(200).json({ success: true, data: serializeMeta(meta) });
+    res.status(200).json({ success: true, data: serializeMeta(meta, req.user) });
   } catch (error) {
     next(error);
   }
@@ -90,7 +93,7 @@ const getProgress = async (req, res, next) => {
 const listWithProgress = async (req, res, next) => {
   try {
     const metas = await metaProgressService.listMetasWithProgress(req.query);
-    res.status(200).json({ success: true, data: metas.map(serializeMeta) });
+    res.status(200).json({ success: true, data: metas.map((meta) => serializeMeta(meta, req.user)) });
   } catch (error) {
     next(error);
   }
