@@ -260,7 +260,7 @@ router.get('/:id/progress', authenticateToken, metaController.getProgress);
  *       403: { description: El usuario no es creador ni pertenece a Rectoría. }
  *       404: { description: Meta inexistente. }
  */
-router.get('/:id', metaController.getById);
+router.get('/:id', authenticateToken, metaController.getById);
 router.put('/:id', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, auditMetaOperation('UPDATE'), metaController.update);
 router.delete('/:id', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, auditMetaOperation('DELETE'), metaController.remove);
 
