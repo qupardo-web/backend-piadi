@@ -64,6 +64,6 @@ const { authenticateToken, authorizeRoles } = require('../middleware/authMiddlew
  *       403:
  *         description: El usuario no pertenece al grupo Rectoria ni Calidad.
  */
-router.get('/audit-logs', authenticateToken, authorizeRoles('Rectoria', 'Calidad'), auditController.getAuditLogs);
+router.get('/audit-logs', authenticateToken, authorizeRoles('Rectoria', 'Calidad', 'Direccion'), auditController.getAuditLogs);
 
 module.exports = router;

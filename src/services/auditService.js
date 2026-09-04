@@ -141,6 +141,7 @@ const buildWhere = (model, filters, range) => {
   const actionAttr = pickAttr(model, ['accion', 'action']);
   const moduleAttr = pickAttr(model, ['modulo', 'module', 'entidad']);
   const dateAttr = pickAttr(model, ['fecha', 'createdAt', 'timestamp']);
+  const roleAttr = pickAttr(model, ['rol', 'role']);
 
   if (filters.userId && userIdAttr) {
     const uid = toIntOrNull(filters.userId);
@@ -148,6 +149,9 @@ const buildWhere = (model, filters, range) => {
   }
   if (filters.action && actionAttr) where[actionAttr] = filters.action;
   if (filters.module && moduleAttr) where[moduleAttr] = filters.module;
+  if (filters.role && roleAttr) {
+    where[roleAttr] = filters.role;
+  }
   if (dateAttr && (range.fromDate || range.toDate)) {
     where[dateAttr] = {};
     if (range.fromDate) where[dateAttr][Op.gte] = range.fromDate;
@@ -181,7 +185,7 @@ const sortKey = (item, sortBy) => {
   return item.createdAt;
 };
 
-const query = async (params = {}) => {
+const query = async (params = {}, user = null) => {
   const page = parsePage(params.page);
   const limit = parseLimit(params.limit);
   const sortBy = validateSortBy(params.sortBy);
@@ -190,6 +194,11 @@ const query = async (params = {}) => {
   const type = validateType(params.type);
 
   const filters = { userId: params.userId, action: params.action, module: params.module };
+
+  // If user is from a specific direction department (not Rectoria and not Calidad), filter by their role
+  if (user && user.roleGroup === 'Direccion' && user.role) {
+    filters.role = user.role;
+  }
   const types = type === 'all' ? ['session', 'carga'] : [type];
   const active = types.map((t) => ({ type: t, model: getModel(t) })).filter((e) => e.model);
 

@@ -1,4 +1,4 @@
-const { User, Role, Plantilla, CampoPlantilla } = require('../models');
+const { User, Role, Department, Plantilla, CampoPlantilla } = require('../models');
 const {
   INNOVACION_TEMPLATE_NAME,
   createInnovationPlantilla,
@@ -35,39 +35,83 @@ async function seedDatabase() {
     }
     console.log('Roles ensured in database.');
 
-    // 2. Seed Users
-    const userCount = await User.count();
-    if (userCount === 0) {
-      console.log('No users found in database. Seeding default users...');
+    // 1.5 Seed Departments (required for User.departmentId foreign key constraint)
+    const departmentsToSeed = [
+      { key: 'educacion_continua', name: 'Educación Continua', description: 'Dirección de Educación Continua', enabled: true, order: 1 },
+      { key: 'vinculacion_medio', name: 'Vinculación con el Medio', description: 'Dirección de Vinculación con el Medio', enabled: true, order: 2 },
+      { key: 'institucional', name: 'Institucional', description: 'Metas institucionales', enabled: true, order: 3 },
+      { key: 'innovacion', name: 'Innovación', description: 'Dirección de Innovación', enabled: true, order: 4 },
+      { key: 'desarrollo_curricular', name: 'Desarrollo Curricular', description: 'Dirección de Desarrollo Curricular', enabled: true, order: 5 }
+    ];
 
-      await User.create({
+    for (const deptData of departmentsToSeed) {
+      await Department.findOrCreate({
+        where: { key: deptData.key },
+        defaults: deptData
+      });
+    }
+    console.log('Departments ensured in database.');
+
+    // 2. Seed Users
+    const usersToSeed = [
+      {
         email: 'educacioncontinua@ecas.cl',
         username: 'educacioncontinua@ecas.cl',
         name: 'Paola Sanchez',
         password: 'admin123',
-        roleId: roleMap['Educación Continua']
-      });
-
-      await User.create({
+        roleId: roleMap['Educación Continua'],
+        departmentId: 'educacion_continua'
+      },
+      {
         email: 'rectoria@ecas.cl',
         username: 'rectoria@ecas.cl',
         name: 'Pablo Marquez',
         password: 'admin123',
-        roleId: roleMap['Rector']
-      });
-
-      await User.create({
+        roleId: roleMap['Rector'],
+        departmentId: null
+      },
+      {
         email: 'calidad@ecas.cl',
         username: 'calidad@ecas.cl',
         name: 'Vicerrectoria de Calidad',
         password: 'admin123',
-        roleId: roleMap['Vicerrectoria de Calidad']
-      });
+        roleId: roleMap['Vicerrectoria de Calidad'],
+        departmentId: null
+      },
+      {
+        email: 'innovacion@ecas.cl',
+        username: 'innovacion@ecas.cl',
+        name: 'Dirección de Innovación',
+        password: 'admin123',
+        roleId: roleMap['Innovación'],
+        departmentId: 'innovacion'
+      },
+      {
+        email: 'vcm@ecas.cl',
+        username: 'vcm@ecas.cl',
+        name: 'Dirección de Vinculación con el Medio',
+        password: 'admin123',
+        roleId: roleMap['Vinculación Con El Medio'],
+        departmentId: 'vinculacion_medio'
+      }
+    ];
 
-      console.log('Default users seeded successfully.');
-    } else {
-      console.log('Users table already contains data. Skipping seeding.');
+    for (const userData of usersToSeed) {
+      if (!userData.roleId) continue;
+      const [user, created] = await User.findOrCreate({
+        where: { email: userData.email },
+        defaults: userData
+      });
+      if (!created) {
+        const updateFields = {};
+        if (user.roleId !== userData.roleId) updateFields.roleId = userData.roleId;
+        if (userData.departmentId && user.departmentId !== userData.departmentId) updateFields.departmentId = userData.departmentId;
+        if (Object.keys(updateFields).length > 0) {
+          await user.update(updateFields);
+        }
+      }
     }
+    console.log('Default users ensured successfully.');
 
     // 3. Seed Plantillas (findOrCreate to support incremental updates)
     let plantillaMap = {};
@@ -82,7 +126,7 @@ async function seedDatabase() {
       { 
         name: 'Vinculación Con El Medio', 
         description: 'Plantilla para carga de convenios, actividades y articulaciones de VCM', 
-        roleId: roleMap['Dirección de Vinculación con el Medio'] || roleMap['Vinculación Con El Medio'],
+        roleId: roleMap['Vinculación Con El Medio'],
         archivoData: null,
         archivoNombre: null
       },
@@ -95,6 +139,9 @@ async function seedDatabase() {
         defaults: data
       });
       plantillaMap[data.name] = created.id;
+      if (created.roleId !== data.roleId) {
+        await created.update({ roleId: data.roleId });
+      }
 
       if (data.name === INNOVACION_TEMPLATE_NAME) {
         await created.update({

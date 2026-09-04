@@ -15,7 +15,7 @@ const sendError = (res, err) => {
 
 const getAuditLogs = async (req, res) => {
   try {
-    const result = await auditService.query(req.query);
+    const result = await auditService.query(req.query, req.user);
     res.status(200).json({ success: true, data: result.data });
   } catch (err) {
     sendError(res, err);

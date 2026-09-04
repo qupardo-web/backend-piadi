@@ -145,8 +145,10 @@ const createIndicatorResolver = () => {
               type: sequelize.QueryTypes.SELECT
             }
           );
-          const value = result && result[0] ? Number(result[0].value) : 0;
-          return { data: { value, hasData: true } };
+          if (result && result[0] && result[0].value !== null && result[0].value !== undefined) {
+            return { data: { value: Number(result[0].value), hasData: true } };
+          }
+          return indicatorService.getIndicatorValue(indicatorKey, query);
         } catch (err) {
           console.warn(`Fallback to JS indicator calculation for ${indicatorKey}:`, err.message);
           return indicatorService.getIndicatorValue(indicatorKey, query);
