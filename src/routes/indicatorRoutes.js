@@ -172,7 +172,7 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', authenticateToke
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Innovación admite proyectos_activos, total_proyectos, proyectos_finalizados, financiamiento_obtenido, secciones_curso y docentes_involucrados.
+ *         description: Innovación admite proyectos_activos, total_proyectos, proyectos_finalizados, financiamiento_obtenido, proyectos_con_financiamiento_externo, secciones_curso y docentes_involucrados.
  *         schema:
  *           type: string
  *           example: proyectos_activos
@@ -245,7 +245,7 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Innovación admite series de proyectos, secciones_curso, docentes_involucrados y financiamiento_obtenido.
+ *         description: Clave del indicador. Innovación admite series de proyectos, secciones_curso, docentes_involucrados, financiamiento_obtenido y proyectos_con_financiamiento_externo.
  *         schema: { type: string, example: docentes_involucrados }
  *       - in: query
  *         name: department
@@ -321,7 +321,7 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Innovación admite proyectos, financiamiento_obtenido, secciones_curso y docentes_involucrados.
+ *         description: Clave del indicador. Innovación admite proyectos, financiamiento_obtenido, proyectos_con_financiamiento_externo, secciones_curso y docentes_involucrados.
  *         schema: { type: string, example: secciones_curso }
  *       - in: query
  *         name: department

@@ -126,6 +126,12 @@ const aggregateInnovationFinancing = (rows) => ({
   financiamientoSum: rows.reduce((sum, row) => sum + (row.montoAdjudicado || 0), 0)
 });
 
+const aggregateExternalFinancingProjects = (rows) => ({
+  proyectosExternosCount: new Set(
+    rows.map((row) => row.idProyecto).filter((id) => id !== null && id !== undefined)
+  ).size
+});
+
 const aggregateInnovationSection = (rows) => ({
   seccionesCount: rows.length
 });
@@ -141,6 +147,7 @@ const aggregate = (config, rows) => {
   if (config.kind === 'innovation_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_finalized_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_financing') return aggregateInnovationFinancing(rows);
+  if (config.kind === 'innovation_external_financing_projects') return aggregateExternalFinancingProjects(rows);
   if (config.kind === 'innovation_section') return aggregateInnovationSection(rows);
   return aggregateProgram(rows);
 };
@@ -156,6 +163,7 @@ const getRows = (config, filters) => {
   if (config.kind === 'innovation_project') return provider.getInnovationProjectRows(filters);
   if (config.kind === 'innovation_finalized_project') return provider.getInnovationProjectRows(filters, { finalizedInYear: true });
   if (config.kind === 'innovation_financing') return provider.getInnovationFinancingRows(filters);
+  if (config.kind === 'innovation_external_financing_projects') return provider.getInnovationFinancingRows(filters);
   if (config.kind === 'innovation_section') return provider.getInnovationSectionRows(filters);
   return provider.getProgramRows(filters);
 };

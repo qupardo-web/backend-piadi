@@ -49,6 +49,7 @@ const INDICATORS = {
   proyectos_activos: { kind: 'innovation_active_project', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
   total_proyectos: { kind: 'innovation_project', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
   financiamiento_obtenido: { kind: 'innovation_financing', formulaKey: 'SUM_INNOVATION_FINANCING', allowedGroupBy: INNOVACION_FINANCING_GROUP_BY },
+  proyectos_con_financiamiento_externo: { kind: 'innovation_external_financing_projects', formulaKey: 'COUNT_EXTERNAL_FINANCED_PROJECTS', allowedGroupBy: ['year'] },
   proyectos_finalizados: { kind: 'innovation_finalized_project', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
   secciones_curso: { kind: 'innovation_section', formulaKey: 'COUNT_INNOVATION_SECTIONS', allowedGroupBy: INNOVACION_SECTION_GROUP_BY },
   docentes_involucrados: { kind: 'innovation_project', formulaKey: 'SUM_INNOVATION_TEACHERS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY }
