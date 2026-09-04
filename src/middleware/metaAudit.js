@@ -70,6 +70,7 @@ const buildAuditDetails = (operation, req, context) => {
   const hasReferenceField = (field) => Object.prototype.hasOwnProperty.call(reference, field);
   const details = {
     metaId: hasReferenceField('id') ? reference.id : (before.id ?? null),
+    metaName: hasReferenceField('nombre') ? reference.nombre : (before.nombre ?? null),
     departmentId: hasReferenceField('departmentId') ? reference.departmentId : (before.departmentId ?? null),
     roleGroup: req.user.roleGroup || null,
     method: req.method,
@@ -120,6 +121,7 @@ const auditRectoriaDepartmentalMetaUpdate = (req, res, next) => {
       if (res.statusCode >= 400) return;
       const details = JSON.stringify({
         metaId: req.meta.id,
+        metaName: req.meta.nombre || null,
         departmentId: req.meta.departmentId,
         method: req.method,
         path: req.originalUrl
