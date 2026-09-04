@@ -4,7 +4,7 @@ const INNOVACION_TEMPLATE_NAME = 'Innovación';
 const INNOVACION_TEMPLATE_FILENAME = 'plantilla-innovacion.xlsx';
 const PROYECTOS_SHEET = 'Proyectos Innovación';
 const FINANCIAMIENTO_SHEET = 'Financiamiento';
-const SECCIONES_SHEET = 'Secciones Cursos';
+const SECCIONES_SHEET = 'Secciones cursos';
 
 const projectFields = [
   ['ID Proyecto', 'idProyecto', 'string'],
@@ -19,6 +19,7 @@ const projectFields = [
   ['Responsable/Docente', 'responsableDocente', 'string'],
   ['Unidad responsable', 'unidadResponsable', 'string'],
   ['Socio/contraparte', 'socioContraparte', 'string'],
+  ['Financiamiento Externo', 'financiamientoExterno', 'string'],
   ['Resultado principal', 'resultadoPrincipal', 'string'],
   ['Evidencia principal', 'evidenciaPrincipal', 'string'],
   ['N° estudiantes', 'nEstudiantes', 'number'],
@@ -76,7 +77,7 @@ const createInnovationTemplateBuffer = () => {
 
 const createInnovationPlantilla = (roleId) => ({
   name: INNOVACION_TEMPLATE_NAME,
-  description: 'Plantilla para carga de proyectos, financiamiento y secciones de cursos de innovación',
+  description: 'Plantilla para carga de proyectos, financiamiento y secciones de innovación',
   roleId,
   archivoData: createInnovationTemplateBuffer(),
   archivoNombre: INNOVACION_TEMPLATE_FILENAME
@@ -98,7 +99,7 @@ const createInnovationFields = (plantillaId) => {
   const fields = [
     ...projectFields.map((field) => toCampo(plantillaId, PROYECTOS_SHEET, 'Proyecto', 1, field)),
     ...financingFields.map((field) => toCampo(plantillaId, FINANCIAMIENTO_SHEET, 'Financiamiento', 2, field)),
-    ...sectionFields.map((field) => toCampo(plantillaId, SECCIONES_SHEET, 'Seccion', 1, field))
+    ...sectionFields.map((field) => toCampo(plantillaId, SECCIONES_SHEET, 'Seccion', 3, field))
   ];
 
   const projectLookup = fields.find((field) =>

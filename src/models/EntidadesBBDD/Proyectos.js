@@ -79,6 +79,10 @@ const Proyecto = sequelize.define('Proyecto', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  financiamientoExterno: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   resultadoPrincipal: {
     type: DataTypes.TEXT,
     allowNull: false

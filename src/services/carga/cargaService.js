@@ -2,6 +2,14 @@ const XLSX = require('xlsx');
 const { sequelize } = require('../../models');
 const { Op } = require('sequelize');
 
+const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const encontrarNombreHoja = (workbook, nombreEsperado) => {
+  if (workbook.Sheets[nombreEsperado]) return nombreEsperado;
+  const esperadoNorm = normalizarTexto(nombreEsperado);
+  return workbook.SheetNames.find(name => normalizarTexto(name) === esperadoNorm) || null;
+};
+
 const procesarCarga = async (workbook, campos) => {
   const transaction = await sequelize.transaction();
 
@@ -20,20 +28,27 @@ const procesarCarga = async (workbook, campos) => {
 
     const promesasHojas = Object.entries(hojas).map(async ([nombreHoja, camposHoja]) => {
       await Promise.resolve(); // Yield control to the event loop
-      const hoja = workbook.Sheets[nombreHoja];
+      const hojaReal = encontrarNombreHoja(workbook, nombreHoja);
+      const hoja = hojaReal ? workbook.Sheets[hojaReal] : null;
       if (!hoja) return [];
       const filas = XLSX.utils.sheet_to_json(hoja, { defval: null });
       const resultadoHoja = [];
 
       for (const [index, fila] of filas.entries()) {
         const filaObj = { _key: JSON.stringify(fila), _orden: Infinity, _hoja: nombreHoja, _fila: index + 2, datos: {} };
+        const filaKeys = Object.keys(fila);
 
         for (const campo of camposHoja) {
           if (!filaObj.datos[campo.tabla_destino]) {
             filaObj.datos[campo.tabla_destino] = {};
           }
+          let valor = fila[campo.columna_excel];
+          if (valor === undefined) {
+            const matchingKey = filaKeys.find(k => normalizarTexto(k) === normalizarTexto(campo.columna_excel));
+            if (matchingKey) valor = fila[matchingKey];
+          }
           filaObj.datos[campo.tabla_destino][campo.columna_destino] = {
-            valor: fila[campo.columna_excel],
+            valor,
             campo
           };
           if (campo.orden_insercion < filaObj._orden) {
