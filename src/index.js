@@ -17,7 +17,8 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
+app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false, credentials: true }));
 app.use(express.json());
 
 // Servir plantillas Excel estáticamente para descarga
