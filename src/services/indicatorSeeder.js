@@ -86,6 +86,34 @@ const CURRICULAR_KPI_SEED = [
   { key: 'innovaciones_pedagogicas', name: 'Innovaciones pedagógicas', description: 'Cantidad de innovaciones pedagógicas o metodologías activas implementadas en el aula.', unit: 'innovaciones', format: 'number', formulaKey: 'COUNT_PEDAGOGICAL_INNOVATIONS', enabled: true }
 ];
 
+const ADMISION_DEPARTMENT_SEED = {
+  key: 'admision',
+  name: 'Admisión',
+  description: 'Dirección de Admisión y Registro Académico.',
+  enabled: true,
+  hasData: true,
+  order: 6
+};
+
+const ADMISION_KPI_SEED = [
+  // Sección Matrícula y Académico (admission_enrollment)
+  { key: 'matricula_total', name: 'Matrícula total por período', description: 'Cantidad total de matrículas registradas en el período académico.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_ENROLLMENT_TOTAL', enabled: true },
+  { key: 'nuevos_vs_antiguos', name: 'Estudiantes nuevos vs antiguos', description: 'Distribución de matrícula entre estudiantes de primer ingreso y cursos superiores.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_NEW_VS_OLD', enabled: true },
+  { key: 'matricula_por_asignatura', name: 'Matrícula por asignatura', description: 'Cantidad de inscripciones activas desglosadas por asignatura.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_BY_COURSE', enabled: true },
+  { key: 'matricula_por_seccion', name: 'Matrícula por sección', description: 'Cantidad de estudiantes inscritos por sección de curso.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_BY_SECTION', enabled: true },
+  { key: 'matricula_por_estado_academico', name: 'Matrícula por estado académico', description: 'Distribución de estudiantes según su estado académico actual.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_BY_ACADEMIC_STATUS', enabled: true },
+
+  // Sección Caracterización del Estudiante (admission_characterization)
+  { key: 'nivel_socioeconomico', name: 'Nivel socioeconómico (NSE)', description: 'Distribución de estudiantes matriculados según clasificación de nivel socioeconómico.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_SOCIOECONOMIC', enabled: true },
+  { key: 'situacion_familiar', name: 'Situación familiar', description: 'Clasificación de estudiantes según su entorno y situación familiar declarada.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_FAMILY_SITUATION', enabled: true },
+  { key: 'procedencia_geografica', name: 'Procedencia geográfica', description: 'Distribución geográfica de estudiantes por región y comuna de residencia.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_GEOGRAPHY', enabled: true },
+  { key: 'tipo_colegio', name: 'Tipo de colegio de procedencia', description: 'Distribución de estudiantes según tipo de establecimiento de egreso de enseñanza media.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_SCHOOL_TYPE', enabled: true },
+  { key: 'via_acceso', name: 'Vía de acceso institucional', description: 'Distribución de estudiantes según la modalidad o vía de admisión a la institución.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_ACCESS_ROUTE', enabled: true },
+  { key: 'beneficios_becas', name: 'Beneficios y becas', description: 'Cantidad y tipo de beneficios estudiantiles, gratuidad o becas asignadas.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_BENEFITS', enabled: true },
+  { key: 'distribucion_sexo', name: 'Distribución por sexo', description: 'Distribución porcentual y cuantitativa de estudiantes matriculados por sexo.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_GENDER', enabled: true },
+  { key: 'rango_etario', name: 'Distribución por rango etario', description: 'Distribución de estudiantes matriculados agrupados por tramos de edad.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_AGE_RANGE', enabled: true }
+];
+
 async function seedIndicators() {
   // 1. Seed Educación Continua
   await Department.findOrCreate({ where: { key: DEPARTMENT_SEED.key }, defaults: DEPARTMENT_SEED });
@@ -141,6 +169,15 @@ async function seedIndicators() {
     await IndicatorDefinition.findOrCreate({
       where: { departmentId: CURRICULAR_DEPARTMENT_SEED.key, key: kpi.key },
       defaults: { ...kpi, departmentId: CURRICULAR_DEPARTMENT_SEED.key }
+    });
+  }
+
+  // 6. Seed Admisión 
+  await Department.findOrCreate({ where: { key: ADMISION_DEPARTMENT_SEED.key }, defaults: ADMISION_DEPARTMENT_SEED });
+  for (const kpi of ADMISION_KPI_SEED) {
+    await IndicatorDefinition.findOrCreate({
+      where: { departmentId: ADMISION_DEPARTMENT_SEED.key, key: kpi.key },
+      defaults: { ...kpi, departmentId: ADMISION_DEPARTMENT_SEED.key }
     });
   }
 }
