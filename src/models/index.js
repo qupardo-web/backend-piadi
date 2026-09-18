@@ -19,6 +19,7 @@ const MetaMetric = require('./EntidadesBBDD/MetaMetric');
 const Alumno = require('./EntidadesBBDD/Alumno');
 const Asignatura = require('./EntidadesBBDD/Asignatura');
 const MatriculaPorAsignatura = require('./EntidadesBBDD/MatriculaPorAsignatura');
+const CaracterizacionEstudiante = require('./EntidadesBBDD/CaracterizacionEstudiante');
 
 // --- Entidades BBDD de Programas y Alumnos Externos ---
 const AlumnoExterno = require('./EntidadesBBDD/AlumnoExterno');
@@ -71,6 +72,10 @@ MatriculaPorAsignatura.belongsTo(Alumno, { foreignKey: 'codCli', as: 'alumno' })
 MatriculaPorAsignatura.belongsTo(Asignatura, { foreignKey: 'ramoEquiv', as: 'asignatura' });
 Alumno.hasMany(MatriculaPorAsignatura, { foreignKey: 'codCli' });
 Asignatura.hasMany(MatriculaPorAsignatura, { foreignKey: 'ramoEquiv' });
+
+// Relación 1:1 Alumno y Caracterización Estudiante por RUT (Admisión)
+Alumno.hasOne(CaracterizacionEstudiante, { foreignKey: 'rut', sourceKey: 'rut', as: 'caracterizacion', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+CaracterizacionEstudiante.belongsTo(Alumno, { foreignKey: 'rut', targetKey: 'rut', as: 'alumno' });
 
 // --- Asociaciones de Programas y Alumnos Externos ---
 Programa.hasOne(EstadoFinancieroPrograma, { foreignKey: 'idPrograma', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
@@ -136,6 +141,7 @@ module.exports = {
   Alumno,
   Asignatura,
   MatriculaPorAsignatura,
+  CaracterizacionEstudiante,
   AlumnoExterno,
   EstadoFinancieroPrograma,
   EstadoMatricula,

@@ -57,30 +57,37 @@ const Alumno = sequelize.define('Alumno', {
     },
     mail: {
         type: DataTypes.STRING(150),
-        allowNull: false,
+        allowNull: true,
         validate: {
             isEmail: true
         }
     },
+    fonoAct: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+        validate: {
+            is: /^[+0-9\s\-()]*$/
+        }
+    },
     celularAct: {
         type: DataTypes.STRING(20),
-        allowNull: false,
+        allowNull: true,
         validate: {
-            is: /^[+0-9\s\-()]+$/
+            is: /^[+0-9\s\-()]*$/
         }
     },
     fonoEmergencia: {
         type: DataTypes.STRING(20),
         allowNull: true,
         validate: {
-            is: /^[+0-9\s\-()]+$/
+            is: /^[+0-9\s\-()]*$/
         }
     },
     fonoProc: {
         type: DataTypes.STRING(20),
-        allowNull: false,
+        allowNull: true,
         validate: {
-            is: /^[+0-9\s\-()]+$/
+            is: /^[+0-9\s\-()]*$/
         }
     },
     alFono: {

@@ -41,7 +41,8 @@ async function seedDatabase() {
       { key: 'vinculacion_medio', name: 'Vinculación con el Medio', description: 'Dirección de Vinculación con el Medio', enabled: true, order: 2 },
       { key: 'institucional', name: 'Institucional', description: 'Metas institucionales', enabled: true, order: 3 },
       { key: 'innovacion', name: 'Innovación', description: 'Dirección de Innovación', enabled: true, order: 4 },
-      { key: 'desarrollo_curricular', name: 'Desarrollo Curricular', description: 'Dirección de Desarrollo Curricular', enabled: true, order: 5 }
+      { key: 'desarrollo_curricular', name: 'Desarrollo Curricular', description: 'Dirección de Desarrollo Curricular', enabled: true, order: 5 },
+      { key: 'admision', name: 'Admisión', description: 'Dirección de Admisión y Registro Académico', enabled: true, order: 6 }
     ];
 
     for (const deptData of departmentsToSeed) {
@@ -93,6 +94,14 @@ async function seedDatabase() {
         password: 'admin123',
         roleId: roleMap['Vinculación Con El Medio'],
         departmentId: 'vinculacion_medio'
+      },
+      {
+        email: 'admision@ecas.cl',
+        username: 'admision@ecas.cl',
+        name: 'Dirección de Admisión',
+        password: 'admin123',
+        roleId: roleMap['Admisión'],
+        departmentId: 'admision'
       }
     ];
 
