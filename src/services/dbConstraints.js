@@ -36,6 +36,8 @@ async function initDbConstraints() {
       ALTER TABLE meta_metrics ADD COLUMN IF NOT EXISTS "upperLimit" DECIMAL(12, 2);
       ALTER TABLE indicator_definitions ADD COLUMN IF NOT EXISTS "name" VARCHAR(255);
       ALTER TABLE indicator_definitions ADD COLUMN IF NOT EXISTS "description" TEXT;
+      ALTER TABLE plantillas ADD COLUMN IF NOT EXISTS "variante" VARCHAR(50);
+      ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS "fonoAct" VARCHAR(20);
     `);
     await sequelize.query(`
       CREATE INDEX IF NOT EXISTS idx_metas_creator ON metas ("creatorId");

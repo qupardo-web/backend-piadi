@@ -4,6 +4,16 @@ const {
   createInnovationPlantilla,
   createInnovationFields
 } = require('../config/plantillaInnovacion');
+const {
+  ADMISION_COMBINADA_NAME,
+  ADMISION_MATRICULA_NAME,
+  ADMISION_CARACTERIZACION_NAME,
+  VARIANTE_COMBINADA,
+  VARIANTE_MATRICULA,
+  VARIANTE_CARACTERIZACION,
+  createAllAdmisionPlantillas,
+  createAdmisionFields
+} = require('../config/plantillaAdmision');
 
 async function seedDatabase() {
   try {
@@ -123,12 +133,17 @@ async function seedDatabase() {
     console.log('Default users ensured successfully.');
 
     // 3. Seed Plantillas (findOrCreate to support incremental updates)
+    await Plantilla.sequelize.query(`
+      ALTER TABLE plantillas ADD COLUMN IF NOT EXISTS "variante" VARCHAR(50);
+    `);
+
     let plantillaMap = {};
     const plantillasToSeed = [
       { 
         name: 'Educación Continua', 
         description: 'Plantilla para carga de programas de educación continua', 
         roleId: roleMap['Educación Continua'],
+        variante: null,
         archivoData: null,
         archivoNombre: null
       },
@@ -136,10 +151,12 @@ async function seedDatabase() {
         name: 'Vinculación Con El Medio', 
         description: 'Plantilla para carga de convenios, actividades y articulaciones de VCM', 
         roleId: roleMap['Vinculación Con El Medio'],
+        variante: null,
         archivoData: null,
         archivoNombre: null
       },
-      createInnovationPlantilla(roleMap[INNOVACION_TEMPLATE_NAME])
+      createInnovationPlantilla(roleMap[INNOVACION_TEMPLATE_NAME]),
+      ...createAllAdmisionPlantillas(roleMap['Admisión'])
     ];
 
     for (const data of plantillasToSeed) {
@@ -148,19 +165,20 @@ async function seedDatabase() {
         defaults: data
       });
       plantillaMap[data.name] = created.id;
-      if (created.roleId !== data.roleId) {
-        await created.update({ roleId: data.roleId });
-      }
 
-      if (data.name === INNOVACION_TEMPLATE_NAME) {
-        await created.update({
-          description: data.description,
-          roleId: data.roleId,
-          archivoData: data.archivoData,
-          archivoNombre: data.archivoNombre
-        });
+      const updateData = {};
+      if (created.roleId !== data.roleId) updateData.roleId = data.roleId;
+      if (data.variante !== undefined && created.variante !== data.variante) updateData.variante = data.variante;
+      if (data.description && created.description !== data.description) updateData.description = data.description;
+      if (data.archivoData) {
+        updateData.archivoData = data.archivoData;
+        updateData.archivoNombre = data.archivoNombre;
+      }
+      if (Object.keys(updateData).length > 0) {
+        await created.update(updateData);
       }
     }
+    plantillaMap['Admisión'] = plantillaMap[ADMISION_COMBINADA_NAME];
     console.log('Plantillas ensured in database.');
 
     // 4. Seed CamposPlantilla (findOrCreate to support incremental updates)
@@ -318,7 +336,12 @@ async function seedDatabase() {
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
 
       // INNOVACIÓN — Proyecto/Seccion (orden 1) y Financiamiento (orden 2)
-      ...createInnovationFields(plantillaMap[INNOVACION_TEMPLATE_NAME])
+      ...createInnovationFields(plantillaMap[INNOVACION_TEMPLATE_NAME]),
+
+      // ADMISIÓN — 3 variantes
+      ...createAdmisionFields(plantillaMap[ADMISION_COMBINADA_NAME], VARIANTE_COMBINADA),
+      ...createAdmisionFields(plantillaMap[ADMISION_MATRICULA_NAME], VARIANTE_MATRICULA),
+      ...createAdmisionFields(plantillaMap[ADMISION_CARACTERIZACION_NAME], VARIANTE_CARACTERIZACION)
     ];
 
     for (const data of camposToSeed) {
