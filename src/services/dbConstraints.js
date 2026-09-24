@@ -970,6 +970,206 @@ async function initDbConstraints() {
       COMMENT ON COLUMN financiamientos.observacion IS 'Observaciones del financiamiento.';
     `);
 
+    // =========================================================================
+    // PIADI-335: RESTRICCIONES, TRIGGERS Y DOCUMENTACIÓN SQL PARA ADMISIÓN
+    // =========================================================================
+    console.log('Applying database-level constraints, triggers, and SQL documentation for Admisión...');
+
+    // 1. Foreign Key Constraints para tablas de Admisión
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_alumnos_rut ON alumnos (rut);
+      CREATE INDEX IF NOT EXISTS idx_matricula_codcli ON matriculas_por_asignatura ("codCli");
+      CREATE INDEX IF NOT EXISTS idx_matricula_ramo ON matriculas_por_asignatura ("ramoEquiv");
+      CREATE INDEX IF NOT EXISTS idx_matricula_anio_periodo ON matriculas_por_asignatura (anio, periodo);
+      CREATE INDEX IF NOT EXISTS idx_caracterizacion_rut ON caracterizacion_estudiante (rut);
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_matricula_alumnos'
+        ) THEN
+          ALTER TABLE matriculas_por_asignatura
+            ADD CONSTRAINT fk_matricula_alumnos
+            FOREIGN KEY ("codCli")
+            REFERENCES alumnos("codCli")
+            ON UPDATE CASCADE
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_matricula_asignaturas'
+        ) THEN
+          ALTER TABLE matriculas_por_asignatura
+            ADD CONSTRAINT fk_matricula_asignaturas
+            FOREIGN KEY ("ramoEquiv")
+            REFERENCES asignaturas("ramoEquiv")
+            ON UPDATE CASCADE
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_caracterizacion_alumnos'
+        ) THEN
+          ALTER TABLE caracterizacion_estudiante
+            ADD CONSTRAINT fk_caracterizacion_alumnos
+            FOREIGN KEY (rut)
+            REFERENCES alumnos(rut)
+            ON UPDATE CASCADE
+            ON DELETE CASCADE;
+        END IF;
+      END $$;
+    `);
+
+    // 2. CHECK Constraints en Alumnos, Asignaturas, Matriculas y Caracterización
+    await sequelize.query(`
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_rut;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_rut CHECK (rut > 0 AND rut <= 99999999);
+
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_dig;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_dig CHECK ("digitoVerificador" ~* '^[0-9Kk]$');
+
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_codcli;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_codcli CHECK (TRIM("codCli") <> '');
+
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_nombres;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_nombres CHECK (TRIM(nombre) <> '' AND TRIM("apellidoPat") <> '' AND TRIM("apellidoMat") <> '');
+
+      ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_ramo;
+      ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_ramo CHECK (TRIM("ramoEquiv") <> '');
+
+      ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_nombre;
+      ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_nombre CHECK (TRIM(nombre) <> '');
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_anio;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_anio CHECK (anio >= 1990 AND anio <= 2100);
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_periodo;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_periodo CHECK (periodo >= 1 AND periodo <= 4);
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_seccion;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_seccion CHECK (seccion >= 1);
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_estadocad;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_estadocad CHECK (TRIM("estadoCad") <> '');
+
+      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_rut;
+      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_rut CHECK (rut > 0 AND rut <= 99999999);
+
+      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_dig;
+      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_dig CHECK (dig IS NULL OR dig ~* '^[0-9Kk]$');
+
+      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_fecha_nac;
+      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_fecha_nac CHECK ("fechaNacimiento" IS NULL OR ("fechaNacimiento" >= '1920-01-01' AND "fechaNacimiento" <= CURRENT_DATE));
+    `);
+
+    // 3. Triggers de validación de integridad referencial y coherencia
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_alumno_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.rut <= 0 THEN
+          RAISE EXCEPTION 'El RUT del alumno (%) debe ser un número positivo.', NEW.rut;
+        END IF;
+        IF TRIM(NEW."codCli") = '' THEN
+          RAISE EXCEPTION 'El código de cliente (codCli) no puede estar vacío.';
+        END IF;
+        IF TRIM(NEW.nombre) = '' OR TRIM(NEW."apellidoPat") = '' OR TRIM(NEW."apellidoMat") = '' THEN
+          RAISE EXCEPTION 'El nombre y apellidos del alumno no pueden estar vacíos.';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_alumno_integrity ON alumnos;
+      CREATE TRIGGER trg_check_alumno_integrity
+      BEFORE INSERT OR UPDATE ON alumnos
+      FOR EACH ROW EXECUTE FUNCTION check_alumno_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_matricula_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM alumnos WHERE "codCli" = NEW."codCli") THEN
+          RAISE EXCEPTION 'El estudiante con código "%" no existe en la tabla alumnos.', NEW."codCli";
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM asignaturas WHERE "ramoEquiv" = NEW."ramoEquiv") THEN
+          RAISE EXCEPTION 'La asignatura con código "%" no existe en la tabla asignaturas.', NEW."ramoEquiv";
+        END IF;
+        IF NEW.seccion < 1 THEN
+          RAISE EXCEPTION 'El número de sección (%) debe ser mayor o igual a 1.', NEW.seccion;
+        END IF;
+        IF NEW.anio < 1990 OR NEW.anio > 2100 THEN
+          RAISE EXCEPTION 'El año de matrícula (%) debe estar entre 1990 y 2100.', NEW.anio;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_matricula_integrity ON matriculas_por_asignatura;
+      CREATE TRIGGER trg_check_matricula_integrity
+      BEFORE INSERT OR UPDATE ON matriculas_por_asignatura
+      FOR EACH ROW EXECUTE FUNCTION check_matricula_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_caracterizacion_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM alumnos WHERE rut = NEW.rut) THEN
+          RAISE EXCEPTION 'El estudiante con RUT "%" no existe en la tabla alumnos.', NEW.rut;
+        END IF;
+        IF NEW."fechaNacimiento" IS NOT NULL AND NEW."fechaNacimiento" > CURRENT_DATE THEN
+          RAISE EXCEPTION 'La fecha de nacimiento (%) no puede ser futura.', NEW."fechaNacimiento";
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_caracterizacion_integrity ON caracterizacion_estudiante;
+      CREATE TRIGGER trg_check_caracterizacion_integrity
+      BEFORE INSERT OR UPDATE ON caracterizacion_estudiante
+      FOR EACH ROW EXECUTE FUNCTION check_caracterizacion_integrity();
+    `);
+
+    // 4. Documentación SQL: Comentarios en tablas y columnas de Admisión
+    await sequelize.query(`
+      COMMENT ON TABLE alumnos IS 'Tabla de estudiantes de pregrado matriculados en la institución.';
+      COMMENT ON COLUMN alumnos."codCli" IS 'Código único de cliente/estudiante asignado en el sistema académico institucional.';
+      COMMENT ON COLUMN alumnos.rut IS 'Número de Rol Único Tributario (RUT) del estudiante (sin dígito verificador).';
+      COMMENT ON COLUMN alumnos."digitoVerificador" IS 'Dígito verificador del RUT (0-9 o K).';
+      COMMENT ON COLUMN alumnos.nombre IS 'Nombre de pila del estudiante.';
+      COMMENT ON COLUMN alumnos."apellidoPat" IS 'Apellido paterno del estudiante.';
+      COMMENT ON COLUMN alumnos."apellidoMat" IS 'Apellido materno del estudiante.';
+      COMMENT ON COLUMN alumnos.mail IS 'Correo electrónico institucional o de contacto.';
+      COMMENT ON COLUMN alumnos."fonoAct" IS 'Teléfono de contacto actualizado.';
+
+      COMMENT ON TABLE asignaturas IS 'Catálogo de asignaturas y ramos equivalentes de la carrera Contador Auditor.';
+      COMMENT ON COLUMN asignaturas."ramoEquiv" IS 'Código identificador de ramo equivalente de la asignatura.';
+      COMMENT ON COLUMN asignaturas.nombre IS 'Nombre descriptivo de la asignatura curricular.';
+
+      COMMENT ON TABLE matriculas_por_asignatura IS 'Registro de inscripciones y matrículas de estudiantes por asignatura, sección y período académico.';
+      COMMENT ON COLUMN matriculas_por_asignatura."codCli" IS 'Identificador foráneo del alumno matriculado.';
+      COMMENT ON COLUMN matriculas_por_asignatura."ramoEquiv" IS 'Identificador foráneo de la asignatura inscrita.';
+      COMMENT ON COLUMN matriculas_por_asignatura.seccion IS 'Número de sección en que cursa la asignatura.';
+      COMMENT ON COLUMN matriculas_por_asignatura.anio IS 'Año académico de la matrícula.';
+      COMMENT ON COLUMN matriculas_por_asignatura.periodo IS 'Período académico semestral (1 o 2).';
+      COMMENT ON COLUMN matriculas_por_asignatura."estadoCad" IS 'Estado académico del estudiante en la asignatura (Regular, Aprobado, Reprobado, etc.).';
+
+      COMMENT ON TABLE caracterizacion_estudiante IS 'Datos sociodemográficos, procedencia escolar y caracterización socioeconómica de los estudiantes de pregrado.';
+      COMMENT ON COLUMN caracterizacion_estudiante.rut IS 'Número de RUT del estudiante (clave primaria y foránea hacia alumnos.rut).';
+      COMMENT ON COLUMN caracterizacion_estudiante.dig IS 'Dígito verificador del RUT.';
+      COMMENT ON COLUMN caracterizacion_estudiante.sexo IS 'Sexo registral declarado por el estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante."fechaNacimiento" IS 'Fecha de nacimiento del estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante.region IS 'Región de residencia del estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante.comuna IS 'Comuna de residencia del estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante."tipoColegio" IS 'Tipo de establecimiento de egreso de enseñanza media (Municipal, Particular Subvencionado, Técnico Profesional, etc.).';
+      COMMENT ON COLUMN caracterizacion_estudiante."viaAcceso" IS 'Vía de ingreso a la institución (Admisión Directa, PSU / PAES, etc.).';
+      COMMENT ON COLUMN caracterizacion_estudiante."nivelSocioeconomico" IS 'Clasificación o tramo socioeconómico del estudiante (NSE).';
+      COMMENT ON COLUMN caracterizacion_estudiante."situacionFamiliar" IS 'Situación y entorno familiar declarado por el estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante.beneficios IS 'Beneficios estudiantiles, gratuidad o becas asignadas al estudiante.';
+    `);
+
     console.log('Database-level constraints, triggers, and SQL documentation applied successfully.');
   } catch (error) {
     console.error('Error applying database constraints:', error);
