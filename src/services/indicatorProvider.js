@@ -14,10 +14,14 @@ const {
   ArticulacionTP,
   Proyecto,
   Financiamiento,
-  Seccion
+  Seccion,
+  Alumno,
+  MatriculaPorAsignatura,
+  Asignatura,
+  CaracterizacionEstudiante
 } = require('../models');
 
-const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio', 'innovacion'];
+const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio', 'innovacion', 'admision'];
 const INNOVATION_PROJECT_TYPES = ['Estudiantil', 'Institucional'];
 const INNOVATION_COURSE = 'Emprendimiento e Innovación';
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
@@ -136,6 +140,66 @@ const buildVcmCommonWhere = (filters = {}, yearField = 'anio') => {
     where[yearField] = { [Op.between]: [from, to] };
   }
   return where;
+};
+
+// --- Filtros y derivados de Admisión ---
+const buildAdmissionEnrollmentWhere = (filters = {}) => {
+  const where = {};
+  if (filters.year !== null && filters.year !== undefined) {
+    where.anio = filters.year;
+  } else if (filters.fromYear !== null || filters.toYear !== null) {
+    const from = filters.fromYear !== null ? filters.fromYear : filters.toYear;
+    const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
+    where.anio = { [Op.between]: [from, to] };
+  }
+  if (filters.periodo && filters.periodo.length) where.periodo = { [Op.in]: filters.periodo.map(Number) };
+  if (filters.seccion && filters.seccion.length) where.seccion = { [Op.in]: filters.seccion.map(Number) };
+  const academicStatuses = filters.estadoAcademico && filters.estadoAcademico.length
+    ? filters.estadoAcademico
+    : filters.estado;
+  if (academicStatuses && academicStatuses.length) where.estadoCad = buildCaseInsensitiveIn(academicStatuses);
+  return where;
+};
+
+const buildAdmissionCharacterizationWhere = (filters = {}) => {
+  const where = {};
+  const mappings = [
+    ['sexo', 'sexo'],
+    ['region', 'region'],
+    ['comuna', 'comuna'],
+    ['tipoColegio', 'tipoColegio'],
+    ['viaAcceso', 'viaAcceso'],
+    ['nivelSocioeconomico', 'nivelSocioeconomico'],
+    ['situacionFamiliar', 'situacionFamiliar'],
+    ['beneficios', 'beneficios']
+  ];
+  mappings.forEach(([filterKey, field]) => {
+    if (filters[filterKey] && filters[filterKey].length) {
+      where[field] = buildCaseInsensitiveIn(filters[filterKey]);
+    }
+  });
+  return where;
+};
+
+const calculateAge = (birthDate, referenceDate) => {
+  if (!birthDate || !referenceDate) return null;
+  const birth = new Date(`${birthDate}T00:00:00Z`);
+  const reference = new Date(referenceDate);
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime()) || birth > reference) return null;
+  let age = reference.getUTCFullYear() - birth.getUTCFullYear();
+  const beforeBirthday = reference.getUTCMonth() < birth.getUTCMonth()
+    || (reference.getUTCMonth() === birth.getUTCMonth() && reference.getUTCDate() < birth.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+};
+
+const admissionReferenceDate = (filters = {}) => {
+  // Contrato PIADI-318: cierre del año consultado; sin year explícito,
+  // el cierre del año actual se usa sólo como referencia técnica.
+  const referenceYear = filters.year !== null && filters.year !== undefined
+    ? filters.year
+    : new Date().getFullYear();
+  return new Date(Date.UTC(referenceYear, 11, 31, 23, 59, 59));
 };
 
 // --- Providers Educación Continua ---
@@ -344,6 +408,131 @@ const getVcmProyectoRows = async (filters = {}) => {
       vigente: String(p.estado || '').trim().toLowerCase() === 'en curso',
       montoFinanciado: f ? Number(f.montoAdjudicado || 0) : 0
     };
+  });
+};
+
+// --- Providers Admisión ---
+const getAdmissionEnrollmentRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'admision') return [];
+
+  const subjectWhere = {};
+  if (filters.asignatura && filters.asignatura.length) {
+    subjectWhere.nombre = buildCaseInsensitiveIn(filters.asignatura);
+  }
+
+  const enrollments = await MatriculaPorAsignatura.findAll({
+    where: buildAdmissionEnrollmentWhere(filters),
+    attributes: ['codCli', 'ramoEquiv', 'anio', 'periodo', 'seccion', 'estadoCad'],
+    include: [
+      {
+        model: Alumno,
+        as: 'alumno',
+        attributes: ['rut'],
+        required: true
+      },
+      {
+        model: Asignatura,
+        as: 'asignatura',
+        attributes: ['nombre'],
+        required: Object.keys(subjectWhere).length > 0,
+        where: Object.keys(subjectWhere).length > 0 ? subjectWhere : undefined
+      }
+    ]
+  });
+
+  const studentCodes = [...new Set(enrollments.map((row) => row.codCli).filter(Boolean))];
+  const firstYears = studentCodes.length
+    ? await MatriculaPorAsignatura.findAll({
+      where: { codCli: { [Op.in]: studentCodes } },
+      attributes: ['codCli', [sequelize.fn('MIN', sequelize.col('anio')), 'firstYear']],
+      group: ['codCli'],
+      raw: true
+    })
+    : [];
+  const firstYearByStudent = new Map(firstYears.map((row) => [row.codCli, Number(row.firstYear)]));
+
+  return enrollments
+    .map((enrollment) => {
+      const year = Number(enrollment.anio);
+      const firstYear = firstYearByStudent.get(enrollment.codCli);
+      const nuevoAntiguo = Number.isFinite(firstYear)
+        ? (firstYear === year ? 'nuevo' : (firstYear < year ? 'antiguo' : null))
+        : null;
+      return {
+        codCli: enrollment.codCli,
+        rut: enrollment.alumno ? enrollment.alumno.rut : null,
+        anio: year,
+        periodo: Number(enrollment.periodo),
+        ramoEquiv: enrollment.ramoEquiv,
+        asignatura: enrollment.asignatura ? enrollment.asignatura.nombre : null,
+        seccion: Number(enrollment.seccion),
+        estadoAcademico: enrollment.estadoCad,
+        nuevoAntiguo
+      };
+    })
+    .filter((row) => !filters.nuevoAntiguo || !filters.nuevoAntiguo.length
+      || filters.nuevoAntiguo.map((value) => String(value).toLowerCase()).includes(row.nuevoAntiguo));
+};
+
+const getAdmissionCharacterizationRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'admision') return [];
+
+  const characterizationWhere = buildAdmissionCharacterizationWhere(filters);
+  const enrollments = await MatriculaPorAsignatura.findAll({
+    where: buildAdmissionEnrollmentWhere(filters),
+    attributes: ['codCli', 'anio', 'periodo'],
+    include: [{
+      model: Alumno,
+      as: 'alumno',
+      attributes: ['rut'],
+      required: true,
+      include: [{
+        model: CaracterizacionEstudiante,
+        as: 'caracterizacion',
+        attributes: [
+          'rut', 'sexo', 'fechaNacimiento', 'region', 'comuna', 'tipoColegio',
+          'viaAcceso', 'nivelSocioeconomico', 'situacionFamiliar', 'beneficios'
+        ],
+        required: true,
+        where: Object.keys(characterizationWhere).length > 0 ? characterizationWhere : undefined
+      }]
+    }]
+  });
+
+  const referenceDate = admissionReferenceDate(filters);
+  const uniqueRows = new Map();
+  enrollments.forEach((enrollment) => {
+    const student = enrollment.alumno || {};
+    const characterization = student.caracterizacion || {};
+    const key = `${enrollment.codCli}|${enrollment.anio}|${enrollment.periodo}`;
+    if (uniqueRows.has(key)) return;
+    uniqueRows.set(key, {
+      rut: student.rut ?? characterization.rut ?? null,
+      codCli: enrollment.codCli,
+      anio: Number(enrollment.anio),
+      periodo: Number(enrollment.periodo),
+      sexo: characterization.sexo ?? null,
+      fechaNacimiento: characterization.fechaNacimiento ?? null,
+      edad: calculateAge(characterization.fechaNacimiento, referenceDate),
+      // No existen tramos etarios institucionales configurados en el repositorio.
+      rangoEtario: null,
+      region: characterization.region ?? null,
+      comuna: characterization.comuna ?? null,
+      tipoColegio: characterization.tipoColegio ?? null,
+      viaAcceso: characterization.viaAcceso ?? null,
+      nivelSocioeconomico: characterization.nivelSocioeconomico ?? null,
+      situacionFamiliar: characterization.situacionFamiliar ?? null,
+      beneficios: characterization.beneficios ?? null
+    });
+  });
+  return [...uniqueRows.values()].filter((row) => {
+    if (filters.minAge !== null && filters.minAge !== undefined
+      && (row.edad === null || row.edad < filters.minAge)) return false;
+    if (filters.maxAge !== null && filters.maxAge !== undefined
+      && (row.edad === null || row.edad > filters.maxAge)) return false;
+    // rangoEtario no se filtra hasta que existan tramos institucionales oficiales.
+    if (filters.rangoEtario && filters.rangoEtario.length) return false;
+    return true;
   });
 };
 
@@ -558,6 +747,31 @@ const getFilterOptions = async (department, filters = {}) => {
       estados: distinctValues(proyectos, 'estado').sort(),
       fuentes: distinctValues(financiamientos, 'fuenteFinanciamiento').sort()
     };
+  } else if (deptKey === 'admision') {
+    const enrollmentRows = await getAdmissionEnrollmentRows(filters);
+    const characterizationRows = await getAdmissionCharacterizationRows(filters);
+    return {
+      years: distinctValues(enrollmentRows, 'anio').map(Number).sort((a, b) => a - b),
+      semesters: distinctValues(enrollmentRows, 'periodo').map(Number).sort((a, b) => a - b),
+      startMonths: [],
+      areas: [],
+      tipos: [],
+      modalidades: [],
+      sexos: distinctTextValues(characterizationRows, 'sexo'),
+      rangosEdad: [],
+      edades: distinctValues(characterizationRows, 'edad').map(Number).sort((a, b) => a - b),
+      asignaturas: distinctTextValues(enrollmentRows, 'asignatura'),
+      secciones: distinctValues(enrollmentRows, 'seccion').map(Number).sort((a, b) => a - b),
+      estadosAcademicos: distinctTextValues(enrollmentRows, 'estadoAcademico'),
+      nuevosAntiguos: distinctTextValues(enrollmentRows, 'nuevoAntiguo'),
+      regiones: distinctTextValues(characterizationRows, 'region'),
+      comunas: distinctTextValues(characterizationRows, 'comuna'),
+      tiposColegio: distinctTextValues(characterizationRows, 'tipoColegio'),
+      viasAcceso: distinctTextValues(characterizationRows, 'viaAcceso'),
+      nivelesSocioeconomicos: distinctTextValues(characterizationRows, 'nivelSocioeconomico'),
+      situacionesFamiliares: distinctTextValues(characterizationRows, 'situacionFamiliar'),
+      beneficios: distinctTextValues(characterizationRows, 'beneficios')
+    };
   }
 
   return empty;
@@ -645,6 +859,9 @@ module.exports = {
   getInnovationProjectRows,
   getInnovationFinancingRows,
   getInnovationSectionRows,
+  getAdmissionEnrollmentRows,
+  getAdmissionCharacterizationRows,
+  calculateAge,
   getFilterOptions,
   getDepartments,
   getDepartmentByKey,

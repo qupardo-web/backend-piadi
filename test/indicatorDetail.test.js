@@ -55,7 +55,7 @@ test('detail devuelve contrato exacto, metadata y transforma la serie reutilizad
   assert.equal(seriesCall.key, 'tasa_aprobacion');
   assert.deepEqual(seriesCall.query, {
     anio: '2026', semestre: '1', tipo: 'Curso', modalidad: 'Online',
-    department: 'educacion_continua', groupBy: 'periodo'
+    department: 'educacion_continua', groupBy: 'year'
   });
 });
 
@@ -76,6 +76,7 @@ test('controller pasa req.query y responde el contrato sin wrapper', async () =>
 
 test('aliases de periodo, año y semestre se normalizan genéricamente', () => {
   assert.equal(parseIndicatorFilters({ groupBy: 'periodo' }).groupBy, 'year');
+  assert.equal(parseIndicatorFilters({ department: 'admision', groupBy: 'periodo' }).groupBy, 'periodo');
   assert.equal(parseIndicatorFilters({ groupBy: 'anio' }).groupBy, 'year');
   assert.equal(parseIndicatorFilters({ anio: '2025' }).year, 2025);
   assert.equal(parseIndicatorFilters({ 'año': '2024' }).year, 2024);

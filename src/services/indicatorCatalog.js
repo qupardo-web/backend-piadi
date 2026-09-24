@@ -22,8 +22,11 @@ const INNOVACION_PROJECT_GROUP_BY = ['year', 'areaTematica'];
 const INNOVACION_SECTION_GROUP_BY = ['year', 'semestre'];
 const INNOVACION_FINANCING_GROUP_BY = ['fuente', 'year'];
 
-const ADMISSION_ENROLLMENT_GROUP_BY = ['year', 'periodo', 'asignatura', 'seccion', 'estadoAcademico'];
-const ADMISSION_CHARACTERIZATION_GROUP_BY = ['year', 'sexo', 'rangoEtario', 'region', 'comuna', 'tipoColegio', 'viaAcceso', 'nivelSocioeconomico'];
+const ADMISSION_ENROLLMENT_GROUP_BY = ['year', 'periodo', 'asignatura', 'seccion', 'estadoAcademico', 'nuevoAntiguo'];
+const ADMISSION_CHARACTERIZATION_GROUP_BY = [
+  'year', 'periodo', 'sexo', 'rangoEtario', 'edad', 'region', 'comuna',
+  'tipoColegio', 'viaAcceso', 'nivelSocioeconomico', 'situacionFamiliar', 'beneficios'
+];
 
 const INDICATORS = {
   // Educación Continua

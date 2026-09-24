@@ -78,6 +78,8 @@ test('PIADI-317: Definición de KPIs y modelo de Admisión', async (t) => {
 
     const origFindOrCreateDep = models.Department.findOrCreate;
     const origFindOrCreateKPI = models.IndicatorDefinition.findOrCreate;
+    const origUpdateDep = models.Department.update;
+    const origUpdateKPI = models.IndicatorDefinition.update;
 
     models.Department.findOrCreate = async ({ where, defaults }) => {
       createdDeps.push({ ...defaults, ...where });
@@ -88,6 +90,8 @@ test('PIADI-317: Definición de KPIs y modelo de Admisión', async (t) => {
       createdKPIs.push({ ...defaults, ...where });
       return [{ key: where.key, departmentId: where.departmentId }, true];
     };
+    models.Department.update = async () => [1];
+    models.IndicatorDefinition.update = async () => [1];
 
     try {
       await seedIndicators();
@@ -102,6 +106,8 @@ test('PIADI-317: Definición de KPIs y modelo de Admisión', async (t) => {
     } finally {
       models.Department.findOrCreate = origFindOrCreateDep;
       models.IndicatorDefinition.findOrCreate = origFindOrCreateKPI;
+      models.Department.update = origUpdateDep;
+      models.IndicatorDefinition.update = origUpdateKPI;
     }
   });
 });
