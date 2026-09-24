@@ -1044,7 +1044,7 @@ async function initDbConstraints() {
       ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_anio CHECK (anio >= 1990 AND anio <= 2100);
 
       ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_periodo;
-      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_periodo CHECK (periodo >= 1 AND periodo <= 4);
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_periodo CHECK (periodo >= 1 AND periodo <= 2);
 
       ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_seccion;
       ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_seccion CHECK (seccion >= 1);

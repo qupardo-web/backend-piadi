@@ -136,6 +136,20 @@ const aggregateInnovationSection = (rows) => ({
   seccionesCount: rows.length
 });
 
+const aggregateAdmissionEnrollment = (rows) => ({
+  admissionUniqueCount: new Set(
+    rows.map((row) => row.codCli).filter((value) => value !== null && value !== undefined && value !== '')
+  ).size
+});
+
+const aggregateAdmissionCharacterization = (rows) => ({
+  admissionUniqueCount: new Set(
+    rows
+      .map((row) => row.codCli || row.rut)
+      .filter((value) => value !== null && value !== undefined && value !== '')
+  ).size
+});
+
 const aggregate = (config, rows) => {
   if (config.kind === 'participant') return aggregateParticipant(rows);
   if (config.kind === 'vcm_convenio') return aggregateVcmConvenio(rows);
@@ -149,6 +163,8 @@ const aggregate = (config, rows) => {
   if (config.kind === 'innovation_financing') return aggregateInnovationFinancing(rows);
   if (config.kind === 'innovation_external_financing_projects') return aggregateExternalFinancingProjects(rows);
   if (config.kind === 'innovation_section') return aggregateInnovationSection(rows);
+  if (config.kind === 'admission_enrollment') return aggregateAdmissionEnrollment(rows);
+  if (config.kind === 'admission_characterization') return aggregateAdmissionCharacterization(rows);
   return aggregateProgram(rows);
 };
 
@@ -165,6 +181,8 @@ const getRows = (config, filters) => {
   if (config.kind === 'innovation_financing') return provider.getInnovationFinancingRows(filters);
   if (config.kind === 'innovation_external_financing_projects') return provider.getInnovationFinancingRows(filters);
   if (config.kind === 'innovation_section') return provider.getInnovationSectionRows(filters);
+  if (config.kind === 'admission_enrollment') return provider.getAdmissionEnrollmentRows(filters);
+  if (config.kind === 'admission_characterization') return provider.getAdmissionCharacterizationRows(filters);
   return provider.getProgramRows(filters);
 };
 
@@ -557,13 +575,21 @@ const getIndicatorDetail = async (indicatorKey, query = {}) => {
   const seriesResult = await module.exports.getIndicatorSeries(key, {
     ...query,
     department: kpi.departmentId,
-    groupBy: 'periodo'
+    groupBy: kpi.departmentId === 'admision' ? 'periodo' : 'year'
   });
   const points = seriesResult?.data?.points || [];
+  const segmentedPoints = (seriesResult?.data?.series || []).flatMap((segment) => (
+    segment.points.map((point) => ({
+      period: `${point.year}-P${segment.label}`,
+      value: point.value
+    }))
+  ));
   return {
     title: kpi.name,
     description: kpi.description,
-    data: points.map((point) => ({ period: point.year, value: point.value }))
+    data: points.length
+      ? points.map((point) => ({ period: point.year, value: point.value }))
+      : segmentedPoints
   };
 };
 

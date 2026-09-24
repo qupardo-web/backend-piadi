@@ -277,6 +277,36 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
     );
   });
 
+  await t.test('8b. Rechaza período de matrícula distinto de semestre 1 o 2', async () => {
+    await cleanDb();
+    await Alumno.create({
+      codCli: 'CLI-PERIODO-03',
+      rut: 16555444,
+      digitoVerificador: '3',
+      nombre: 'Diego',
+      apellidoPat: 'Silva',
+      apellidoMat: 'Mora'
+    });
+    await Asignatura.create({ ramoEquiv: 'AUD-302', nombre: 'Auditoría II' });
+
+    await assert.rejects(
+      async () => sequelize.query(`
+        INSERT INTO matriculas_por_asignatura (
+          "codCli", "ramoEquiv", "seccion", "anio", "periodo", "estadoCad", "createdAt", "updatedAt"
+        ) VALUES (
+          'CLI-PERIODO-03', 'AUD-302', 1, 2026, 3, 'Regular', NOW(), NOW()
+        );
+      `),
+      (err) => {
+        assert.ok(
+          err.message.includes('chk_matricula_periodo') || err.message.includes('período'),
+          `Error esperado período inválido pero se recibió: ${err.message}`
+        );
+        return true;
+      }
+    );
+  });
+
   await t.test('9. Rechaza Caracterización con fecha de nacimiento futura', async () => {
     await cleanDb();
     await Alumno.create({
