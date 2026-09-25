@@ -19,6 +19,51 @@ const VARIANTE_COMBINADA = 'combinada';
 const VARIANTE_MATRICULA = 'matricula';
 const VARIANTE_CARACTERIZACION = 'caracterizacion';
 
+const ADMISION_TABLE_ORDER = Object.freeze({
+  Alumno: 1,
+  Asignatura: 2,
+  MatriculaPorAsignatura: 3,
+  CaracterizacionEstudiante: 4
+});
+
+const normalizarNombreHoja = (value) => String(value || '')
+  .trim()
+  .toLocaleLowerCase('es')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, ' ');
+
+const esHojaMatriculaAdmision = (sheetName) => {
+  const normalized = normalizarNombreHoja(sheetName);
+  return /^(?:estudiantes pregrados?|estudiantes|esstudiantes)(?:[\s_-]+(?:19|20)\d{2})?$/.test(normalized);
+};
+
+const esHojaCaracterizacionAdmision = (sheetName) =>
+  normalizarNombreHoja(sheetName) === normalizarNombreHoja(CARACTERIZACION_SHEET);
+
+const resolverHojaAdmision = (workbook, expectedName) => {
+  const expectedNormalized = normalizarNombreHoja(expectedName);
+  const isEnrollment = expectedNormalized === normalizarNombreHoja(ESTUDIANTES_PREGRADO_SHEET);
+  const isCharacterization = expectedNormalized === normalizarNombreHoja(CARACTERIZACION_SHEET);
+
+  if (!isEnrollment && !isCharacterization) return { nombre: null, ambiguas: [] };
+
+  const matches = workbook.SheetNames.filter((sheetName) =>
+    isEnrollment ? esHojaMatriculaAdmision(sheetName) : esHojaCaracterizacionAdmision(sheetName)
+  );
+
+  return matches.length === 1
+    ? { nombre: matches[0], ambiguas: [] }
+    : { nombre: null, ambiguas: matches };
+};
+
+const esConfiguracionAdmision = (campos) => {
+  if (!Array.isArray(campos) || campos.length === 0) return false;
+  const tables = new Set(campos.map((campo) => campo.tabla_destino));
+  return [...tables].every((table) => Object.hasOwn(ADMISION_TABLE_ORDER, table)) &&
+    [...tables].some((table) => table === 'MatriculaPorAsignatura' || table === 'CaracterizacionEstudiante');
+};
+
 // Encabezados en el archivo Excel
 const estudiantesPregradosHeaders = [
   'Número',
@@ -238,6 +283,12 @@ module.exports = {
   VARIANTE_COMBINADA,
   VARIANTE_MATRICULA,
   VARIANTE_CARACTERIZACION,
+  ADMISION_TABLE_ORDER,
+  normalizarNombreHoja,
+  esHojaMatriculaAdmision,
+  esHojaCaracterizacionAdmision,
+  resolverHojaAdmision,
+  esConfiguracionAdmision,
   estudiantesPregradosHeaders,
   caracterizacionEstudianteHeaders,
   alumnoFields,

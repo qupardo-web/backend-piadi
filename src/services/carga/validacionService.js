@@ -1,5 +1,11 @@
 const XLSX = require('xlsx');
 const { CampoPlantilla, sequelize } = require('../../models');
+const { normalizeAdmissionPeriod } = require('../indicatorFilters');
+const {
+  ESTUDIANTES_PREGRADO_SHEET,
+  resolverHojaAdmision,
+  esConfiguracionAdmision
+} = require('../../config/plantillaAdmision');
 
 const estaVacio = (valor) => valor === null ||
   valor === undefined ||
@@ -121,6 +127,58 @@ const encontrarNombreHoja = (workbook, nombreEsperado) => {
   return workbook.SheetNames.find(name => normalizarTexto(name) === esperadoNorm) || null;
 };
 
+const resolverNombreHoja = (workbook, nombreEsperado, esAdmision) => {
+  if (!esAdmision) return { nombre: encontrarNombreHoja(workbook, nombreEsperado), ambiguas: [] };
+  return resolverHojaAdmision(workbook, nombreEsperado);
+};
+
+const detectarConflictosMatricula = ({ datos, resolverColumnaReal, hoja }) => {
+  const columnas = ['CODCLI', 'RAMOEQUIV', 'AÑO', 'PERIODO', 'SECCION', 'ESTACAD'];
+  const reales = Object.fromEntries(columnas.map((columna) => [columna, resolverColumnaReal(columna)]));
+  if (columnas.some((columna) => !reales[columna])) return [];
+
+  const grupos = new Map();
+  for (const [index, fila] of datos.entries()) {
+    let periodo;
+    try {
+      periodo = normalizeAdmissionPeriod(fila[reales.PERIODO]);
+    } catch (_) {
+      continue;
+    }
+    const key = [
+      String(fila[reales.CODCLI] ?? '').trim(),
+      String(fila[reales.RAMOEQUIV] ?? '').trim(),
+      Number(fila[reales['AÑO']]),
+      periodo
+    ].join('::');
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push({
+      fila: index + 2,
+      seccion: Number(fila[reales.SECCION]),
+      estadoCad: String(fila[reales.ESTACAD] ?? '').trim()
+    });
+  }
+
+  const errores = [];
+  for (const [key, filas] of grupos.entries()) {
+    if (filas.length < 2) continue;
+    const variantes = new Set(filas.map((fila) => `${fila.seccion}::${fila.estadoCad}`));
+    if (variantes.size < 2) continue;
+    const [codCli, ramoEquiv, anio, periodo] = key.split('::');
+    errores.push({
+      hoja,
+      campo: 'CODCLI, RAMOEQUIV, AÑO, PERIODO',
+      fila: filas.map((fila) => fila.fila).join(', '),
+      valor: `${codCli} / ${ramoEquiv} / ${anio} / ${periodo}`,
+      esperado: 'una sola combinación de SECCION y ESTACAD por clave de matrícula',
+      mensaje: `Conflicto de matrícula en la hoja "${hoja}": las filas ${filas.map((fila) => fila.fila).join(', ')} ` +
+        `comparten CODCLI ${codCli}, RAMOEQUIV ${ramoEquiv}, AÑO ${anio} y PERIODO ${periodo}, ` +
+        `pero contienen combinaciones SECCION/ESTACAD diferentes (${[...variantes].join(', ')}).`
+    });
+  }
+  return errores;
+};
+
 const validarArchivo = async (filePath, plantillaId) => {
   const campos = await CampoPlantilla.findAll({
     where: { plantillaId },
@@ -129,6 +187,24 @@ const validarArchivo = async (filePath, plantillaId) => {
 
   const workbook = XLSX.readFile(filePath);
   const errores = [];
+
+  if (campos.length === 0) {
+    return {
+      valido: false,
+      errores: [{
+        hoja: 'General',
+        campo: 'plantillaId',
+        valor: String(plantillaId),
+        esperado: 'plantilla existente con campos configurados',
+        mensaje: `La plantilla ${plantillaId} no existe o no tiene campos configurados`
+      }],
+      campos,
+      workbook,
+      hojasEsperadas: {}
+    };
+  }
+
+  const esAdmision = esConfiguracionAdmision(campos);
 
   // Agrupar campos por hoja_origen
   const hojasEsperadas = {};
@@ -139,10 +215,39 @@ const validarArchivo = async (filePath, plantillaId) => {
     hojasEsperadas[campo.hoja_origen].push(campo);
   }
 
+  const resoluciones = new Map(Object.keys(hojasEsperadas).map((nombreHoja) => [
+    nombreHoja,
+    resolverNombreHoja(workbook, nombreHoja, esAdmision)
+  ]));
+
+  if (esAdmision) {
+    for (const [nombreHoja, resolucion] of resoluciones.entries()) {
+      if (resolucion.ambiguas.length > 1) {
+        errores.push({
+          hoja: nombreHoja,
+          esperado: 'una única hoja reconocible de Admisión',
+          mensaje: `El archivo contiene varias hojas compatibles con "${nombreHoja}": ${resolucion.ambiguas.join(', ')}`
+        });
+      }
+    }
+
+    const presentes = [...resoluciones.values()].filter((resolucion) => resolucion.nombre).length;
+    if (presentes === 0 && ![...resoluciones.values()].some((resolucion) => resolucion.ambiguas.length > 1)) {
+      errores.push({
+        hoja: 'Admisión',
+        esperado: 'al menos una hoja válida de matrícula o caracterización',
+        mensaje: 'El archivo no contiene ninguna hoja válida de Admisión'
+      });
+    }
+  }
+
   // Validar cada hoja esperada
   for (const [nombreHoja, camposDeHoja] of Object.entries(hojasEsperadas)) {
-    const hojaReal = encontrarNombreHoja(workbook, nombreHoja);
+    const resolucion = resoluciones.get(nombreHoja);
+    const hojaReal = resolucion.nombre;
     if (!hojaReal) {
+      if (esAdmision && Object.keys(hojasEsperadas).length > 1) continue;
+      if (resolucion.ambiguas.length > 1) continue;
       errores.push({
         hoja: nombreHoja,
         mensaje: `La hoja "${nombreHoja}" no existe en el archivo`
@@ -170,6 +275,11 @@ const validarArchivo = async (filePath, plantillaId) => {
       return columnasArchivo.find(c => normalizarTexto(c) === norm) || null;
     };
 
+    const columnasResueltas = new Map(camposDeHoja.map((campo) => [
+      campo.columna_excel,
+      resolverColumnaReal(campo.columna_excel)
+    ]));
+
     // 1. Validar la existencia de las columnas requeridas
     for (const campo of camposDeHoja) {
       if (campo.requerido && !resolverColumnaReal(campo.columna_excel)) {
@@ -186,7 +296,7 @@ const validarArchivo = async (filePath, plantillaId) => {
     // 2. Si no hay error de columnas faltantes en esta hoja, validar celdas vacías fila por fila
     // Evitamos duplicar validaciones si una misma columna de Excel se mapea a múltiples tablas de base de datos
     const columnasUnicas = new Map();
-    camposDeHoja.filter(c => c.requerido && columnasPresentes.has(c.columna_excel)).forEach(c => {
+    camposDeHoja.filter(c => c.requerido && columnasResueltas.get(c.columna_excel)).forEach(c => {
       if (!columnasUnicas.has(c.columna_excel)) {
         columnasUnicas.set(c.columna_excel, c);
       }
@@ -196,8 +306,9 @@ const validarArchivo = async (filePath, plantillaId) => {
     for (const [index, fila] of datos.entries()) {
       const numeroFilaExcel = index + 2; // Fila 1 es el encabezado en Excel
       for (const campo of columnasRequeridasPresentes) {
-        const valorCelda = fila[campo.columna_excel];
-        const columnaIndex = columnasArchivo.indexOf(campo.columna_excel);
+        const columnaReal = columnasResueltas.get(campo.columna_excel);
+        const valorCelda = fila[columnaReal];
+        const columnaIndex = columnasArchivo.indexOf(columnaReal);
         const celda = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
         
         // Comprobar si el valor es null, undefined, o un string vacío tras hacer trim
@@ -222,8 +333,9 @@ const validarArchivo = async (filePath, plantillaId) => {
         if (!dataByTable[campo.tabla_destino]) {
           dataByTable[campo.tabla_destino] = {};
         }
-        let valor = fila[campo.columna_excel];
-        const columnaIndex = columnasArchivo.indexOf(campo.columna_excel);
+        const columnaReal = columnasResueltas.get(campo.columna_excel);
+        let valor = columnaReal ? fila[columnaReal] : undefined;
+        const columnaIndex = columnasArchivo.indexOf(columnaReal);
         const celda = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
         const Model = sequelize.models[campo.tabla_destino];
         const tipoEsperado = resolverTipoEsperado(campo, Model);
@@ -231,17 +343,38 @@ const validarArchivo = async (filePath, plantillaId) => {
         const tipoKey = `${campo.columna_excel}:${tipoEsperado}`;
         if (!estaVacio(valor) && !tiposValidados.has(tipoKey)) {
           tiposValidados.add(tipoKey);
-          const validacionTipo = validarTipo(valor, tipoEsperado);
+          let validacionTipo;
+          if (esAdmision && campo.tabla_destino === 'MatriculaPorAsignatura' && campo.columna_destino === 'periodo') {
+            try {
+              validacionTipo = { valido: true, valor: normalizeAdmissionPeriod(valor) };
+            } catch (_) {
+              validacionTipo = { valido: false, valor };
+            }
+          } else {
+            validacionTipo = validarTipo(valor, tipoEsperado);
+          }
           if (!validacionTipo.valido) {
             tablasConTipoInvalido.add(campo.tabla_destino);
-            errores.push(crearErrorTipo({
-              hoja: nombreHoja,
-              fila: numeroFilaExcel,
-              columna: campo.columna_excel,
-              celda,
-              valor,
-              tipo: tipoEsperado
-            }));
+            if (esAdmision && campo.tabla_destino === 'MatriculaPorAsignatura' && campo.columna_destino === 'periodo') {
+              errores.push({
+                hoja: hojaReal,
+                campo: campo.columna_excel,
+                fila: numeroFilaExcel,
+                celda,
+                valor: serializarValorSeguro(valor),
+                esperado: 'semestre 1 o 2',
+                mensaje: `Fila ${numeroFilaExcel}: El período de Admisión debe corresponder al semestre 1 o 2`
+              });
+            } else {
+              errores.push(crearErrorTipo({
+                hoja: hojaReal,
+                fila: numeroFilaExcel,
+                columna: campo.columna_excel,
+                celda,
+                valor,
+                tipo: tipoEsperado
+              }));
+            }
           } else {
             valor = validacionTipo.valor;
           }
@@ -318,7 +451,7 @@ const validarArchivo = async (filePath, plantillaId) => {
                   campo: campoExcel,
                   fila: numeroFilaExcel,
                   celda: celdaExcel,
-                  valor: serializarValorSeguro(fila[campoExcel]),
+                  valor: serializarValorSeguro(fila[columnasResueltas.get(campoExcel) || campoExcel]),
                   esperado: detalleTipo(tipoEsperado).esperado,
                   mensaje: `Fila ${numeroFilaExcel}: ${cleanMsg}`
                 });
@@ -327,6 +460,10 @@ const validarArchivo = async (filePath, plantillaId) => {
           }
         }
       }
+    }
+
+    if (esAdmision && normalizarTexto(nombreHoja) === normalizarTexto(ESTUDIANTES_PREGRADO_SHEET)) {
+      errores.push(...detectarConflictosMatricula({ datos, resolverColumnaReal, hoja: hojaReal }));
     }
   }
 
