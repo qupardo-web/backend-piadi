@@ -1022,6 +1022,9 @@ async function initDbConstraints() {
 
     // 2. CHECK Constraints en Alumnos, Asignaturas, Matriculas y Caracterización
     await sequelize.query(`
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_codCli_ramoEquiv_key";
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_ramoEquiv_codCli_unique";
+
       ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_rut;
       ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_rut CHECK (rut > 0 AND rut <= 99999999);
 

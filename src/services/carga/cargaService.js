@@ -4,10 +4,41 @@ const { Op } = require('sequelize');
 
 const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+const limpiarNombreHojaParaComparar = (s) => {
+  let norm = normalizarTexto(s).replace(/\s+/g, ' ');
+  // Quitar sufijos o menciones de año como "(2024)", "( 2025 )", "2026", "- 2024", etc.
+  norm = norm.replace(/\(?\b(19\d{2}|20\d{2})\b\)?/g, '').trim();
+  // Quitar caracteres no alfanuméricos sobrantes al final como "( )", "-", "_"
+  norm = norm.replace(/[\(\)\-_]+$/g, '').trim();
+  // Normalizar variaciones de plurales comunes (pregrados -> pregrado, estudiantes -> estudiante)
+  norm = norm.replace(/\bpregrados\b/g, 'pregrado');
+  norm = norm.replace(/\bestudiantes\b/g, 'estudiante');
+  return norm;
+};
+
 const encontrarNombreHoja = (workbook, nombreEsperado) => {
-  if (workbook.Sheets[nombreEsperado]) return nombreEsperado;
+  const sheetNames = workbook.SheetNames || Object.keys(workbook.Sheets || {});
+  if (workbook.Sheets && workbook.Sheets[nombreEsperado]) return nombreEsperado;
+  if (sheetNames.includes(nombreEsperado)) return nombreEsperado;
+
   const esperadoNorm = normalizarTexto(nombreEsperado);
-  return workbook.SheetNames.find(name => normalizarTexto(name) === esperadoNorm) || null;
+  const exactNorm = sheetNames.find(name => normalizarTexto(name) === esperadoNorm);
+  if (exactNorm) return exactNorm;
+
+  const esperadoLimpio = limpiarNombreHojaParaComparar(nombreEsperado);
+
+  // 1. Coincidencia limpia exacta (sin año, sin plurales/mayúsculas/acentos)
+  const limpioExacto = sheetNames.find(name => limpiarNombreHojaParaComparar(name) === esperadoLimpio);
+  if (limpioExacto) return limpioExacto;
+
+  // 2. Coincidencia por prefijo (ej: 'estudiante pregrado (2024)' coincide con 'Estudiantes Pregrados')
+  const porPrefijo = sheetNames.find(name => {
+    const nameLimpio = limpiarNombreHojaParaComparar(name);
+    return nameLimpio.startsWith(esperadoLimpio) || esperadoLimpio.startsWith(nameLimpio);
+  });
+  if (porPrefijo) return porPrefijo;
+
+  return null;
 };
 
 const procesarCarga = async (workbook, campos) => {
@@ -203,12 +234,21 @@ const procesarCarga = async (workbook, campos) => {
           }
         }
 
-        const pkAttrs = Model.primaryKeyAttributes;
-        if (pkAttrs && pkAttrs.length > 0 && registrosAInsertar.some(r => pkAttrs.some(a => r[a] !== undefined))) {
+        const pkAttrs = Model.primaryKeyAttributes || [];
+        if (pkAttrs && pkAttrs.length > 0) {
           const map = new Map();
           for (const reg of registrosAInsertar) {
-            const key = pkAttrs.map(a => reg[a]).join('::');
-            if (!map.has(key)) map.set(key, reg);
+            const key = pkAttrs.map(a => String(reg[a] !== undefined && reg[a] !== null ? reg[a] : '').trim().toLowerCase()).join('::');
+            if (!map.has(key)) {
+              map.set(key, reg);
+            } else {
+              const existing = map.get(key);
+              for (const [k, v] of Object.entries(reg)) {
+                if (v !== undefined && v !== null && v !== '') {
+                  existing[k] = v;
+                }
+              }
+            }
           }
           registrosAInsertar = [...map.values()];
         }
@@ -220,14 +260,24 @@ const procesarCarga = async (workbook, campos) => {
           }
           let insertados = [];
           const CHUNK_SIZE = 1000;
+          
+          // Atributos no-PK para soportar Upsert (updateOnDuplicate) y evitar fallos por registros existentes
+          const nonPkAttributes = Object.keys(Model.rawAttributes || {}).filter(
+            attr => !pkAttrs.includes(attr) && attr !== 'id' && attr !== 'createdAt'
+          );
+
           try {
             for (let i = 0; i < registrosAInsertar.length; i += CHUNK_SIZE) {
               const chunk = registrosAInsertar.slice(i, i + CHUNK_SIZE);
-              const chunkResult = await Model.bulkCreate(chunk, {
+              const bulkOptions = {
                 transaction,
                 returning: true,
                 validate: false
-              });
+              };
+              if (nonPkAttributes.length > 0) {
+                bulkOptions.updateOnDuplicate = nonPkAttributes;
+              }
+              const chunkResult = await Model.bulkCreate(chunk, bulkOptions);
               insertados.push(...chunkResult);
             }
           } catch (err) {

@@ -24,7 +24,7 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
     const alumno = await Alumno.create({
       codCli: 'CLI-TEST-001',
       rut: 18123456,
-      digitoVerificador: '0',
+      digitoVerificador: '3',
       nombre: 'Juan',
       apellidoPat: 'Pérez',
       apellidoMat: 'González',
@@ -54,7 +54,7 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
 
     const caracterizacion = await CaracterizacionEstudiante.create({
       rut: 18123456,
-      dig: '0',
+      dig: '3',
       sexo: 'Masculino',
       fechaNacimiento: '2000-05-15',
       region: 'Metropolitana',
@@ -170,7 +170,7 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
     await Alumno.create({
       codCli: 'CLI-OK-01',
       rut: 15444333,
-      digitoVerificador: '2',
+      digitoVerificador: '9',
       nombre: 'María',
       apellidoPat: 'Soto',
       apellidoMat: 'Pardo'
@@ -203,7 +203,7 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
     await Alumno.create({
       codCli: 'CLI-OK-02',
       rut: 16555444,
-      digitoVerificador: '3',
+      digitoVerificador: '2',
       nombre: 'Pedro',
       apellidoPat: 'Rios',
       apellidoMat: 'Lara'
@@ -282,7 +282,7 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
     await Alumno.create({
       codCli: 'CLI-PERIODO-03',
       rut: 16555444,
-      digitoVerificador: '3',
+      digitoVerificador: '2',
       nombre: 'Diego',
       apellidoPat: 'Silva',
       apellidoMat: 'Mora'
@@ -312,7 +312,7 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
     await Alumno.create({
       codCli: 'CLI-OK-03',
       rut: 17666555,
-      digitoVerificador: '4',
+      digitoVerificador: '6',
       nombre: 'Lucía',
       apellidoPat: 'Castro',
       apellidoMat: 'Vera'
@@ -324,7 +324,7 @@ test('PIADI-335: Restricciones de integridad, triggers y FKs para Admisión', as
           INSERT INTO caracterizacion_estudiante (
             "rut", "dig", "sexo", "fechaNacimiento", "createdAt", "updatedAt"
           ) VALUES (
-            17666555, '4', 'Femenino', '2099-01-01', NOW(), NOW()
+            17666555, '6', 'Femenino', '2099-01-01', NOW(), NOW()
           );
         `);
       },
