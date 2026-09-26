@@ -3,6 +3,10 @@ const path = require('node:path');
 const { CampoPlantilla, sequelize } = require('../../models');
 const { normalizeAdmissionPeriod } = require('../indicatorFilters');
 const {
+  validarIdentidadesAdmision,
+  validarRangoFechaNacimiento
+} = require('./admisionValidation');
+const {
   ESTUDIANTES_PREGRADO_SHEET,
   decodificarEntidadesHtml,
   resolverHojaAdmision,
@@ -223,6 +227,8 @@ const validarArchivo = async (filePath, plantillaId, sourceName = filePath) => {
     configurable: true
   });
   const errores = [];
+  const advertencias = [];
+  let pendientesCaracterizacion = [];
 
   if (campos.length === 0) {
     return {
@@ -416,6 +422,22 @@ const validarArchivo = async (filePath, plantillaId, sourceName = filePath) => {
             }
           } else {
             valor = validacionTipo.valor;
+            if (esAdmision && campo.tabla_destino === 'CaracterizacionEstudiante' &&
+                campo.columna_destino === 'fechaNacimiento' &&
+                !validarRangoFechaNacimiento(valor)) {
+              tablasConTipoInvalido.add(campo.tabla_destino);
+              errores.push({
+                hoja: hojaReal,
+                campo: campo.columna_excel,
+                fila: numeroFilaExcel,
+                celda,
+                valor: serializarValorSeguro(valor),
+                esperado: 'fecha entre 1920-01-01 y la fecha actual',
+                codigo: 'ADMISION_FECHANAC_FUERA_RANGO',
+                severidad: 'ERROR',
+                mensaje: `Fila ${numeroFilaExcel}: FECHANAC debe estar entre 1920-01-01 y la fecha actual`
+              });
+            }
           }
         }
 
@@ -509,13 +531,29 @@ const validarArchivo = async (filePath, plantillaId, sourceName = filePath) => {
     }
   }
 
-  return {
+  if (esAdmision && [...resoluciones.values()].some((resolucion) => resolucion.nombre)) {
+    const resultadoAdmision = await validarIdentidadesAdmision({
+      workbook,
+      resoluciones,
+      models: sequelize.models
+    });
+    errores.push(...resultadoAdmision.errores);
+    advertencias.push(...resultadoAdmision.advertencias);
+    pendientesCaracterizacion = resultadoAdmision.pendientesCaracterizacion;
+  }
+
+  const resultado = {
     valido: errores.length === 0,
     errores,
     campos,
     workbook,
     hojasEsperadas
   };
+  if (esAdmision) {
+    resultado.advertencias = advertencias;
+    resultado.pendientesCaracterizacion = pendientesCaracterizacion;
+  }
+  return resultado;
 };
 
 module.exports = {
