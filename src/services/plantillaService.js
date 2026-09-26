@@ -1,4 +1,9 @@
-const { Plantilla, Role, CampoPlantilla } = require('../models');
+const { Plantilla, Role, Department, CampoPlantilla } = require('../models');
+
+const plantillaAuthorizationAssociations = [
+  { model: Role, as: 'role' },
+  { model: Department, as: 'department' }
+];
 
 const buildRequirementSheets = (fields) => {
   const sheets = new Map();
@@ -52,15 +57,15 @@ const getPlantillaById = async (id) => {
 }
 
 const createNewPlantilla = async (plantillaData) => {
-  const { name, description, roleId, variante } = plantillaData;
-  if (!name || !roleId) {
-    throw new Error('Nombre y roleId son requeridos');
+  const { name, description, roleId, departmentId, variante } = plantillaData;
+  if (!name || !roleId || !departmentId) {
+    throw new Error('Nombre, roleId y departmentId son requeridos');
   }
   const existente = await Plantilla.findOne({ where: { name } });
   if (existente) {
     throw new Error('Ya existe una plantilla con ese nombre');
   }
-  return await Plantilla.create({ name, description, roleId, variante });
+  return await Plantilla.create({ name, description, roleId, departmentId, variante });
 }
 
 const updatePlantillaById = async (id, plantillaData) => {
@@ -68,14 +73,14 @@ const updatePlantillaById = async (id, plantillaData) => {
   if (!plantilla) {
     throw new Error('Plantilla no encontrada');
   }
-  const { name, description, roleId, variante } = plantillaData;
+  const { name, description, roleId, departmentId, variante } = plantillaData;
   if (name && name !== plantilla.name) {
     const existente = await Plantilla.findOne({ where: { name } });
     if (existente) {
       throw new Error('Ya existe una plantilla con ese nombre');
     }
   }
-  const fieldsToUpdate = { name, description, roleId };
+  const fieldsToUpdate = { name, description, roleId, departmentId };
   if (variante !== undefined) {
     fieldsToUpdate.variante = variante;
   }
@@ -101,8 +106,12 @@ const getPlantillaWithArchivo = async (id) => {
   return plantilla;
 }
 
-const guardarArchivoTemplate = async (id, buffer, originalname) => {
-  const plantilla = await Plantilla.unscoped().findByPk(id);
+const getPlantillaForAuthorization = async (id) => Plantilla.findByPk(id, {
+  include: plantillaAuthorizationAssociations
+});
+
+const guardarArchivoTemplate = async (id, buffer, originalname, resolvedPlantilla = null) => {
+  const plantilla = resolvedPlantilla || await Plantilla.unscoped().findByPk(id);
   if (!plantilla) {
     throw new Error('Plantilla no encontrada');
   }
@@ -120,5 +129,6 @@ module.exports = {
   updatePlantillaById,
   deletePlantillaById,
   getPlantillaWithArchivo,
+  getPlantillaForAuthorization,
   guardarArchivoTemplate
 }

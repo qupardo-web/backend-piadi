@@ -230,6 +230,7 @@ const createAdmisionCombinadaPlantilla = (roleId) => ({
   name: ADMISION_COMBINADA_NAME,
   description: 'Plantilla para carga completa de estudiantes, matrículas y caracterización de admisión',
   roleId,
+  departmentId: 'admision',
   variante: VARIANTE_COMBINADA,
   archivoData: createAdmisionCombinadaBuffer(),
   archivoNombre: ADMISION_COMBINADA_FILENAME
@@ -239,6 +240,7 @@ const createAdmisionMatriculaPlantilla = (roleId) => ({
   name: ADMISION_MATRICULA_NAME,
   description: 'Plantilla para carga de estudiantes y matrículas por asignatura de admisión',
   roleId,
+  departmentId: 'admision',
   variante: VARIANTE_MATRICULA,
   archivoData: createAdmisionMatriculaBuffer(),
   archivoNombre: ADMISION_MATRICULA_FILENAME
@@ -248,6 +250,7 @@ const createAdmisionCaracterizacionPlantilla = (roleId) => ({
   name: ADMISION_CARACTERIZACION_NAME,
   description: 'Plantilla para carga de caracterización socioeconómica y personal de estudiantes',
   roleId,
+  departmentId: 'admision',
   variante: VARIANTE_CARACTERIZACION,
   archivoData: createAdmisionCaracterizacionBuffer(),
   archivoNombre: ADMISION_CARACTERIZACION_FILENAME

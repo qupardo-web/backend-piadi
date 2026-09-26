@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const plantillaController = require('../controllers/plantillaController');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { authorizePlantillaAdministration } = require('../middleware/plantillaUploadAuthorization');
 
 /**
  * @openapi
@@ -91,6 +93,9 @@ router.get('/:id', plantillaController.getPlantilla);
  *   post:
  *     tags: [Plantillas]
  *     summary: Crea una nueva plantilla
+ *     description: Operación administrativa exclusiva de Rectoría.
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -100,6 +105,7 @@ router.get('/:id', plantillaController.getPlantilla);
  *             required:
  *               - name
  *               - roleId
+ *               - departmentId
  *             properties:
  *               name:
  *                 type: string
@@ -107,6 +113,8 @@ router.get('/:id', plantillaController.getPlantilla);
  *                 type: string
  *               roleId:
  *                 type: integer
+ *               departmentId:
+ *                 type: string
  *     responses:
  *       201:
  *         description: Plantilla creada con éxito.
@@ -116,8 +124,12 @@ router.get('/:id', plantillaController.getPlantilla);
  *               $ref: '#/components/schemas/Plantilla'
  *       400:
  *         description: Faltan campos obligatorios.
+ *       401:
+ *         description: Token ausente, inválido o usuario no vigente.
+ *       403:
+ *         description: Solo Rectoría puede administrar plantillas.
  */
-router.post('/', plantillaController.createPlantilla);
+router.post('/', authenticateToken, authorizePlantillaAdministration, plantillaController.createPlantilla);
 
 /**
  * @openapi
@@ -125,6 +137,9 @@ router.post('/', plantillaController.createPlantilla);
  *   put:
  *     tags: [Plantillas]
  *     summary: Actualiza una plantilla existente
+ *     description: Operación administrativa exclusiva de Rectoría.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -144,6 +159,8 @@ router.post('/', plantillaController.createPlantilla);
  *                 type: string
  *               roleId:
  *                 type: integer
+ *               departmentId:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Plantilla actualizada con éxito.
@@ -153,8 +170,12 @@ router.post('/', plantillaController.createPlantilla);
  *               $ref: '#/components/schemas/Plantilla'
  *       404:
  *         description: Plantilla no encontrada.
+ *       401:
+ *         description: Token ausente, inválido o usuario no vigente.
+ *       403:
+ *         description: Solo Rectoría puede administrar plantillas.
  */
-router.put('/:id', plantillaController.updatePlantilla);
+router.put('/:id', authenticateToken, authorizePlantillaAdministration, plantillaController.updatePlantilla);
 
 /**
  * @openapi
@@ -162,6 +183,9 @@ router.put('/:id', plantillaController.updatePlantilla);
  *   delete:
  *     tags: [Plantillas]
  *     summary: Elimina una plantilla por ID
+ *     description: Operación administrativa exclusiva de Rectoría.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -173,8 +197,12 @@ router.put('/:id', plantillaController.updatePlantilla);
  *         description: Plantilla eliminada.
  *       404:
  *         description: Plantilla no encontrada.
+ *       401:
+ *         description: Token ausente, inválido o usuario no vigente.
+ *       403:
+ *         description: Solo Rectoría puede administrar plantillas.
  */
-router.delete('/:id', plantillaController.deletePlantilla);
+router.delete('/:id', authenticateToken, authorizePlantillaAdministration, plantillaController.deletePlantilla);
 
 /**
  * @openapi
