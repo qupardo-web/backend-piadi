@@ -567,6 +567,102 @@ const getIndicatorDetail = async (indicatorKey, query = {}) => {
   };
 };
 
+/**
+ * Vista detallada de un indicador: metadatos + total + tabla + comparación.
+ *
+ * Fuente ÚNICA de verdad para:
+ *   - el endpoint GET /api/indicators/:key/detail-view (PIADI-409)
+ *   - la generación de reportes (PIADI-418, reporteService)
+ *
+ * Acepta: department (opcional; se resuelve desde la key), year/fromYear/toYear,
+ *         groupBy (opcional, debe estar en allowedGroupBy), segment (opcional, futuro).
+ *
+ * @returns {{ data: {
+ *   indicatorKey, department, title, description, unit, format,
+ *   total, formattedTotal, hasData, disaggregated, groupBy,
+ *   period: {from,to}, comparison: ({previousYear,previousValue,diff}|null),
+ *   table: Array, series: Array, filters, meta
+ * } }}
+ */
+const getIndicatorDetailView = async (indicatorKey, query = {}) => {
+  const key = ensureIndicatorKey(indicatorKey);
+
+  // Resolver el indicador por su key en cualquier departamento.
+  // provider.getKpi('institucional', key) consulta solo por key (sin filtro de departamento).
+  const kpi = await provider.getKpi('institucional', key);
+  if (!kpi) {
+    throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe', { indicatorKey: key });
+  }
+
+  const department = kpi.departmentId;
+  const baseQuery = { ...query, department };
+  const config = getIndicatorConfig(key, kpi);
+
+  const requestedGroupBy = query.groupBy || null;
+  const groupBy = requestedGroupBy && Array.isArray(config.allowedGroupBy) && config.allowedGroupBy.includes(requestedGroupBy)
+    ? requestedGroupBy
+    : null;
+
+  // Total del período (respeta los filtros del query)
+  const valueResult = await getIndicatorValue(key, baseQuery);
+  const total = valueResult.data.value;
+  const hasData = valueResult.data.hasData;
+
+  // Serie base (sin desagregar): sirve para período y comparación
+  const seriesBase = await getIndicatorSeries(key, baseQuery);
+  const points = seriesBase.data.points || [];
+  const years = points.map((point) => Number(point.year)).filter((year) => Number.isFinite(year));
+  const period = years.length
+    ? { from: Math.min(...years), to: Math.max(...years) }
+    : { from: null, to: null };
+
+  let comparison = null;
+  if (points.length >= 2) {
+    const current = points[points.length - 1];
+    const previous = points[points.length - 2];
+    comparison = {
+      previousYear: previous.year,
+      previousValue: previous.value,
+      diff: current.value - previous.value
+    };
+  }
+
+  // Tabla y serie: por categoría (desagregado) o por período (simple)
+  let table;
+  let series;
+  if (groupBy) {
+    const breakdownResult = await getIndicatorBreakdown(key, { ...baseQuery, groupBy });
+    table = (breakdownResult.data.items || []).map((item) => ({ label: item.label, value: item.value }));
+    const seriesResult = await getIndicatorSeries(key, { ...baseQuery, groupBy });
+    series = seriesResult.data.series || [];
+  } else {
+    table = points.map((point) => ({ year: point.year, value: point.value }));
+    series = points;
+  }
+
+  return {
+    data: {
+      indicatorKey: key,
+      department,
+      title: kpi.name,
+      description: kpi.description,
+      unit: kpi.unit,
+      format: kpi.format,
+      total,
+      formattedTotal: hasData ? formatValue(total, kpi.format) : null,
+      hasData,
+      disaggregated: Boolean(groupBy),
+      groupBy,
+      period,
+      comparison,
+      table,
+      series,
+      filters: valueResult.data.filters,
+      meta: { source: 'postgresql', formulaKey: kpi.formulaKey }
+    }
+  };
+};
+
 module.exports = {
   ServiceError,
   parseYear,
@@ -585,5 +681,6 @@ module.exports = {
   getDepartmentFilters,
   getIndicatorValue,
   getIndicatorSeries,
-  getIndicatorBreakdown
+  getIndicatorBreakdown,
+  getIndicatorDetailView
 };

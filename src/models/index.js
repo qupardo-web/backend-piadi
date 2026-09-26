@@ -9,6 +9,10 @@ const CampoPlantilla = require('./CampoPlantilla');
 const AuditCarga = require('./EntidadesAudit/AuditCarga');
 const AuditSesion = require('./EntidadesAudit/AuditSesion');
 
+// --- Reportes (PIADI-418) ---
+const Reporte = require('./Reporte');
+const ReporteEjecucion = require('./ReporteEjecucion');
+
 // --- Entidades de Indicadores (PIADI-150 / PIADI-153) ---
 const Department = require('./Department');
 const IndicatorDefinition = require('./IndicatorDefinition');
@@ -131,6 +135,19 @@ MetaMetric.belongsTo(Meta, { foreignKey: 'metaId', as: 'meta', onDelete: 'CASCAD
 MetaMetric.belongsTo(IndicatorDefinition, { foreignKey: 'indicatorKey', targetKey: 'key', as: 'indicator', onDelete: 'RESTRICT', onUpdate: 'CASCADE' });
 IndicatorDefinition.hasMany(MetaMetric, { foreignKey: 'indicatorKey', sourceKey: 'key', as: 'metaMetrics' });
 
+// --- Asociaciones de Reportes (PIADI-418) ---
+Role.hasMany(Reporte, { foreignKey: 'roleId' });
+Reporte.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
+
+User.hasMany(Reporte, { foreignKey: 'createdBy', as: 'reportesCreados' });
+Reporte.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+
+Reporte.hasMany(ReporteEjecucion, { foreignKey: 'reporteId', as: 'ejecuciones', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+ReporteEjecucion.belongsTo(Reporte, { foreignKey: 'reporteId', as: 'reporte', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+
+User.hasMany(ReporteEjecucion, { foreignKey: 'solicitadoPor', as: 'reportesSolicitados' });
+ReporteEjecucion.belongsTo(User, { foreignKey: 'solicitadoPor', as: 'solicitante' });
+
 module.exports = {
   sequelize,
   Item,
@@ -160,5 +177,7 @@ module.exports = {
   Department,
   IndicatorDefinition,
   Meta,
-  MetaMetric
+  MetaMetric,
+  Reporte,
+  ReporteEjecucion
 };

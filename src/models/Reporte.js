@@ -1,0 +1,109 @@
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/database');
+
+/**
+ * @openapi
+ * components:
+ *   schemas:
+ *     Reporte:
+ *       type: object
+ *       required:
+ *         - nombre
+ *       properties:
+ *         id:
+ *           type: integer
+ *           description: ID autogenerado del reporte.
+ *         nombre:
+ *           type: string
+ *           description: Nombre del reporte.
+ *         descripcion:
+ *           type: string
+ *           description: Descripción del reporte.
+ *         roleId:
+ *           type: integer
+ *           description: Rol/área al que pertenece el reporte (opcional).
+ *         createdBy:
+ *           type: integer
+ *           description: Usuario que creó el reporte.
+ *         indicadores:
+ *           type: array
+ *           description: Lista de claves de indicadores incluidos.
+ *         filtros:
+ *           type: object
+ *           description: Filtros y período por defecto del reporte.
+ *         formato:
+ *           type: string
+ *           description: Formato de salida (XLSX o PDF).
+ *         periodicidad:
+ *           type: string
+ *           description: Periodicidad programada (opcional).
+ *         activo:
+ *           type: boolean
+ *           description: Si el reporte está activo.
+ */
+const Reporte = sequelize.define('Reporte', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true
+  },
+  nombre: {
+    type: DataTypes.STRING(150),
+    allowNull: false,
+    validate: {
+      notEmpty: true
+    }
+  },
+  descripcion: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  roleId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'roles',
+      key: 'id'
+    }
+  },
+  createdBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  indicadores: {
+    type: DataTypes.JSON,
+    allowNull: false,
+    defaultValue: []
+  },
+  filtros: {
+    type: DataTypes.JSON,
+    allowNull: false,
+    defaultValue: {}
+  },
+  formato: {
+    type: DataTypes.STRING(10),
+    allowNull: false,
+    defaultValue: 'XLSX',
+    validate: {
+      isIn: [['XLSX', 'PDF']]
+    }
+  },
+  periodicidad: {
+    type: DataTypes.STRING(20),
+    allowNull: true
+  },
+  activo: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true
+  }
+}, {
+  tableName: 'reportes',
+  timestamps: true
+});
+
+module.exports = Reporte;
