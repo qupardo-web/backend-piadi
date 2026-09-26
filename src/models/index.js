@@ -142,6 +142,9 @@ Reporte.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 User.hasMany(Reporte, { foreignKey: 'createdBy', as: 'reportesCreados' });
 Reporte.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
 
+Department.hasMany(Reporte, { foreignKey: 'departmentId', sourceKey: 'key', as: 'reportes' });
+Reporte.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'area' });
+
 Reporte.hasMany(ReporteEjecucion, { foreignKey: 'reporteId', as: 'ejecuciones', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 ReporteEjecucion.belongsTo(Reporte, { foreignKey: 'reporteId', as: 'reporte', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 

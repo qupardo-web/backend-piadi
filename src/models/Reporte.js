@@ -22,6 +22,9 @@ const sequelize = require('../config/database');
  *         roleId:
  *           type: integer
  *           description: Rol/área al que pertenece el reporte (opcional).
+ *         departmentId:
+ *           type: string
+ *           description: Área (departamento) del reporte; vacío para reportes globales (Rectoría).
  *         createdBy:
  *           type: integer
  *           description: Usuario que creó el reporte.
@@ -67,6 +70,14 @@ const Reporte = sequelize.define('Reporte', {
     references: {
       model: 'roles',
       key: 'id'
+    }
+  },
+  departmentId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    references: {
+      model: 'departments',
+      key: 'key'
     }
   },
   createdBy: {
