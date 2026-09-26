@@ -114,9 +114,10 @@ const saveHtmlXls = (records) => {
   return filePath;
 };
 
-const validate = async (workbook, variante = VARIANTE_COMBINADA) => {
+const validate = async (workbook, variante = VARIANTE_COMBINADA, alumnos = []) => {
   const fields = createAdmisionFields(330, variante);
   stub(models.CampoPlantilla, 'findAll', async () => fields);
+  stub(models.Alumno, 'findAll', async () => alumnos);
   return validarArchivo(saveWorkbook(workbook), 330);
 };
 
@@ -187,7 +188,11 @@ test('1-3. reconoce aliases de matrícula y Caracterización Estudiante', async 
     });
   }
   await t.test('Caracterización Estudiante', async () => {
-    const result = await validate(createWorkbook({ caracterizacion: [caracterizacionRecord()] }), VARIANTE_CARACTERIZACION);
+    const result = await validate(
+      createWorkbook({ caracterizacion: [caracterizacionRecord()] }),
+      VARIANTE_CARACTERIZACION,
+      [{ codCli: 'CLI-001', rut: 12345678 }]
+    );
     assert.equal(result.valido, true, JSON.stringify(result.errores));
   });
 });
@@ -198,7 +203,11 @@ test('4-7. admite solo matrícula, solo caracterización o ambas y rechaza ningu
     assert.equal(result.valido, true, JSON.stringify(result.errores));
   });
   await t.test('solo caracterización en combinada', async () => {
-    const result = await validate(createWorkbook({ caracterizacion: [caracterizacionRecord()] }));
+    const result = await validate(
+      createWorkbook({ caracterizacion: [caracterizacionRecord()] }),
+      VARIANTE_COMBINADA,
+      [{ codCli: 'CLI-001', rut: 12345678 }]
+    );
     assert.equal(result.valido, true, JSON.stringify(result.errores));
   });
   await t.test('ambas hojas', async () => {
@@ -293,9 +302,10 @@ test('13-17. normaliza períodos 1/2, rechaza 3/4 y soporta fechas reales/serial
     });
   }
   await t.test('DD-MM-YYYY y serial Excel', async () => {
-    let result = await validate(createWorkbook({ caracterizacion: [caracterizacionRecord()] }), VARIANTE_CARACTERIZACION);
+    const alumnos = [{ codCli: 'CLI-001', rut: 12345678 }];
+    let result = await validate(createWorkbook({ caracterizacion: [caracterizacionRecord()] }), VARIANTE_CARACTERIZACION, alumnos);
     assert.equal(result.valido, true, JSON.stringify(result.errores));
-    result = await validate(createWorkbook({ caracterizacion: [caracterizacionRecord({ FECHANAC: 45000 })] }), VARIANTE_CARACTERIZACION);
+    result = await validate(createWorkbook({ caracterizacion: [caracterizacionRecord({ FECHANAC: 45000 })] }), VARIANTE_CARACTERIZACION, alumnos);
     assert.equal(result.valido, true, JSON.stringify(result.errores));
   });
 });
@@ -415,6 +425,7 @@ test('mock previo conserva evidencia de sus 50 conflictos de matrícula', {
   skip: !mockExcelPath || !fs.existsSync(mockExcelPath)
 }, async () => {
   stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_COMBINADA));
+  stub(models.Alumno, 'findAll', async () => []);
   const result = await validarArchivo(mockExcelPath, 330);
   assert.equal(result.valido, false);
   assert.equal(result.errores.filter((error) => /Conflicto de matrícula/.test(error.mensaje)).length, 50);
@@ -425,6 +436,7 @@ test('archivo original se reconoce sin conflictos PK y reporta solo sus 8 errore
   skip: !originalExcelPath || !fs.existsSync(originalExcelPath)
 }, async () => {
   stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_MATRICULA));
+  stub(models.Alumno, 'findAll', async () => []);
   const result = await validarArchivo(originalExcelPath, 330);
   assert.equal(result.valido, false);
   assert.equal(result.errores.length, 8);
@@ -438,6 +450,7 @@ test('POST original devuelve 422 antes de persistir por sus 8 errores de datos',
   skip: !originalExcelPath || !fs.existsSync(originalExcelPath)
 }, async () => {
   stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_MATRICULA));
+  stub(models.Alumno, 'findAll', async () => []);
   let processCalls = 0;
   const statusCodes = [];
   const responses = [];
