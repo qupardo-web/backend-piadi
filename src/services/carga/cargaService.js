@@ -4,12 +4,13 @@ const { Op } = require('sequelize');
 const { normalizeAdmissionPeriod } = require('../indicatorFilters');
 const {
   ADMISION_TABLE_ORDER,
+  decodificarEntidadesHtml,
   resolverHojaAdmision,
   esConfiguracionAdmision
 } = require('../../config/plantillaAdmision');
 const { persistAdmissionTable } = require('./admisionPersistence');
 
-const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const normalizarTexto = (s) => String(decodificarEntidadesHtml(s) || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const limpiarNombreHojaParaComparar = (s) => {
   let norm = normalizarTexto(s).replace(/\s+/g, ' ');
@@ -96,6 +97,9 @@ const procesarCarga = async (workbook, campos) => {
           if (valor === undefined) {
             const matchingKey = filaKeys.find(k => normalizarTexto(k) === normalizarTexto(campo.columna_excel));
             if (matchingKey) valor = fila[matchingKey];
+          }
+          if (esAdmision && typeof valor === 'string') {
+            valor = decodificarEntidadesHtml(valor);
           }
           filaObj.datos[campo.tabla_destino][campo.columna_destino] = {
             valor,
@@ -233,6 +237,9 @@ const procesarCarga = async (workbook, campos) => {
               if (esAdmision && typeof valor === 'string') {
                 valor = valor.trim();
                 if (valor === '') valor = null;
+              }
+              if (esAdmision && ['STRING', 'CHAR', 'TEXT'].includes(typeKey) && valor !== null && valor !== undefined) {
+                valor = String(valor).trim();
               }
               if (esAdmision && (typeKey === 'INTEGER' || typeKey === 'BIGINT' || typeKey === 'FLOAT' || typeKey === 'DECIMAL') && valor !== null) {
                 const numericValue = Number(valor);

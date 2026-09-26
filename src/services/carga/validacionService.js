@@ -1,8 +1,10 @@
 const XLSX = require('xlsx');
+const path = require('node:path');
 const { CampoPlantilla, sequelize } = require('../../models');
 const { normalizeAdmissionPeriod } = require('../indicatorFilters');
 const {
   ESTUDIANTES_PREGRADO_SHEET,
+  decodificarEntidadesHtml,
   resolverHojaAdmision,
   esConfiguracionAdmision
 } = require('../../config/plantillaAdmision');
@@ -119,7 +121,7 @@ const crearErrorTipo = ({ hoja, fila, columna, celda, valor, tipo }) => {
   };
 };
 
-const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const normalizarTexto = (s) => String(decodificarEntidadesHtml(s) || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const limpiarNombreHojaParaComparar = (s) => {
   let norm = normalizarTexto(s).replace(/\s+/g, ' ');
@@ -209,13 +211,17 @@ const detectarConflictosMatricula = ({ datos, resolverColumnaReal, hoja }) => {
   return errores;
 };
 
-const validarArchivo = async (filePath, plantillaId) => {
+const validarArchivo = async (filePath, plantillaId, sourceName = filePath) => {
   const campos = await CampoPlantilla.findAll({
     where: { plantillaId },
     order: [['orden_insercion', 'ASC'], ['id', 'ASC']]
   });
 
   const workbook = XLSX.readFile(filePath);
+  Object.defineProperty(workbook, '__piadiSourceName', {
+    value: path.parse(sourceName).name,
+    configurable: true
+  });
   const errores = [];
 
   if (campos.length === 0) {
@@ -365,6 +371,9 @@ const validarArchivo = async (filePath, plantillaId) => {
         }
         const columnaReal = columnasResueltas.get(campo.columna_excel);
         let valor = columnaReal ? fila[columnaReal] : undefined;
+        if (esAdmision && typeof valor === 'string') {
+          valor = decodificarEntidadesHtml(valor);
+        }
         const columnaIndex = columnasArchivo.indexOf(columnaReal);
         const celda = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
         const Model = sequelize.models[campo.tabla_destino];
@@ -415,6 +424,9 @@ const validarArchivo = async (filePath, plantillaId) => {
           const attrType = Model.rawAttributes[campo.columna_destino];
           if (attrType) {
             const typeKey = attrType.type && (attrType.type.key || (attrType.type.constructor && attrType.type.constructor.name));
+            if (esAdmision && ['STRING', 'CHAR', 'TEXT'].includes(typeKey) && !estaVacio(valor)) {
+              valor = String(valor).trim();
+            }
             if (typeKey === 'DATEONLY' || typeKey === 'DATE') {
               // DD-MM-YYYY o DD/MM/YYYY → YYYY-MM-DD
               if (typeof valor === 'string') {

@@ -26,7 +26,28 @@ const ADMISION_TABLE_ORDER = Object.freeze({
   CaracterizacionEstudiante: 4
 });
 
-const normalizarNombreHoja = (value) => String(value || '')
+const decodificarEntidadesHtml = (value) => {
+  if (typeof value !== 'string') return value;
+  const namedEntities = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    nbsp: ' ',
+    quot: '"'
+  };
+  return value
+    .replace(/&#(x?[0-9a-f]+);/gi, (_, code) => {
+      const radix = code.toLowerCase().startsWith('x') ? 16 : 10;
+      const numericCode = parseInt(radix === 16 ? code.slice(1) : code, radix);
+      return Number.isInteger(numericCode) && numericCode >= 0 && numericCode <= 0x10FFFF
+        ? String.fromCodePoint(numericCode)
+        : _;
+    })
+    .replace(/&(amp|apos|gt|lt|nbsp|quot);/gi, (_, entity) => namedEntities[entity.toLowerCase()]);
+};
+
+const normalizarNombreHoja = (value) => String(decodificarEntidadesHtml(value) || '')
   .trim()
   .toLocaleLowerCase('es')
   .normalize('NFD')
@@ -35,7 +56,7 @@ const normalizarNombreHoja = (value) => String(value || '')
 
 const esHojaMatriculaAdmision = (sheetName) => {
   const normalized = normalizarNombreHoja(sheetName);
-  return /^(?:estudiantes pregrados?|estudiantes|esstudiantes)(?:[\s_-]+(?:19|20)\d{2})?$/.test(normalized);
+  return /^(?:estudiantes|esstudiantes)(?: pregrados?)?(?:[\s_-]+(?:19|20)\d{2})?$/.test(normalized);
 };
 
 const esHojaCaracterizacionAdmision = (sheetName) =>
@@ -51,6 +72,14 @@ const resolverHojaAdmision = (workbook, expectedName) => {
   const matches = workbook.SheetNames.filter((sheetName) =>
     isEnrollment ? esHojaMatriculaAdmision(sheetName) : esHojaCaracterizacionAdmision(sheetName)
   );
+
+  if (matches.length === 0 && isEnrollment && workbook.SheetNames.length === 1) {
+    const onlySheet = workbook.SheetNames[0];
+    const sourceName = workbook.__piadiSourceName;
+    if (/^sheet\d*$/i.test(onlySheet) && esHojaMatriculaAdmision(sourceName)) {
+      return { nombre: onlySheet, ambiguas: [] };
+    }
+  }
 
   return matches.length === 1
     ? { nombre: matches[0], ambiguas: [] }
@@ -284,6 +313,7 @@ module.exports = {
   VARIANTE_MATRICULA,
   VARIANTE_CARACTERIZACION,
   ADMISION_TABLE_ORDER,
+  decodificarEntidadesHtml,
   normalizarNombreHoja,
   esHojaMatriculaAdmision,
   esHojaCaracterizacionAdmision,

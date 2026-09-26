@@ -23,7 +23,8 @@ const {
 
 const originals = [];
 const tempDirectories = [];
-const realExcelPath = process.env.PIADI_ADMISION_TEST_FILE || '';
+const mockExcelPath = process.env.PIADI_ADMISION_MOCK_TEST_FILE || '';
+const originalExcelPath = process.env.PIADI_ADMISION_REAL_TEST_FILE || '';
 
 const stub = (object, key, value) => {
   originals.push([object, key, object[key]]);
@@ -93,6 +94,26 @@ const saveWorkbook = (workbook) => {
   return filePath;
 };
 
+const saveHtmlXls = (records) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'piadi-330-html-'));
+  const filePath = path.join(directory, 'upload-temporal.xls');
+  const headers = estudiantesPregradosHeaders.map((header) => {
+    if (header === 'Número') return 'N&#250;mero';
+    if (header === 'AÑO') return 'A&#209;O';
+    return header;
+  });
+  const cell = (value) => value === null || value === undefined
+    ? ''
+    : String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/Ó/g, '&#211;');
+  const rows = records.map((record) =>
+    `<tr>${estudiantesPregradosHeaders.map((header) => `<td>${cell(record[header])}</td>`).join('')}</tr>`
+  ).join('');
+  const html = `<form method="post"></form><table><tr>${headers.map((header) => `<td>${header}</td>`).join('')}</tr>${rows}</table>`;
+  fs.writeFileSync(filePath, html, 'utf8');
+  tempDirectories.push(directory);
+  return filePath;
+};
+
 const validate = async (workbook, variante = VARIANTE_COMBINADA) => {
   const fields = createAdmisionFields(330, variante);
   stub(models.CampoPlantilla, 'findAll', async () => fields);
@@ -157,7 +178,8 @@ test('1-3. reconoce aliases de matrícula y Caracterización Estudiante', async 
     'Estudiantes Pregrados',
     'Estudiantes',
     'Esstudiantes',
-    'Estudiantes Pregrado 2026'
+    'Estudiantes Pregrado 2026',
+    'Esstudiantes pregrado 2026'
   ]) {
     await t.test(alias, async () => {
       const result = await validate(createWorkbook({ matricula: [matriculaRecord()], matriculaSheet: alias }), VARIANTE_MATRICULA);
@@ -348,20 +370,74 @@ test('23. plantilla inexistente produce error controlado y nunca success true', 
   assert.match(result.errores[0].mensaje, /no existe o no tiene campos/i);
 });
 
-test('Excel real se reconoce y reporta sus 50 conflictos de matrícula antes de persistir', {
-  skip: !realExcelPath || !fs.existsSync(realExcelPath)
+test('24. procesa el HTML institucional con extensión .xls y nombre original histórico', async () => {
+  const filePath = saveHtmlXls([
+    matriculaRecord({ ASIGNATURA: 'GESTIÓN I' }),
+    matriculaRecord({ RAMOEQUIV: 'GEST-102', ASIGNATURA: 'GESTIÓN II', PERIODO: 2 })
+  ]);
+  const signature = fs.readFileSync(filePath).subarray(0, 5).toString('utf8');
+  assert.equal(signature, '<form');
+
+  const state = preparePersistence();
+  stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_MATRICULA));
+  const responses = [];
+  const handler = createCargarArchivo({
+    validateFile: validarArchivo,
+    processUpload: procesarCarga,
+    removeFile: async () => {}
+  });
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await handler(
+      {
+        params: { id: '330' },
+        file: { path: filePath, originalname: 'Esstudiantes pregrado 2026.xls' }
+      },
+      {
+        status() { return this; },
+        json(payload) { responses.push(payload); return this; }
+      },
+      (error) => { throw error; }
+    );
+  }
+
+  assert.deepEqual(responses.map((response) => response.resumen), [
+    { Alumno: 1, Asignatura: 2, MatriculaPorAsignatura: 2 },
+    { Alumno: 0, Asignatura: 0, MatriculaPorAsignatura: 0 }
+  ]);
+  assert.equal(state.stores.Alumno.length, 1);
+  assert.equal(state.stores.Asignatura.length, 2);
+  assert.equal(state.stores.MatriculaPorAsignatura.length, 2);
+  assert.equal(state.stores.Asignatura[0].nombre, 'GESTIÓN I');
+});
+
+test('mock previo conserva evidencia de sus 50 conflictos de matrícula', {
+  skip: !mockExcelPath || !fs.existsSync(mockExcelPath)
 }, async () => {
   stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_COMBINADA));
-  const result = await validarArchivo(realExcelPath, 330);
+  const result = await validarArchivo(mockExcelPath, 330);
   assert.equal(result.valido, false);
   assert.equal(result.errores.filter((error) => /Conflicto de matrícula/.test(error.mensaje)).length, 50);
   assert.ok(!result.errores.some((error) => /no existe en el archivo/.test(error.mensaje)));
 });
 
-test('POST /api/plantillas/:id/cargar devuelve 422 para el Excel real y no inicia persistencia', {
-  skip: !realExcelPath || !fs.existsSync(realExcelPath)
+test('archivo original se reconoce sin conflictos PK y reporta solo sus 8 errores de datos', {
+  skip: !originalExcelPath || !fs.existsSync(originalExcelPath)
 }, async () => {
-  stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_COMBINADA));
+  stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_MATRICULA));
+  const result = await validarArchivo(originalExcelPath, 330);
+  assert.equal(result.valido, false);
+  assert.equal(result.errores.length, 8);
+  assert.equal(result.errores.filter((error) => error.campo === 'MAIL').length, 5);
+  assert.equal(result.errores.filter((error) => error.campo === 'MATERNO').length, 3);
+  assert.equal(result.errores.filter((error) => /Conflicto de matrícula/.test(error.mensaje)).length, 0);
+  assert.ok(!result.errores.some((error) => /hoja .* no existe|ninguna hoja válida/i.test(error.mensaje)));
+});
+
+test('POST original devuelve 422 antes de persistir por sus 8 errores de datos', {
+  skip: !originalExcelPath || !fs.existsSync(originalExcelPath)
+}, async () => {
+  stub(models.CampoPlantilla, 'findAll', async () => createAdmisionFields(330, VARIANTE_MATRICULA));
   let processCalls = 0;
   const statusCodes = [];
   const responses = [];
@@ -374,7 +450,7 @@ test('POST /api/plantillas/:id/cargar devuelve 422 para el Excel real y no inici
     await handler(
       {
         params: { id: '330' },
-        file: { path: realExcelPath }
+        file: { path: originalExcelPath, originalname: 'Esstudiantes pregrado 2026.xls' }
       },
       {
         status(code) { statusCodes.push(code); return this; },
@@ -385,8 +461,9 @@ test('POST /api/plantillas/:id/cargar devuelve 422 para el Excel real y no inici
   }
   assert.deepEqual(statusCodes, [422, 422]);
   assert.ok(responses.every((response) => response.success === false));
+  assert.ok(responses.every((response) => response.errores.length === 8));
   assert.ok(responses.every((response) =>
-    response.errores.filter((error) => /Conflicto de matrícula/.test(error.message)).length === 50
+    response.errores.every((error) => !/Conflicto de matrícula/.test(error.message))
   ));
   assert.equal(processCalls, 0);
 });

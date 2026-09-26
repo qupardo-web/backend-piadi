@@ -97,7 +97,8 @@ const createCargarArchivo = ({
       throw new UnprocessableEntityError('Debe enviar un archivo Excel');
     }
 
-    const { valido, errores, campos, workbook } = await validateFile(req.file.path, id);
+    const originalName = normalizeUploadedFilename(req.file.originalname || req.file.path);
+    const { valido, errores, campos, workbook } = await validateFile(req.file.path, id, originalName);
 
     if (!valido) {
       const errorMsg = `Error de validación en carga: ${errores.map(e => e.mensaje).join('. ')}`;
