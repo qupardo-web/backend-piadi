@@ -1,8 +1,16 @@
 const XLSX = require('xlsx');
 const { sequelize } = require('../../models');
 const { Op } = require('sequelize');
+const { normalizeAdmissionPeriod } = require('../indicatorFilters');
+const {
+  ADMISION_TABLE_ORDER,
+  decodificarEntidadesHtml,
+  resolverHojaAdmision,
+  esConfiguracionAdmision
+} = require('../../config/plantillaAdmision');
+const { persistAdmissionTable } = require('./admisionPersistence');
 
-const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const normalizarTexto = (s) => String(decodificarEntidadesHtml(s) || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
 const limpiarNombreHojaParaComparar = (s) => {
   let norm = normalizarTexto(s).replace(/\s+/g, ' ');
@@ -43,6 +51,7 @@ const encontrarNombreHoja = (workbook, nombreEsperado) => {
 
 const procesarCarga = async (workbook, campos) => {
   const transaction = await sequelize.transaction();
+  const esAdmision = esConfiguracionAdmision(campos);
 
   try {
     // 1. Leer todas las filas del Excel (sin resolver lookups aún)
@@ -59,14 +68,25 @@ const procesarCarga = async (workbook, campos) => {
 
     const promesasHojas = Object.entries(hojas).map(async ([nombreHoja, camposHoja]) => {
       await Promise.resolve(); // Yield control to the event loop
-      const hojaReal = encontrarNombreHoja(workbook, nombreHoja);
+      const resolucionAdmision = esAdmision ? resolverHojaAdmision(workbook, nombreHoja) : null;
+      if (resolucionAdmision && resolucionAdmision.ambiguas.length > 1) {
+        throw new Error(`Varias hojas de Admisión coinciden con "${nombreHoja}": ${resolucionAdmision.ambiguas.join(', ')}`);
+      }
+      const hojaReal = esAdmision ? resolucionAdmision.nombre : encontrarNombreHoja(workbook, nombreHoja);
       const hoja = hojaReal ? workbook.Sheets[hojaReal] : null;
       if (!hoja) return [];
       const filas = XLSX.utils.sheet_to_json(hoja, { defval: null });
       const resultadoHoja = [];
 
       for (const [index, fila] of filas.entries()) {
-        const filaObj = { _key: JSON.stringify(fila), _orden: Infinity, _hoja: nombreHoja, _fila: index + 2, datos: {} };
+        const filaObj = {
+          _key: JSON.stringify(fila),
+          _orden: Infinity,
+          _hoja: hojaReal,
+          _fila: index + 2,
+          _raw: fila,
+          datos: {}
+        };
         const filaKeys = Object.keys(fila);
 
         for (const campo of camposHoja) {
@@ -77,6 +97,9 @@ const procesarCarga = async (workbook, campos) => {
           if (valor === undefined) {
             const matchingKey = filaKeys.find(k => normalizarTexto(k) === normalizarTexto(campo.columna_excel));
             if (matchingKey) valor = fila[matchingKey];
+          }
+          if (esAdmision && typeof valor === 'string') {
+            valor = decodificarEntidadesHtml(valor);
           }
           filaObj.datos[campo.tabla_destino][campo.columna_destino] = {
             valor,
@@ -106,15 +129,16 @@ const procesarCarga = async (workbook, campos) => {
       ordenes[campo.orden_insercion].add(campo.tabla_destino);
     }
 
-    const ordenesSorted = Object.keys(ordenes).sort((a, b) => a - b);
+    const gruposTablas = esAdmision
+      ? [[...new Set(campos.map((campo) => campo.tabla_destino))]
+        .sort((a, b) => ADMISION_TABLE_ORDER[a] - ADMISION_TABLE_ORDER[b])]
+      : Object.keys(ordenes).sort((a, b) => a - b).map((orden) => [...ordenes[orden]]);
 
     // 3. Procesar por orden de inserción
     const lookupMaps = {};
     const resumenFinal = {};
 
-    for (const orden of ordenesSorted) {
-      const tablas = [...ordenes[orden]];
-
+    for (const tablas of gruposTablas) {
       for (const tabla of tablas) {
         const Model = sequelize.models[tabla];
         if (!Model) {
@@ -126,7 +150,7 @@ const procesarCarga = async (workbook, campos) => {
         for (const cLookup of camposLookupDef) {
           const lookupTabla = cLookup.campo_lookup_tabla;
           const lookupCol = cLookup.campo_lookup_columna_db;
-          
+
           const valoresUnicosExcel = new Set();
           for (const fila of filasProcesadas) {
             const datosTabla = fila.datos[tabla];
@@ -210,6 +234,20 @@ const procesarCarga = async (workbook, campos) => {
             const attrType = Model.rawAttributes[colDest];
             if (attrType) {
               const typeKey = attrType.type && (attrType.type.key || (attrType.type.constructor && attrType.type.constructor.name));
+              if (esAdmision && typeof valor === 'string') {
+                valor = valor.trim();
+                if (valor === '') valor = null;
+              }
+              if (esAdmision && ['STRING', 'CHAR', 'TEXT'].includes(typeKey) && valor !== null && valor !== undefined) {
+                valor = String(valor).trim();
+              }
+              if (esAdmision && (typeKey === 'INTEGER' || typeKey === 'BIGINT' || typeKey === 'FLOAT' || typeKey === 'DECIMAL') && valor !== null) {
+                const numericValue = Number(valor);
+                if (Number.isFinite(numericValue)) valor = numericValue;
+              }
+              if (esAdmision && tabla === 'MatriculaPorAsignatura' && colDest === 'periodo' && valor !== null) {
+                valor = normalizeAdmissionPeriod(valor);
+              }
               if (typeKey === 'DATEONLY' || typeKey === 'DATE') {
                 // DD-MM-YYYY o DD/MM/YYYY → YYYY-MM-DD
                 if (typeof valor === 'string') {
@@ -230,9 +268,29 @@ const procesarCarga = async (workbook, campos) => {
           }
 
           if (Object.keys(registro).length > 0) {
-            registrosAInsertar.push(registro);
+            const rawCodCliKey = Object.keys(fila._raw || {}).find((key) => normalizarTexto(key) === 'codcli');
+            registrosAInsertar.push({
+              record: registro,
+              row: fila._fila,
+              sheet: fila._hoja,
+              sourceCodCli: rawCodCliKey ? String(fila._raw[rawCodCliKey] ?? '').trim() || null : null
+            });
           }
         }
+
+        if (esAdmision) {
+          const stats = await persistAdmissionTable({
+            table: tabla,
+            items: registrosAInsertar,
+            models: sequelize.models,
+            transaction,
+            lookupMaps
+          });
+          resumenFinal[tabla] = (resumenFinal[tabla] || 0) + stats.affected;
+          continue;
+        }
+
+        registrosAInsertar = registrosAInsertar.map((item) => item.record);
 
         const pkAttrs = Model.primaryKeyAttributes || [];
         if (pkAttrs && pkAttrs.length > 0) {
