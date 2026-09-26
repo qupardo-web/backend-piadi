@@ -115,10 +115,40 @@ const crearErrorTipo = ({ hoja, fila, columna, celda, valor, tipo }) => {
 
 const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+const limpiarNombreHojaParaComparar = (s) => {
+  let norm = normalizarTexto(s).replace(/\s+/g, ' ');
+  // Quitar sufijos o menciones de año como "(2024)", "( 2025 )", "2026", "- 2024", etc.
+  norm = norm.replace(/\(?\b(19\d{2}|20\d{2})\b\)?/g, '').trim();
+  // Quitar caracteres no alfanuméricos sobrantes al final como "( )", "-", "_"
+  norm = norm.replace(/[\(\)\-_]+$/g, '').trim();
+  // Normalizar variaciones de plurales comunes (pregrados -> pregrado, estudiantes -> estudiante)
+  norm = norm.replace(/\bpregrados\b/g, 'pregrado');
+  norm = norm.replace(/\bestudiantes\b/g, 'estudiante');
+  return norm;
+};
+
 const encontrarNombreHoja = (workbook, nombreEsperado) => {
-  if (workbook.SheetNames.includes(nombreEsperado)) return nombreEsperado;
+  const sheetNames = workbook.SheetNames || Object.keys(workbook.Sheets || {});
+  if (sheetNames.includes(nombreEsperado)) return nombreEsperado;
+
   const esperadoNorm = normalizarTexto(nombreEsperado);
-  return workbook.SheetNames.find(name => normalizarTexto(name) === esperadoNorm) || null;
+  const exactNorm = sheetNames.find(name => normalizarTexto(name) === esperadoNorm);
+  if (exactNorm) return exactNorm;
+
+  const esperadoLimpio = limpiarNombreHojaParaComparar(nombreEsperado);
+
+  // 1. Coincidencia limpia exacta (sin año, sin plurales/mayúsculas/acentos)
+  const limpioExacto = sheetNames.find(name => limpiarNombreHojaParaComparar(name) === esperadoLimpio);
+  if (limpioExacto) return limpioExacto;
+
+  // 2. Coincidencia por prefijo (ej: 'estudiante pregrado (2024)' coincide con 'Estudiantes Pregrados')
+  const porPrefijo = sheetNames.find(name => {
+    const nameLimpio = limpiarNombreHojaParaComparar(name);
+    return nameLimpio.startsWith(esperadoLimpio) || esperadoLimpio.startsWith(nameLimpio);
+  });
+  if (porPrefijo) return porPrefijo;
+
+  return null;
 };
 
 const validarArchivo = async (filePath, plantillaId) => {
