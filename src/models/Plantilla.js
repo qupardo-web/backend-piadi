@@ -23,6 +23,9 @@ const sequelize = require('../config/database');
  *         roleId:
  *           type: integer
  *           description: ID del rol/area asociado a la plantilla.
+ *         variante:
+ *           type: string
+ *           description: Variante de la plantilla (combinada, matricula, caracterizacion).
  *         archivoNombre:
  *           type: string
  *           description: Nombre del archivo de plantilla.
@@ -59,6 +62,10 @@ const Plantilla = sequelize.define('Plantilla', {
       model: 'roles',
       key: 'id'
     }
+  },
+  variante: {
+    type: DataTypes.STRING(50),
+    allowNull: true
   },
   archivoData: {
     type: DataTypes.BLOB('long'),

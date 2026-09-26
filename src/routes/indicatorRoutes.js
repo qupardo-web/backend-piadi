@@ -196,6 +196,10 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', authenticateToke
  *         name: semesters
  *         schema: { type: string }
  *       - in: query
+ *         name: periodo
+ *         description: En Admisión acepta 1, 2 y aliases de primer/segundo semestre.
+ *         schema: { type: string }
+ *       - in: query
  *         name: startMonth
  *         schema: { type: integer }
  *       - in: query
@@ -229,6 +233,37 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', authenticateToke
  *       - in: query
  *         name: maxAge
  *         schema: { type: integer }
+ *       - in: query
+ *         name: nuevoAntiguo
+ *         description: En Admisión filtra estudiantes nuevos o antiguos según su primera matrícula histórica.
+ *         schema: { type: string, enum: [nuevo, antiguo] }
+ *       - in: query
+ *         name: asignatura
+ *         description: Nombre de asignatura de Admisión.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: seccion
+ *         description: Número de sección de Admisión.
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: estadoAcademico
+ *         description: Estado académico de la matrícula de Admisión.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: tipoColegio
+ *         schema: { type: string }
+ *       - in: query
+ *         name: viaAcceso
+ *         schema: { type: string }
+ *       - in: query
+ *         name: nivelSocioeconomico
+ *         schema: { type: string }
+ *       - in: query
+ *         name: situacionFamiliar
+ *         schema: { type: string }
+ *       - in: query
+ *         name: beneficios
+ *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Valor del indicador (hasData false si faltan datos).
@@ -288,8 +323,8 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         name: groupBy
  *         schema:
  *           type: string
- *           description: anio es alias externo de year. En Innovación, area es alias contextual de areaTematica; financiamiento anual usa Proyecto.anioInicio.
- *           enum: [year, anio, area, areaTematica, semestre, tipo, modalidad, programa, sexo, rangoEdad, sector, fuente]
+ *           description: anio es alias externo de year. En Innovación, area es alias contextual de areaTematica; financiamiento anual usa Proyecto.anioInicio. En Admisión, periodo representa el semestre 1/2 y nuevoAntiguo deriva de la primera matrícula histórica.
+ *           enum: [year, anio, area, areaTematica, semestre, periodo, tipo, modalidad, programa, sexo, rangoEdad, asignatura, seccion, estadoAcademico, nuevoAntiguo, edad, tipoColegio, viaAcceso, nivelSocioeconomico, situacionFamiliar, region, comuna, beneficios, sector, fuente]
  *     responses:
  *       200:
  *         description: Serie simple (points) o segmentada (series) según groupBy. Si existe una única meta aplicable, incluye targetLine.
@@ -332,8 +367,8 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *         required: true
  *         schema:
  *           type: string
- *           description: anio es alias de year; area es alias contextual de areaTematica para proyectos de Innovación; secciones_curso admite semestre; financiamiento_obtenido admite fuente y year usando Proyecto.anioInicio.
- *           enum: [year, anio, area, areaTematica, semestre, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico, sector, fuente]
+ *           description: anio es alias de year; area es alias contextual de areaTematica para proyectos de Innovación; secciones_curso admite semestre; financiamiento_obtenido admite fuente y year usando Proyecto.anioInicio. En Admisión, periodo representa el semestre 1/2 y nuevoAntiguo deriva de la primera matrícula histórica.
+ *           enum: [year, anio, area, areaTematica, semestre, periodo, tipo, modalidad, programa, sexo, rangoEdad, asignatura, seccion, estadoAcademico, nuevoAntiguo, edad, tipoColegio, viaAcceso, nivelSocioeconomico, situacionFamiliar, region, comuna, beneficios, nivelDeEstudio, tipoParticipante, sectorEconomico, sector, fuente]
  *       - in: query
  *         name: year
  *         schema: { type: integer }

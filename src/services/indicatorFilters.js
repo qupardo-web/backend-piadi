@@ -35,7 +35,20 @@ const GROUP_BY_DIMENSIONS = [
   // Innovación
   'fuente',
   'areaTematica',
-  'semestre'
+  'semestre',
+
+  // Admisión
+  'asignatura',
+  'seccion',
+  'estadoAcademico',
+  'nuevoAntiguo',
+  'rangoEtario',
+  'edad',
+  'tipoColegio',
+  'viaAcceso',
+  'nivelSocioeconomico',
+  'situacionFamiliar',
+  'beneficios'
 ];
 
 class FilterError extends Error {
@@ -81,12 +94,36 @@ const normalizeSemester = (value) => {
   return [token];
 };
 
-const normalizeGroupBy = (value) => {
+const ADMISSION_PERIOD_ALIASES = {
+  '1': 1,
+  'primer semestre': 1,
+  '1er semestre': 1,
+  'semestre 1': 1,
+  '2': 2,
+  'segundo semestre': 2,
+  '2do semestre': 2,
+  'semestre 2': 2
+};
+
+const normalizeAdmissionPeriod = (value) => {
+  const token = String(value).trim().toLocaleLowerCase('es');
+  const normalized = ADMISSION_PERIOD_ALIASES[token];
+  if (!normalized) {
+    throw new FilterError('INVALID_PERIOD', 'El período de Admisión debe corresponder al semestre 1 o 2', {
+      periodo: value,
+      allowed: [1, 2]
+    });
+  }
+  return normalized;
+};
+
+const normalizeGroupBy = (value, department = null) => {
   if (value === undefined || value === null || value === '') {
     return null;
   }
   const g = String(value).trim();
-  if (g === 'anio' || g === 'periodo') return 'year';
+  if (g === 'anio') return 'year';
+  if (g === 'periodo' && String(department || '').toLocaleLowerCase('es') !== 'admision') return 'year';
   return g === 'ageRange' ? 'rangoEdad' : g;
 };
 
@@ -113,7 +150,7 @@ const parseIndicatorFilters = (query = {}) => {
     rangoEdad: uniq([...normalizeArrayParam(query.ageRange), ...normalizeArrayParam(query.rangoEdad)]),
     minAge: normalizeNumber(query.minAge),
     maxAge: normalizeNumber(query.maxAge),
-    groupBy: normalizeGroupBy(query.groupBy),
+    groupBy: normalizeGroupBy(query.groupBy, query.department),
     
     // Vinculación con el Medio
     sector: normalizeArrayParam(query.sector),
@@ -139,7 +176,21 @@ const parseIndicatorFilters = (query = {}) => {
     cohorte: normalizeArrayParam(query.cohorte),
     jornada: normalizeArrayParam(query.jornada),
     periodo: normalizeArrayParam(query.periodo),
-    region: normalizeArrayParam(query.region)
+    region: normalizeArrayParam(query.region),
+    // Admisión
+    asignatura: normalizeArrayParam(query.asignatura),
+    seccion: normalizeArrayParam(query.seccion),
+    estadoAcademico: uniq([
+      ...normalizeArrayParam(query.estadoAcademico),
+      ...normalizeArrayParam(query.estadoCad)
+    ]),
+    nuevoAntiguo: normalizeArrayParam(query.nuevoAntiguo),
+    rangoEtario: normalizeArrayParam(query.rangoEtario),
+    tipoColegio: normalizeArrayParam(query.tipoColegio),
+    viaAcceso: normalizeArrayParam(query.viaAcceso),
+    nivelSocioeconomico: normalizeArrayParam(query.nivelSocioeconomico),
+    situacionFamiliar: normalizeArrayParam(query.situacionFamiliar),
+    beneficios: normalizeArrayParam(query.beneficios)
   };
 
   if (requestedYear !== undefined && requestedYear !== '') {
@@ -175,6 +226,13 @@ const parseIndicatorFilters = (query = {}) => {
   ]);
   filters.semesterLabels = semesterTokens;
   filters.semesters = uniq(semesterTokens.flatMap((t) => normalizeSemester(t)));
+
+  if (String(filters.department || '').toLocaleLowerCase('es') === 'admision') {
+    filters.periodo = uniq([
+      ...filters.periodo,
+      ...semesterTokens
+    ].map(normalizeAdmissionPeriod));
+  }
 
   const monthTokens = uniq([...normalizeArrayParam(query.month), ...normalizeArrayParam(query.startMonth)]);
   for (const token of monthTokens) {
@@ -241,6 +299,16 @@ const buildFilterMeta = (filters) => {
   if (filters.cohorte.length) meta.cohorte = filters.cohorte;
   if (filters.jornada.length) meta.jornada = filters.jornada;
   if (filters.periodo.length) meta.periodo = filters.periodo;
+  if (filters.asignatura.length) meta.asignatura = filters.asignatura;
+  if (filters.seccion.length) meta.seccion = filters.seccion;
+  if (filters.estadoAcademico.length) meta.estadoAcademico = filters.estadoAcademico;
+  if (filters.nuevoAntiguo.length) meta.nuevoAntiguo = filters.nuevoAntiguo;
+  if (filters.rangoEtario.length) meta.rangoEtario = filters.rangoEtario;
+  if (filters.tipoColegio.length) meta.tipoColegio = filters.tipoColegio;
+  if (filters.viaAcceso.length) meta.viaAcceso = filters.viaAcceso;
+  if (filters.nivelSocioeconomico.length) meta.nivelSocioeconomico = filters.nivelSocioeconomico;
+  if (filters.situacionFamiliar.length) meta.situacionFamiliar = filters.situacionFamiliar;
+  if (filters.beneficios.length) meta.beneficios = filters.beneficios;
   
   return meta;
 };
@@ -251,6 +319,7 @@ module.exports = {
   parseIndicatorFilters,
   validateIndicatorFilters,
   normalizeSemester,
+  normalizeAdmissionPeriod,
   normalizeArrayParam,
   normalizeNumber,
   buildFilterMeta

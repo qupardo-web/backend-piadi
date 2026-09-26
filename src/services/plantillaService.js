@@ -52,7 +52,7 @@ const getPlantillaById = async (id) => {
 }
 
 const createNewPlantilla = async (plantillaData) => {
-  const { name, description, roleId } = plantillaData;
+  const { name, description, roleId, variante } = plantillaData;
   if (!name || !roleId) {
     throw new Error('Nombre y roleId son requeridos');
   }
@@ -60,7 +60,7 @@ const createNewPlantilla = async (plantillaData) => {
   if (existente) {
     throw new Error('Ya existe una plantilla con ese nombre');
   }
-  return await Plantilla.create({ name, description, roleId });
+  return await Plantilla.create({ name, description, roleId, variante });
 }
 
 const updatePlantillaById = async (id, plantillaData) => {
@@ -68,14 +68,18 @@ const updatePlantillaById = async (id, plantillaData) => {
   if (!plantilla) {
     throw new Error('Plantilla no encontrada');
   }
-  const { name, description, roleId } = plantillaData;
+  const { name, description, roleId, variante } = plantillaData;
   if (name && name !== plantilla.name) {
     const existente = await Plantilla.findOne({ where: { name } });
     if (existente) {
       throw new Error('Ya existe una plantilla con ese nombre');
     }
   }
-  await plantilla.update({ name, description, roleId });
+  const fieldsToUpdate = { name, description, roleId };
+  if (variante !== undefined) {
+    fieldsToUpdate.variante = variante;
+  }
+  await plantilla.update(fieldsToUpdate);
   return plantilla;
 }
 
