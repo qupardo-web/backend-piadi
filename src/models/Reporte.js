@@ -31,6 +31,9 @@ const sequelize = require('../config/database');
  *         filtros:
  *           type: object
  *           description: Filtros y período por defecto del reporte.
+ *         tipo:
+ *           type: string
+ *           description: Tipo de reporte (PREDEFINIDO o PERSONALIZADO).
  *         formato:
  *           type: string
  *           description: Formato de salida (XLSX o PDF).
@@ -83,6 +86,14 @@ const Reporte = sequelize.define('Reporte', {
     type: DataTypes.JSON,
     allowNull: false,
     defaultValue: {}
+  },
+  tipo: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    defaultValue: 'PERSONALIZADO',
+    validate: {
+      isIn: [['PREDEFINIDO', 'PERSONALIZADO']]
+    }
   },
   formato: {
     type: DataTypes.STRING(10),
