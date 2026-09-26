@@ -98,7 +98,18 @@ const createCargarArchivo = ({
     }
 
     const originalName = normalizeUploadedFilename(req.file.originalname || req.file.path);
-    const { valido, errores, campos, workbook } = await validateFile(req.file.path, id, originalName);
+    const validacion = await validateFile(req.file.path, id, originalName);
+    const {
+      valido,
+      errores,
+      advertencias = [],
+      pendientesCaracterizacion = [],
+      campos,
+      workbook
+    } = validacion;
+    const contextoAdmision = Object.hasOwn(validacion, 'advertencias') || Object.hasOwn(validacion, 'pendientesCaracterizacion')
+      ? { advertencias, pendientesCaracterizacion }
+      : {};
 
     if (!valido) {
       const errorMsg = `Error de validación en carga: ${errores.map(e => e.mensaje).join('. ')}`;
@@ -111,14 +122,20 @@ const createCargarArchivo = ({
           columna: e.campo || '',
           celda: e.celda || '',
           valor: e.valor ?? '',
-          esperado: e.esperado || ''
+          esperado: e.esperado || '',
+          ...(e.codigo ? { codigo: e.codigo } : {}),
+          ...(e.severidad ? { severidad: e.severidad } : {})
         })),
+        ...contextoAdmision,
         success: false
       });
     }
 
     const resultado = await processUpload(workbook, campos);
-    res.json(resultado);
+    res.json({
+      ...resultado,
+      ...contextoAdmision
+    });
   } catch (err) {
     next(err);
   } finally {
