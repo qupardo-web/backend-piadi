@@ -57,12 +57,12 @@ AuditSesion.belongsTo(User, { foreignKey: 'usuarioId', as: 'usuario' });
 
 // --- Asociaciones Académicas (Relación N:M entre Alumno y Asignatura) ---
 Alumno.belongsToMany(Asignatura, { 
-  through: MatriculaPorAsignatura, 
+  through: { model: MatriculaPorAsignatura, unique: false }, 
   foreignKey: 'codCli', 
   otherKey: 'ramoEquiv' 
 });
 Asignatura.belongsToMany(Alumno, { 
-  through: MatriculaPorAsignatura, 
+  through: { model: MatriculaPorAsignatura, unique: false }, 
   foreignKey: 'ramoEquiv', 
   otherKey: 'codCli' 
 });
