@@ -132,7 +132,7 @@ test('PIADI-336 caso 3: ambas hojas mantienen identidad consistente', async () =
     VARIANTE_COMBINADA
   );
   assert.equal(result.valido, true, JSON.stringify(result.errores));
-  assert.equal(result.pendientesCaracterizacion.length, 0);
+  assert.equal(result.metadata.pendientesCaracterizacion.length, 0);
 });
 
 test('PIADI-336 caso 4: ninguna hoja reconocida es error', async () => {

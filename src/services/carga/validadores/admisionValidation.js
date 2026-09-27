@@ -1,10 +1,12 @@
-const XLSX = require('xlsx');
 const { Op } = require('sequelize');
+const { normalizeAdmissionPeriod } = require('../../indicatorFilters');
 const {
   ESTUDIANTES_PREGRADO_SHEET,
   CARACTERIZACION_SHEET,
-  decodificarEntidadesHtml
-} = require('../../config/plantillaAdmision');
+  decodificarEntidadesHtml,
+  resolverHojaAdmision,
+  esConfiguracionAdmision
+} = require('../../../config/plantillaAdmision');
 
 const texto = (value) => String(decodificarEntidadesHtml(value) ?? '').trim();
 const normalizar = (value) => texto(value)
@@ -12,11 +14,6 @@ const normalizar = (value) => texto(value)
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '');
 const plain = (record) => record?.dataValues || record || {};
-
-const obtenerFilas = (workbook, resolucion) => {
-  if (!resolucion?.nombre) return [];
-  return XLSX.utils.sheet_to_json(workbook.Sheets[resolucion.nombre], { defval: null });
-};
 
 const crearLector = (filas) => {
   const columnas = new Map();
@@ -68,11 +65,58 @@ const registroUnico = (map, key) => {
   return records.length === 1 ? records[0] : null;
 };
 
-const validarIdentidadesAdmision = async ({ workbook, resoluciones, models }) => {
+const detectarConflictosMatricula = ({ filas, resolverColumna, hoja }) => {
+  const columnas = ['CODCLI', 'RAMOEQUIV', 'AÑO', 'PERIODO', 'SECCION', 'ESTACAD'];
+  const reales = Object.fromEntries(columnas.map((columna) => [columna, resolverColumna(columna)]));
+  if (columnas.some((columna) => !reales[columna])) return [];
+
+  const grupos = new Map();
+  for (const [index, fila] of filas.entries()) {
+    let periodo;
+    try {
+      periodo = normalizeAdmissionPeriod(fila[reales.PERIODO]);
+    } catch (_) {
+      continue;
+    }
+    const key = [
+      String(fila[reales.CODCLI] ?? '').trim(),
+      String(fila[reales.RAMOEQUIV] ?? '').trim(),
+      Number(fila[reales['AÑO']]),
+      periodo
+    ].join('::');
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key).push({
+      fila: index + 2,
+      seccion: Number(fila[reales.SECCION]),
+      estadoCad: String(fila[reales.ESTACAD] ?? '').trim()
+    });
+  }
+
+  const errores = [];
+  for (const [key, filasGrupo] of grupos.entries()) {
+    if (filasGrupo.length < 2) continue;
+    const variantes = new Set(filasGrupo.map((fila) => `${fila.seccion}::${fila.estadoCad}`));
+    if (variantes.size < 2) continue;
+    const [codCli, ramoEquiv, anio, periodo] = key.split('::');
+    errores.push({
+      hoja,
+      campo: 'CODCLI, RAMOEQUIV, AÑO, PERIODO',
+      fila: filasGrupo.map((fila) => fila.fila).join(', '),
+      valor: `${codCli} / ${ramoEquiv} / ${anio} / ${periodo}`,
+      esperado: 'una sola combinación de SECCION y ESTACAD por clave de matrícula',
+      mensaje: `Conflicto de matrícula en la hoja "${hoja}": las filas ${filasGrupo.map((fila) => fila.fila).join(', ')} ` +
+        `comparten CODCLI ${codCli}, RAMOEQUIV ${ramoEquiv}, AÑO ${anio} y PERIODO ${periodo}, ` +
+        `pero contienen combinaciones SECCION/ESTACAD diferentes (${[...variantes].join(', ')}).`
+    });
+  }
+  return errores;
+};
+
+const validarIdentidadesAdmision = async ({ resoluciones, hojasResueltas, models }) => {
   const matriculaResolucion = resoluciones.get(ESTUDIANTES_PREGRADO_SHEET);
   const caracterizacionResolucion = resoluciones.get(CARACTERIZACION_SHEET);
-  const filasMatricula = obtenerFilas(workbook, matriculaResolucion);
-  const filasCaracterizacion = obtenerFilas(workbook, caracterizacionResolucion);
+  const filasMatricula = hojasResueltas.get(ESTUDIANTES_PREGRADO_SHEET)?.filas || [];
+  const filasCaracterizacion = hojasResueltas.get(CARACTERIZACION_SHEET)?.filas || [];
   const leerMatricula = crearLector(filasMatricula);
   const leerCaracterizacion = crearLector(filasCaracterizacion);
   const errores = [];
@@ -304,7 +348,119 @@ const validarRangoFechaNacimiento = (fecha, hoy = new Date()) => {
   return fecha >= '1920-01-01' && fecha <= limiteSuperior;
 };
 
-module.exports = {
-  validarIdentidadesAdmision,
-  validarRangoFechaNacimiento
+const admisionValidation = {
+  nombre: 'admision',
+
+  aplica({ campos }) {
+    return esConfiguracionAdmision(campos);
+  },
+
+  prepare({ workbook, nombresHojas }) {
+    const resoluciones = new Map(nombresHojas.map((nombreHoja) => [
+      nombreHoja,
+      resolverHojaAdmision(workbook, nombreHoja)
+    ]));
+    const errores = [];
+
+    for (const [nombreHoja, resolucion] of resoluciones.entries()) {
+      if (resolucion.ambiguas.length > 1) {
+        errores.push({
+          hoja: nombreHoja,
+          esperado: 'una única hoja reconocible de Admisión',
+          mensaje: `El archivo contiene varias hojas compatibles con "${nombreHoja}": ${resolucion.ambiguas.join(', ')}`
+        });
+      }
+    }
+
+    const presentes = [...resoluciones.values()].filter((resolucion) => resolucion.nombre).length;
+    const tieneAmbiguedad = [...resoluciones.values()].some((resolucion) => resolucion.ambiguas.length > 1);
+    if (presentes === 0 && !tieneAmbiguedad) {
+      errores.push({
+        hoja: 'Admisión',
+        esperado: 'al menos una hoja válida de matrícula o caracterización',
+        mensaje: 'El archivo no contiene ninguna hoja válida de Admisión'
+      });
+    }
+
+    return { resoluciones, errores };
+  },
+
+  omitirHojaFaltante({ cantidadHojas, resolucion }) {
+    return cantidadHojas > 1 || resolucion.ambiguas.length > 1;
+  },
+
+  normalizarValor({ valor }) {
+    return typeof valor === 'string' ? decodificarEntidadesHtml(valor) : valor;
+  },
+
+  normalizarNombreColumna({ valor }) {
+    return decodificarEntidadesHtml(valor);
+  },
+
+  validarValor({ valor, campo }) {
+    if (campo.tabla_destino !== 'MatriculaPorAsignatura' || campo.columna_destino !== 'periodo') {
+      return null;
+    }
+    try {
+      return { valido: true, valor: normalizeAdmissionPeriod(valor) };
+    } catch (_) {
+      return {
+        valido: false,
+        valor,
+        error: ({ hoja, fila, celda, serializarValor }) => ({
+          hoja,
+          campo: campo.columna_excel,
+          fila,
+          celda,
+          valor: serializarValor(valor),
+          esperado: 'semestre 1 o 2',
+          mensaje: `Fila ${fila}: El período de Admisión debe corresponder al semestre 1 o 2`
+        })
+      };
+    }
+  },
+
+  validarSemantica({ valor, campo, hoja, fila, celda, serializarValor }) {
+    if (campo.tabla_destino !== 'CaracterizacionEstudiante' ||
+        campo.columna_destino !== 'fechaNacimiento' || validarRangoFechaNacimiento(valor)) {
+      return [];
+    }
+    return [{
+      hoja,
+      campo: campo.columna_excel,
+      fila,
+      celda,
+      valor: serializarValor(valor),
+      esperado: 'fecha entre 1920-01-01 y la fecha actual',
+      codigo: 'ADMISION_FECHANAC_FUERA_RANGO',
+      severidad: 'ERROR',
+      mensaje: `Fila ${fila}: FECHANAC debe estar entre 1920-01-01 y la fecha actual`
+    }];
+  },
+
+  normalizarValorModelo({ valor, tipoModelo }) {
+    return ['STRING', 'CHAR', 'TEXT'].includes(tipoModelo) && valor !== null && valor !== undefined &&
+      !(typeof valor === 'string' && valor.trim() === '')
+      ? String(valor).trim()
+      : valor;
+  },
+
+  validarHoja({ nombreEsperado, nombreReal, filas, resolverColumna }) {
+    if (nombreEsperado !== ESTUDIANTES_PREGRADO_SHEET) return [];
+    return detectarConflictosMatricula({ filas, resolverColumna, hoja: nombreReal });
+  },
+
+  async validateSpecific({ resoluciones, hojasResueltas, models }) {
+    if (![...resoluciones.values()].some((resolucion) => resolucion.nombre)) {
+      return { errores: [], advertencias: [], metadata: { pendientesCaracterizacion: [] } };
+    }
+    const resultado = await validarIdentidadesAdmision({ resoluciones, hojasResueltas, models });
+    return {
+      errores: resultado.errores,
+      advertencias: resultado.advertencias,
+      metadata: { pendientesCaracterizacion: resultado.pendientesCaracterizacion }
+    };
+  }
 };
+
+module.exports = admisionValidation;
