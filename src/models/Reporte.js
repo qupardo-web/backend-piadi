@@ -40,9 +40,6 @@ const sequelize = require('../config/database');
  *         formato:
  *           type: string
  *           description: Formato de salida (XLSX o PDF).
- *         periodicidad:
- *           type: string
- *           description: Periodicidad programada (opcional).
  *         activo:
  *           type: boolean
  *           description: Si el reporte está activo.
@@ -113,10 +110,6 @@ const Reporte = sequelize.define('Reporte', {
     validate: {
       isIn: [['XLSX', 'PDF']]
     }
-  },
-  periodicidad: {
-    type: DataTypes.STRING(20),
-    allowNull: true
   },
   activo: {
     type: DataTypes.BOOLEAN,

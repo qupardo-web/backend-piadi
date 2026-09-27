@@ -136,7 +136,6 @@ const construirDatosReporte = async (data, { politica, parcial = false } = {}) =
 
   if (data.descripcion !== undefined) campos.descripcion = data.descripcion;
   if (data.roleId !== undefined) campos.roleId = await validarRoleIdReporte(data.roleId);
-  if (data.periodicidad !== undefined) campos.periodicidad = data.periodicidad;
   if (data.activo !== undefined) campos.activo = parsearActivo(data.activo);
 
   return campos;
