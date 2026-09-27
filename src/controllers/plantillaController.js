@@ -103,12 +103,12 @@ const createCargarArchivo = ({
       valido,
       errores,
       advertencias = [],
-      pendientesCaracterizacion = [],
+      metadata = {},
       campos,
       workbook
     } = validacion;
-    const contextoAdmision = Object.hasOwn(validacion, 'advertencias') || Object.hasOwn(validacion, 'pendientesCaracterizacion')
-      ? { advertencias, pendientesCaracterizacion }
+    const contextoValidacion = Object.hasOwn(validacion, 'advertencias') || Object.hasOwn(validacion, 'metadata')
+      ? { advertencias, ...metadata }
       : {};
 
     if (!valido) {
@@ -126,7 +126,7 @@ const createCargarArchivo = ({
           ...(e.codigo ? { codigo: e.codigo } : {}),
           ...(e.severidad ? { severidad: e.severidad } : {})
         })),
-        ...contextoAdmision,
+        ...contextoValidacion,
         success: false
       });
     }
@@ -134,7 +134,7 @@ const createCargarArchivo = ({
     const resultado = await processUpload(workbook, campos);
     res.json({
       ...resultado,
-      ...contextoAdmision
+      ...contextoValidacion
     });
   } catch (err) {
     next(err);
