@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const { Reporte, Role, Department, IndicatorDefinition } = require('../models');
 const indicatorService = require('./indicatorService');
 const { politicaReportes } = require('./reportesPolitica');
+const { auditarReporte, calcularCambios } = require('./reporteAuditoria');
 const { ValidationError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
 const TIPOS = ['PREDEFINIDO', 'PERSONALIZADO'];
@@ -205,7 +206,9 @@ const createReporte = async (user, data) => {
     campos.departmentId = null;
   }
 
-  return Reporte.create(campos);
+  const reporte = await Reporte.create(campos);
+  auditarReporte({ user, accion: 'REPORTE_CREATED', reporte, path: '/api/reportes' });
+  return reporte;
 };
 
 const updateReporte = async (user, id, data) => {
@@ -236,7 +239,15 @@ const updateReporte = async (user, id, data) => {
     campos.departmentId = user.departmentId;
   }
 
+  const antes = reporte.toJSON();
   await reporte.update(campos);
+  auditarReporte({
+    user,
+    accion: 'REPORTE_UPDATED',
+    reporte,
+    cambios: calcularCambios(antes, campos),
+    path: `/api/reportes/${reporte.id}`
+  });
   return reporte;
 };
 
@@ -254,7 +265,14 @@ const deleteReporte = async (user, id) => {
     throw new ForbiddenError('Solo puedes eliminar tus propios reportes');
   }
 
+  const datos = reporte.toJSON();
   await reporte.destroy();
+  auditarReporte({
+    user,
+    accion: 'REPORTE_DELETED',
+    reporte: datos,
+    path: `/api/reportes/${datos.id}`
+  });
   return true;
 };
 

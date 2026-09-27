@@ -2,7 +2,7 @@ const XLSX = require('xlsx');
 const { ReporteEjecucion } = require('../models');
 const reporteService = require('./reporteService');
 const indicatorService = require('./indicatorService');
-const auditService = require('./auditService');
+const { auditarReporte } = require('./reporteAuditoria');
 const { ValidationError, NotFoundError } = require('../utils/errors');
 
 const MAX_SHEET_NAME = 31;
@@ -104,16 +104,13 @@ const generarEjecucion = async (user, reporteId) => {
     generadoEn: new Date()
   });
 
-  auditService.recordSession({
-    userId: user.id,
-    role: user.role,
-    action: 'GENERAR_REPORTE',
-    entity: 'Reporte',
-    module: 'Reportes',
-    method: 'POST',
-    path: `/api/reportes/${reporte.id}/generar`,
-    detalles: `Reporte "${reporte.nombre}" (${(reporte.indicadores || []).length} indicadores)`
-  }).catch(() => {});
+  auditarReporte({
+    user,
+    accion: 'REPORTE_GENERATED',
+    reporte,
+    extra: { indicadores: (reporte.indicadores || []).length },
+    path: `/api/reportes/${reporte.id}/generar`
+  });
 
   const json = ejecucion.toJSON();
   delete json.archivo;
