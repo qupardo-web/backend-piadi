@@ -45,6 +45,13 @@ const validarFiltrosReporte = (filtros) => {
   return filtros;
 };
 
+const validarIdReporte = (id) => {
+  if (!/^\d+$/.test(String(id))) {
+    throw new ValidationError('El id del reporte debe ser numérico');
+  }
+  return Number(id);
+};
+
 // Valida que el área asignada esté dentro del alcance del usuario.
 const validarAreaReporte = (departmentId, politica) => {
   if (departmentId === undefined) return undefined;
@@ -138,7 +145,7 @@ const listReportes = async (user, { tipo, activo } = {}) => {
 };
 
 const getReporteById = async (user, id) => {
-  const reporte = await Reporte.findByPk(id, { include: includeRelaciones });
+  const reporte = await Reporte.findByPk(validarIdReporte(id), { include: includeRelaciones });
   if (!reporte) {
     throw new NotFoundError('Reporte no encontrado');
   }
@@ -179,7 +186,7 @@ const updateReporte = async (user, id, data) => {
     throw new ForbiddenError('Tu rol no puede gestionar reportes');
   }
 
-  const reporte = await Reporte.findByPk(id);
+  const reporte = await Reporte.findByPk(validarIdReporte(id));
   if (!reporte) {
     throw new NotFoundError('Reporte no encontrado');
   }
@@ -211,7 +218,7 @@ const deleteReporte = async (user, id) => {
     throw new ForbiddenError('Tu rol no puede gestionar reportes');
   }
 
-  const reporte = await Reporte.findByPk(id);
+  const reporte = await Reporte.findByPk(validarIdReporte(id));
   if (!reporte) {
     throw new NotFoundError('Reporte no encontrado');
   }
