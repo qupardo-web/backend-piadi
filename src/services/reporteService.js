@@ -162,7 +162,9 @@ const createReporte = async (user, data) => {
   }
 
   campos.createdBy = user.id;
-  if (esDeArea(politica)) {
+  if (campos.tipo === 'PREDEFINIDO') {
+    campos.departmentId = null;
+  } else if (esDeArea(politica)) {
     campos.departmentId = user.departmentId;
   } else if (campos.departmentId === undefined) {
     campos.departmentId = null;
@@ -192,7 +194,10 @@ const updateReporte = async (user, id, data) => {
   if (campos.tipo === 'PREDEFINIDO' && !politica.predefinidos) {
     throw new ForbiddenError('Solo Rectoría puede crear reportes predefinidos');
   }
-  if (esDeArea(politica)) {
+  const tipoFinal = campos.tipo ?? reporte.tipo;
+  if (tipoFinal === 'PREDEFINIDO') {
+    campos.departmentId = null;
+  } else if (esDeArea(politica)) {
     campos.departmentId = user.departmentId;
   }
 
