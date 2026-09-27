@@ -1,5 +1,5 @@
 const { UnauthorizedError, ForbiddenError } = require('../utils/errors');
-const { politicaReportes } = require('../services/reportesPolitica');
+const { politicaReportes } = require('../services/reportePolitica');
 
 // Guard para rutas de escritura de reportes (crear/editar/eliminar).
 const requireReportesGestion = (req, res, next) => {

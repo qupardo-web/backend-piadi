@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
 const { Reporte, Role, Department, IndicatorDefinition } = require('../models');
 const indicatorService = require('./indicatorService');
-const { politicaReportes } = require('./reportesPolitica');
+const { politicaReportes } = require('./reportePolitica');
 const { auditarReporte, calcularCambios } = require('./reporteAuditoria');
 const { ValidationError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
