@@ -51,9 +51,10 @@ const armarExcel = async (reporte) => {
     ['Indicador', 'Valor']
   ];
   for (const detalle of detalles) {
-    const valor = detalle.error
-      ? `Error: ${detalle.error}`
-      : (detalle.formattedTotal ?? detalle.total ?? '');
+    let valor;
+    if (detalle.error) valor = `Error: ${detalle.error}`;
+    else if (!detalle.hasData) valor = 'Sin datos';
+    else valor = detalle.formattedTotal ?? detalle.total ?? '';
     resumen.push([detalle.title || detalle.indicatorKey, valor]);
   }
   const hojaResumen = XLSX.utils.aoa_to_sheet(resumen);
@@ -67,8 +68,13 @@ const armarExcel = async (reporte) => {
       filas.push([]);
     }
     filas.push(detalle.disaggregated ? ['Categoría', 'Valor'] : ['Período', 'Valor']);
-    for (const fila of (detalle.table || [])) {
-      filas.push(filaTabla(fila));
+    const cuerpo = detalle.table || [];
+    if (cuerpo.length === 0) {
+      filas.push(['Sin datos para el período', '']);
+    } else {
+      for (const fila of cuerpo) {
+        filas.push(filaTabla(fila));
+      }
     }
     const hoja = XLSX.utils.aoa_to_sheet(filas);
     hoja['!cols'] = [{ wch: 32 }, { wch: 18 }];
