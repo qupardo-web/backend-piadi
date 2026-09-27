@@ -18,10 +18,14 @@ const listAreas = async () => {
 // ── Validadores ────────────────────────────────────────────────────────────
 
 const validarNombreReporte = (nombre) => {
-  if (!nombre || !String(nombre).trim()) {
+  const limpio = String(nombre ?? '').trim();
+  if (!limpio) {
     throw new ValidationError('El nombre del reporte es obligatorio');
   }
-  return String(nombre).trim();
+  if (limpio.length > 150) {
+    throw new ValidationError('El nombre del reporte no puede superar los 150 caracteres');
+  }
+  return limpio;
 };
 
 const validarFormatoReporte = (formato) => {
@@ -52,14 +56,39 @@ const validarIdReporte = (id) => {
   return Number(id);
 };
 
-// Valida que el área asignada esté dentro del alcance del usuario.
-const validarAreaReporte = (departmentId, politica) => {
+// Interpreta un valor booleano de forma estricta (booleano o "true"/"false").
+const parsearActivo = (valor) => {
+  if (typeof valor === 'boolean') return valor;
+  if (typeof valor === 'string') {
+    const normalizado = valor.trim().toLowerCase();
+    if (normalizado === 'true') return true;
+    if (normalizado === 'false') return false;
+  }
+  throw new ValidationError('El campo activo debe ser booleano (true/false)');
+};
+
+// Valida que el área exista y esté dentro del alcance del usuario.
+const validarAreaReporte = async (departmentId, politica) => {
   if (departmentId === undefined) return undefined;
   if (departmentId === null) return null;
   if (politica && politica.areas !== null && !politica.areas.includes(departmentId)) {
     throw new ForbiddenError('No puedes asignar un área fuera de tu alcance');
   }
+  const area = await Department.findOne({ where: { key: departmentId } });
+  if (!area) {
+    throw new ValidationError(`El área "${departmentId}" no existe`);
+  }
   return departmentId;
+};
+
+// Valida que el rol exista.
+const validarRoleIdReporte = async (roleId) => {
+  if (roleId === null) return null;
+  const role = await Role.findByPk(roleId);
+  if (!role) {
+    throw new ValidationError(`El rol ${roleId} no existe`);
+  }
+  return roleId;
 };
 
 // Valida existencia de los indicadores y que pertenezcan al alcance (área) del usuario.
@@ -103,12 +132,12 @@ const construirDatosReporte = async (data, { politica, parcial = false } = {}) =
   if (data.tipo !== undefined) campos.tipo = validarTipoReporte(data.tipo);
   if (data.indicadores !== undefined) campos.indicadores = await validarIndicadoresReporte(data.indicadores, politica);
   if (data.filtros !== undefined) campos.filtros = validarFiltrosReporte(data.filtros);
-  if (data.departmentId !== undefined) campos.departmentId = validarAreaReporte(data.departmentId, politica);
+  if (data.departmentId !== undefined) campos.departmentId = await validarAreaReporte(data.departmentId, politica);
 
   if (data.descripcion !== undefined) campos.descripcion = data.descripcion;
-  if (data.roleId !== undefined) campos.roleId = data.roleId;
+  if (data.roleId !== undefined) campos.roleId = await validarRoleIdReporte(data.roleId);
   if (data.periodicidad !== undefined) campos.periodicidad = data.periodicidad;
-  if (data.activo !== undefined) campos.activo = Boolean(data.activo);
+  if (data.activo !== undefined) campos.activo = parsearActivo(data.activo);
 
   return campos;
 };
@@ -135,8 +164,8 @@ const includeRelaciones = [
 const listReportes = async (user, { tipo, activo } = {}) => {
   const politica = politicaReportes(user);
   const where = {};
-  if (tipo) where.tipo = tipo;
-  if (activo !== undefined) where.activo = Boolean(activo);
+  if (tipo) where.tipo = validarTipoReporte(tipo);
+  if (activo !== undefined) where.activo = parsearActivo(activo);
 
   if (politica.lectura === 'area') where.departmentId = { [Op.in]: politica.areas };
   else if (politica.lectura === 'propios') where.createdBy = user.id;
