@@ -143,6 +143,7 @@ async function seedDatabase() {
         name: 'Educación Continua', 
         description: 'Plantilla para carga de programas de educación continua', 
         roleId: roleMap['Educación Continua'],
+        departmentId: 'educacion_continua',
         variante: null,
         archivoData: null,
         archivoNombre: null
@@ -151,6 +152,7 @@ async function seedDatabase() {
         name: 'Vinculación Con El Medio', 
         description: 'Plantilla para carga de convenios, actividades y articulaciones de VCM', 
         roleId: roleMap['Vinculación Con El Medio'],
+        departmentId: 'vinculacion_medio',
         variante: null,
         archivoData: null,
         archivoNombre: null
@@ -168,6 +170,7 @@ async function seedDatabase() {
 
       const updateData = {};
       if (created.roleId !== data.roleId) updateData.roleId = data.roleId;
+      if (created.departmentId !== data.departmentId) updateData.departmentId = data.departmentId;
       if (data.variante !== undefined && created.variante !== data.variante) updateData.variante = data.variante;
       if (data.description && created.description !== data.description) updateData.description = data.description;
       if (data.archivoData) {

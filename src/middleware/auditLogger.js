@@ -23,7 +23,9 @@ const auditLogger = (meta = {}) => (req, res, next) => {
     if (type === 'carga') {
       const plantillaId = req.params && req.params.id ? req.params.id : null;
       let plantillaNombre = plantillaId ? String(plantillaId) : null;
-      if (plantillaId) {
+      if (req.plantilla && req.plantilla.name) {
+        plantillaNombre = req.plantilla.name;
+      } else if (plantillaId) {
         try {
           const { Plantilla } = require('../models');
           const tmpl = await Plantilla.findByPk(plantillaId, { attributes: ['name'] });

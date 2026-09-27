@@ -79,6 +79,7 @@ const createInnovationPlantilla = (roleId) => ({
   name: INNOVACION_TEMPLATE_NAME,
   description: 'Plantilla para carga de proyectos, financiamiento y secciones de innovación',
   roleId,
+  departmentId: 'innovacion',
   archivoData: createInnovationTemplateBuffer(),
   archivoNombre: INNOVACION_TEMPLATE_FILENAME
 });

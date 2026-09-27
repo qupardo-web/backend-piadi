@@ -52,9 +52,16 @@ async function initDb(retries = 5, delay = 2000) {
       
       await sequelize.sync();
       console.log('Database synced successfully. Models mapped to tables.');
+
+      const {
+        preparePlantillaDepartmentMigration,
+        migratePlantillaDepartments
+      } = require('./migrations/20260926-plantilla-department');
+      await preparePlantillaDepartmentMigration();
       
       const { seedDatabase } = require('./services/dbSeeder');
       await seedDatabase();
+      await migratePlantillaDepartments();
 
       const { seedIndicators } = require('./services/indicatorSeeder');
       await seedIndicators();

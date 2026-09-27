@@ -169,7 +169,12 @@ const subirTemplate = async (req, res, next) => {
     }
 
     const originalname = normalizeUploadedFilename(req.file.originalname);
-    const plantilla = await plantillaService.guardarArchivoTemplate(id, req.file.buffer, originalname);
+    const plantilla = await plantillaService.guardarArchivoTemplate(
+      id,
+      req.file.buffer,
+      originalname,
+      req.plantilla
+    );
     res.json({
       success: true,
       message: 'Archivo de plantilla guardado exitosamente en base de datos',
