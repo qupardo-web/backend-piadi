@@ -82,10 +82,6 @@ const ReporteEjecucion = sequelize.define('ReporteEjecucion', {
     allowNull: false,
     defaultValue: {}
   },
-  archivo: {
-    type: DataTypes.BLOB('long'),
-    allowNull: true
-  },
   archivoNombre: {
     type: DataTypes.STRING(255),
     allowNull: true
@@ -100,10 +96,7 @@ const ReporteEjecucion = sequelize.define('ReporteEjecucion', {
   }
 }, {
   tableName: 'reporte_ejecuciones',
-  timestamps: true,
-  defaultScope: {
-    attributes: { exclude: ['archivo'] }
-  }
+  timestamps: true
 });
 
 module.exports = ReporteEjecucion;

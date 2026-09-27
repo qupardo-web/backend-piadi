@@ -60,15 +60,6 @@ const listAreas = async (req, res, next) => {
   }
 };
 
-const generarReporte = async (req, res, next) => {
-  try {
-    const ejecucion = await reporteGeneracionService.generarEjecucion(req.user, req.params.id);
-    sendSuccess(res, ejecucion, 201);
-  } catch (err) {
-    next(err);
-  }
-};
-
 const listEjecuciones = async (req, res, next) => {
   try {
     const ejecuciones = await reporteGeneracionService.listEjecuciones(req.user, req.params.id);
@@ -78,12 +69,12 @@ const listEjecuciones = async (req, res, next) => {
   }
 };
 
-const descargarEjecucion = async (req, res, next) => {
+const descargarReporte = async (req, res, next) => {
   try {
-    const ejecucion = await reporteGeneracionService.obtenerEjecucionDescarga(req.user, req.params.id);
+    const { buffer, nombre } = await reporteGeneracionService.descargarReporte(req.user, req.params.id);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${ejecucion.archivoNombre || 'reporte.xlsx'}"`);
-    res.send(ejecucion.archivo);
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+    res.send(buffer);
   } catch (err) {
     next(err);
   }
@@ -98,7 +89,6 @@ module.exports = {
   listTipos,
   listFormatos,
   listAreas,
-  generarReporte,
   listEjecuciones,
-  descargarEjecucion
+  descargarReporte
 };

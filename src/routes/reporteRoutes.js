@@ -144,10 +144,10 @@ router.get('/areas', authenticateToken, reporteController.listAreas);
 
 /**
  * @openapi
- * /api/reportes/ejecuciones/{id}/descargar:
+ * /api/reportes/{id}/descargar:
  *   get:
  *     tags: [Reportes]
- *     summary: Descarga el archivo (Excel) de una ejecución
+ *     summary: Genera y descarga el Excel del reporte (registra la ejecución)
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -161,42 +161,14 @@ router.get('/areas', authenticateToken, reporteController.listAreas);
  *         content:
  *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
  *             schema: { type: string, format: binary }
+ *       400:
+ *         description: El reporte está inactivo.
  *       403:
  *         description: Sin acceso al reporte.
  *       404:
- *         description: Ejecución no encontrada.
- */
-router.get('/ejecuciones/:id/descargar', authenticateToken, reporteController.descargarEjecucion);
-
-/**
- * @openapi
- * /api/reportes/{id}/generar:
- *   post:
- *     tags: [Reportes]
- *     summary: Genera el reporte y registra la ejecución
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema: { type: integer }
- *     responses:
- *       201:
- *         description: Ejecución generada (estado LISTO).
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean }
- *                 data: { $ref: '#/components/schemas/ReporteEjecucion' }
- *       400:
- *         description: El reporte está inactivo.
- *       404:
  *         description: Reporte no encontrado.
  */
-router.post('/:id/generar', authenticateToken, reporteController.generarReporte);
+router.get('/:id/descargar', authenticateToken, reporteController.descargarReporte);
 
 /**
  * @openapi

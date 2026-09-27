@@ -3,7 +3,7 @@ const { ReporteEjecucion } = require('../models');
 const reporteService = require('./reporteService');
 const indicatorService = require('./indicatorService');
 const { auditarReporte } = require('./reporteAuditoria');
-const { ValidationError, NotFoundError } = require('../utils/errors');
+const { ValidationError } = require('../utils/errors');
 
 const MAX_SHEET_NAME = 31;
 
@@ -84,23 +84,23 @@ const armarExcel = async (reporte) => {
   return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 };
 
-// Genera el archivo del reporte y registra la ejecución (síncrono).
-const generarEjecucion = async (user, reporteId) => {
+// Genera el archivo al vuelo y registra la ejecución (solo metadata, sin archivo).
+const descargarReporte = async (user, reporteId) => {
   const reporte = await reporteService.getReporteById(user, reporteId);
   if (!reporte.activo) {
     throw new ValidationError('El reporte está inactivo y no puede generarse');
   }
 
   const buffer = await armarExcel(reporte);
+  const nombre = nombreArchivo(reporte);
 
-  const ejecucion = await ReporteEjecucion.create({
+  await ReporteEjecucion.create({
     reporteId: reporte.id,
     solicitadoPor: user.id,
     estado: 'LISTO',
     formato: 'XLSX',
     parametros: reporte.filtros || {},
-    archivo: buffer,
-    archivoNombre: nombreArchivo(reporte),
+    archivoNombre: nombre,
     generadoEn: new Date()
   });
 
@@ -109,12 +109,10 @@ const generarEjecucion = async (user, reporteId) => {
     accion: 'REPORTE_GENERATED',
     reporte,
     extra: { indicadores: (reporte.indicadores || []).length },
-    path: `/api/reportes/${reporte.id}/generar`
+    path: `/api/reportes/${reporte.id}/descargar`
   });
 
-  const json = ejecucion.toJSON();
-  delete json.archivo;
-  return json;
+  return { buffer, nombre };
 };
 
 const listEjecuciones = async (user, reporteId) => {
@@ -122,22 +120,8 @@ const listEjecuciones = async (user, reporteId) => {
   return ReporteEjecucion.findAll({ where: { reporteId }, order: [['createdAt', 'DESC']] });
 };
 
-// Devuelve la ejecución con su archivo, validando el alcance sobre el reporte padre.
-const obtenerEjecucionDescarga = async (user, ejecucionId) => {
-  const ejecucion = await ReporteEjecucion.unscoped().findByPk(ejecucionId);
-  if (!ejecucion) {
-    throw new NotFoundError('Ejecución no encontrada');
-  }
-  await reporteService.getReporteById(user, ejecucion.reporteId);
-  if (!ejecucion.archivo) {
-    throw new NotFoundError('La ejecución no tiene un archivo generado');
-  }
-  return ejecucion;
-};
-
 module.exports = {
-  generarEjecucion,
+  descargarReporte,
   listEjecuciones,
-  obtenerEjecucionDescarga,
   armarExcel
 };
