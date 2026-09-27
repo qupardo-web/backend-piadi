@@ -186,6 +186,9 @@ const updateReporte = async (user, id, data) => {
   }
 
   const campos = await construirDatosReporte(data, { politica, parcial: true });
+  if (Object.keys(campos).length === 0) {
+    throw new ValidationError('No se enviaron campos válidos para actualizar');
+  }
   if (campos.tipo === 'PREDEFINIDO' && !politica.predefinidos) {
     throw new ForbiddenError('Solo Rectoría puede crear reportes predefinidos');
   }
