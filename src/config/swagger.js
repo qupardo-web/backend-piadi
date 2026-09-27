@@ -36,6 +36,7 @@ const swaggerOptions = {
       { name: 'Metas', description: 'Gestión de metas y sus métricas asociadas' },
       { name: 'Landing', description: 'Información preparada para la página de inicio' },
       { name: 'Auditoria', description: 'Visualización de bitácoras de auditoría' },
+      { name: 'Reportes', description: 'Gestión y generación de reportes de indicadores' },
       { name: 'default', description: 'Endpoints generales' }
     ]
   },
