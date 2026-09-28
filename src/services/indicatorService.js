@@ -584,10 +584,7 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
   const baseQuery = { ...query, department };
   const config = getIndicatorConfig(key, kpi) || { allowedGroupBy: [] };
 
-  const requestedGroupBy = query.groupBy || null;
-  const groupBy = requestedGroupBy && Array.isArray(config.allowedGroupBy) && config.allowedGroupBy.includes(requestedGroupBy)
-    ? requestedGroupBy
-    : null;
+  const groupBy = validateGroupBy(config, query.groupBy || null);
 
   const valueResult = await module.exports.getIndicatorValue(key, baseQuery);
   const total = valueResult.data.value;

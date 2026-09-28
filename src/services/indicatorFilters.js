@@ -244,12 +244,8 @@ const parseIndicatorFilters = (query = {}) => {
   }
   filters.months = uniq(filters.months);
 
-  if (filters.groupBy !== null && !GROUP_BY_DIMENSIONS.includes(filters.groupBy)) {
-    throw new FilterError('INVALID_GROUP_BY', 'El parámetro "groupBy" no es una dimensión válida', {
-      groupBy: filters.groupBy,
-      allowed: GROUP_BY_DIMENSIONS
-    });
-  }
+  // La validación de groupBy es por indicador (validateGroupBy en indicatorService),
+  // que devuelve los allowedGroupBy del indicador. Aquí no se valida globalmente.
 
   return filters;
 };
