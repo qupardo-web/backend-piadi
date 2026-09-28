@@ -417,7 +417,7 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  * /api/indicators/{indicatorKey}/detail:
  *   get:
  *     tags: [Indicadores]
- *     summary: Obtiene metadata y serie temporal de un indicador
+ *     summary: Obtiene metadata, serie por año, tabla y comparación de un indicador
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -427,44 +427,60 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *         schema: { type: string }
  *       - in: query
  *         name: year
+ *         description: Año de referencia para la card y la comparación. Alias anio, año.
  *         schema: { type: integer }
- *       - in: query
- *         name: anio
- *         schema: { type: integer }
- *       - in: query
- *         name: año
- *         schema: { type: integer }
- *       - in: query
- *         name: semester
- *         schema: { type: string }
  *       - in: query
  *         name: semestre
+ *         description: Filtra por semestre. Alias semester.
  *         schema: { type: string }
  *       - in: query
- *         name: tipo
- *         schema: { type: string }
- *       - in: query
- *         name: modalidad
+ *         name: groupBy
+ *         description: Dimensión de desagregación; debe estar en allowedGroupBy del indicador.
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Detalle del indicador con puntos temporales.
+ *         description: Detalle del indicador con serie por año, tabla y comparación.
  *         content:
  *           application/json:
  *             schema:
  *               type: object
- *               required: [title, description, data]
+ *               required: [title, description]
  *               properties:
+ *                 indicatorKey: { type: string }
+ *                 department: { type: string }
  *                 title: { type: string }
  *                 description: { type: string }
- *                 data:
+ *                 unit: { type: string }
+ *                 format: { type: string }
+ *                 total: { type: number }
+ *                 formattedTotal: { type: string, nullable: true }
+ *                 hasData: { type: boolean }
+ *                 disaggregated: { type: boolean }
+ *                 groupBy: { type: string, nullable: true }
+ *                 allowedGroupBy:
  *                   type: array
- *                   items:
- *                     type: object
- *                     required: [period, value]
- *                     properties:
- *                       period: { type: integer, example: 2026 }
- *                       value: { type: number, example: 10 }
+ *                   items: { type: string }
+ *                 dimensionLabels:
+ *                   type: object
+ *                   additionalProperties: { type: string }
+ *                 period:
+ *                   type: object
+ *                   properties:
+ *                     from: { type: integer, nullable: true }
+ *                     to: { type: integer, nullable: true }
+ *                 comparison:
+ *                   nullable: true
+ *                   type: object
+ *                   properties:
+ *                     previousYear: { type: integer }
+ *                     previousValue: { type: number }
+ *                     diff: { type: number }
+ *                 table:
+ *                   type: array
+ *                   items: { type: object }
+ *                 series:
+ *                   type: array
+ *                   items: { type: object }
  *       400: { description: Filtros inválidos. }
  *       401: { description: Token ausente o inválido. }
  *       404: { description: Indicador inexistente. }

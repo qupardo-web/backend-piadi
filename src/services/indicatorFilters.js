@@ -1,56 +1,3 @@
-const GROUP_BY_DIMENSIONS = [
-  // Campos de Educación Continua
-  'year',
-  'area',
-  'tipo',
-  'modalidad',
-  'programa',
-  'sexo',
-  'rangoEdad',
-  'region',
-  'nivelDeEstudio',
-  'tipoParticipante',
-  'sectorEconomico',
-  'cohorte',
-  'jornada',
-  'periodo',
-
-  // Campos de Vinculación con el Medio (VcM)
-  'sector',
-  'tipoConvenio',
-  'areaVinculada',
-  'contraparte',
-  'responsableEcas',
-  'lineaVcM',
-  'tipoActividad',
-  'comuna',
-  'publicoObjetivo',
-  'plataformaFoco',
-  'tipoArticulacion',
-  'especialidadTP',
-  'colegioLiceoTP',
-  'institucion',
-  'internosExternos',
-
-  // Innovación
-  'fuente',
-  'areaTematica',
-  'semestre',
-
-  // Admisión
-  'asignatura',
-  'seccion',
-  'estadoAcademico',
-  'nuevoAntiguo',
-  'rangoEtario',
-  'edad',
-  'tipoColegio',
-  'viaAcceso',
-  'nivelSocioeconomico',
-  'situacionFamiliar',
-  'beneficios'
-];
-
 class FilterError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -244,21 +191,10 @@ const parseIndicatorFilters = (query = {}) => {
   }
   filters.months = uniq(filters.months);
 
-  if (filters.groupBy !== null && !GROUP_BY_DIMENSIONS.includes(filters.groupBy)) {
-    throw new FilterError('INVALID_GROUP_BY', 'El parámetro "groupBy" no es una dimensión válida', {
-      groupBy: filters.groupBy,
-      allowed: GROUP_BY_DIMENSIONS
-    });
-  }
+  // La validación de groupBy es por indicador (validateGroupBy en indicatorService),
+  // que devuelve los allowedGroupBy del indicador. Aquí no se valida globalmente.
 
   return filters;
-};
-
-const validateIndicatorFilters = (filters) => {
-  if (filters.groupBy !== null && !GROUP_BY_DIMENSIONS.includes(filters.groupBy)) {
-    throw new FilterError('INVALID_GROUP_BY', 'El parámetro "groupBy" no es una dimensión válida', { groupBy: filters.groupBy });
-  }
-  return true;
 };
 
 const buildFilterMeta = (filters) => {
@@ -315,9 +251,7 @@ const buildFilterMeta = (filters) => {
 
 module.exports = {
   FilterError,
-  GROUP_BY_DIMENSIONS,
   parseIndicatorFilters,
-  validateIndicatorFilters,
   normalizeSemester,
   normalizeAdmissionPeriod,
   normalizeArrayParam,

@@ -170,7 +170,7 @@ test('las 13 fórmulas están registradas y reutilizan el conteo común salvo ra
   });
 });
 
-test('motor genérico entrega series por período y detail reutiliza esas series', async () => {
+test('motor genérico entrega series por período y detail entrega serie por año', async () => {
   stubKpi('matricula_total');
   stub(provider, 'getAdmissionEnrollmentRows', async () => [
     enrollment('A', { periodo: 1 }),
@@ -187,10 +187,8 @@ test('motor genérico entrega series por período y detail reutiliza esas series
   ]);
 
   const detail = await indicatorService.getIndicatorDetail('matricula_total', { year: '2026' });
-  assert.deepEqual(detail.data, [
-    { period: '2026-P1', value: 1 },
-    { period: '2026-P2', value: 1 }
-  ]);
+  assert.equal(detail.groupBy, null);
+  assert.deepEqual(detail.series, [{ year: 2026, value: 2 }]);
 });
 
 test('Swagger documenta período y dimensiones de Admisión', () => {

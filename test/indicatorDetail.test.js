@@ -33,10 +33,14 @@ test('la ruta detail exige autenticación antes del controller', () => {
   assert.equal(route.route.stack[0].handle, authenticateToken);
 });
 
-test('detail devuelve contrato exacto, metadata y transforma la serie reutilizada', async () => {
+test('detail devuelve serie por año, tabla y comparación (contrato nuevo)', async () => {
   stub(indicatorProvider, 'getKpi', async () => ({
     key: 'tasa_aprobacion', name: 'Tasa de aprobación',
-    description: 'Aprobados sobre la matrícula total.', departmentId: 'educacion_continua'
+    description: 'Aprobados sobre la matrícula total.',
+    unit: 'porcentaje', format: 'percentage', departmentId: 'educacion_continua'
+  }));
+  stub(indicatorService, 'getIndicatorValue', async () => ({
+    data: { value: 10, hasData: true, filters: {} }
   }));
   let seriesCall;
   stub(indicatorService, 'getIndicatorSeries', async (key, query) => {
@@ -47,15 +51,19 @@ test('detail devuelve contrato exacto, metadata y transforma la serie reutilizad
   const result = await indicatorService.getIndicatorDetail('tasa_aprobacion', {
     anio: '2026', semestre: '1', tipo: 'Curso', modalidad: 'Online'
   });
-  assert.deepEqual(result, {
-    title: 'Tasa de aprobación',
-    description: 'Aprobados sobre la matrícula total.',
-    data: [{ period: 2025, value: 8 }, { period: 2026, value: 10 }]
-  });
+  assert.equal(result.title, 'Tasa de aprobación');
+  assert.equal(result.description, 'Aprobados sobre la matrícula total.');
+  assert.equal(result.total, 10);
+  assert.deepEqual(result.series, [{ year: 2025, value: 8 }, { year: 2026, value: 10 }]);
+  assert.deepEqual(result.table, [{ year: 2025, value: 8 }, { year: 2026, value: 10 }]);
+  assert.deepEqual(result.comparison, { previousYear: 2025, previousValue: 8, diff: 2 });
+  assert.deepEqual(result.period, { from: 2025, to: 2026 });
+  assert.equal(result.groupBy, null);
   assert.equal(seriesCall.key, 'tasa_aprobacion');
+  // ya NO se fuerza groupBy:'year'
   assert.deepEqual(seriesCall.query, {
     anio: '2026', semestre: '1', tipo: 'Curso', modalidad: 'Online',
-    department: 'educacion_continua', groupBy: 'year'
+    department: 'educacion_continua'
   });
 });
 
@@ -86,15 +94,19 @@ test('aliases de periodo, año y semestre se normalizan genéricamente', () => {
 
 test('detail es genérico para EC, VCM, Innovación y Curricular sin datos', async () => {
   const originalKpi = indicatorProvider.getKpi;
+  const originalValue = indicatorService.getIndicatorValue;
   const originalSeries = indicatorService.getIndicatorSeries;
   const departments = ['educacion_continua', 'vinculacion_medio', 'innovacion', 'desarrollo_curricular'];
   for (const departmentId of departments) {
+    const empty = departmentId === 'desarrollo_curricular';
     indicatorProvider.getKpi = async () => ({ key: `kpi-${departmentId}`, name: departmentId, description: 'd', departmentId });
-    indicatorService.getIndicatorSeries = async () => ({ data: { points: departmentId === 'desarrollo_curricular' ? [] : [{ year: 2026, value: 1 }] } });
+    indicatorService.getIndicatorValue = async () => ({ data: { value: empty ? 0 : 1, hasData: !empty, filters: {} } });
+    indicatorService.getIndicatorSeries = async () => ({ data: { points: empty ? [] : [{ year: 2026, value: 1 }] } });
     const result = await indicatorService.getIndicatorDetail(`kpi-${departmentId}`);
-    assert.deepEqual(result.data, departmentId === 'desarrollo_curricular' ? [] : [{ period: 2026, value: 1 }]);
+    assert.deepEqual(result.series, empty ? [] : [{ year: 2026, value: 1 }]);
   }
   indicatorProvider.getKpi = originalKpi;
+  indicatorService.getIndicatorValue = originalValue;
   indicatorService.getIndicatorSeries = originalSeries;
 });
 
