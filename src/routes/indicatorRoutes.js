@@ -457,6 +457,12 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *                 hasData: { type: boolean }
  *                 disaggregated: { type: boolean }
  *                 groupBy: { type: string, nullable: true }
+ *                 allowedGroupBy:
+ *                   type: array
+ *                   items: { type: string }
+ *                 dimensionLabels:
+ *                   type: object
+ *                   additionalProperties: { type: string }
  *                 period:
  *                   type: object
  *                   properties:

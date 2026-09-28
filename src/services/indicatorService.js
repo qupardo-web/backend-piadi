@@ -1,7 +1,7 @@
 const provider = require('./indicatorProvider');
 const formulaService = require('./indicatorFormulaService');
 const { parseIndicatorFilters, buildFilterMeta } = require('./indicatorFilters');
-const { getIndicatorConfig } = require('./indicatorCatalog');
+const { getIndicatorConfig, DIMENSION_LABELS } = require('./indicatorCatalog');
 
 class ServiceError extends Error {
   constructor(statusCode, code, message, details = {}) {
@@ -641,6 +641,12 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
       hasData,
       disaggregated: Boolean(groupBy),
       groupBy,
+      allowedGroupBy: Array.isArray(config.allowedGroupBy) ? config.allowedGroupBy : [],
+      dimensionLabels: Object.fromEntries(
+        (Array.isArray(config.allowedGroupBy) ? config.allowedGroupBy : [])
+          .filter((dim) => DIMENSION_LABELS[dim])
+          .map((dim) => [dim, DIMENSION_LABELS[dim]])
+      ),
       period,
       comparison,
       table,
