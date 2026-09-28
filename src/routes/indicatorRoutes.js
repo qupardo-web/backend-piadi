@@ -417,7 +417,7 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  * /api/indicators/{indicatorKey}/detail:
  *   get:
  *     tags: [Indicadores]
- *     summary: Obtiene metadata y serie temporal de un indicador
+ *     summary: Obtiene metadata, serie por año, tabla y comparación de un indicador
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -427,24 +427,15 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *         schema: { type: string }
  *       - in: query
  *         name: year
+ *         description: Año de referencia para la card y la comparación (alias: anio, año).
  *         schema: { type: integer }
- *       - in: query
- *         name: anio
- *         schema: { type: integer }
- *       - in: query
- *         name: año
- *         schema: { type: integer }
- *       - in: query
- *         name: semester
- *         schema: { type: string }
  *       - in: query
  *         name: semestre
+ *         description: Filtra por semestre (alias: semester).
  *         schema: { type: string }
  *       - in: query
- *         name: tipo
- *         schema: { type: string }
- *       - in: query
- *         name: modalidad
+ *         name: groupBy
+ *         description: Dimensión de desagregación; debe estar en allowedGroupBy del indicador.
  *         schema: { type: string }
  *     responses:
  *       200:
