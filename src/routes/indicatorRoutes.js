@@ -448,23 +448,42 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Detalle del indicador con puntos temporales.
+ *         description: Detalle del indicador con serie por año, tabla y comparación.
  *         content:
  *           application/json:
  *             schema:
  *               type: object
- *               required: [title, description, data]
+ *               required: [title, description]
  *               properties:
+ *                 indicatorKey: { type: string }
+ *                 department: { type: string }
  *                 title: { type: string }
  *                 description: { type: string }
- *                 data:
+ *                 unit: { type: string }
+ *                 format: { type: string }
+ *                 total: { type: number }
+ *                 formattedTotal: { type: string, nullable: true }
+ *                 hasData: { type: boolean }
+ *                 disaggregated: { type: boolean }
+ *                 groupBy: { type: string, nullable: true }
+ *                 period:
+ *                   type: object
+ *                   properties:
+ *                     from: { type: integer, nullable: true }
+ *                     to: { type: integer, nullable: true }
+ *                 comparison:
+ *                   nullable: true
+ *                   type: object
+ *                   properties:
+ *                     previousYear: { type: integer }
+ *                     previousValue: { type: number }
+ *                     diff: { type: number }
+ *                 table:
  *                   type: array
- *                   items:
- *                     type: object
- *                     required: [period, value]
- *                     properties:
- *                       period: { type: integer, example: 2026 }
- *                       value: { type: number, example: 10 }
+ *                   items: { type: object }
+ *                 series:
+ *                   type: array
+ *                   items: { type: object }
  *       400: { description: Filtros inválidos. }
  *       401: { description: Token ausente o inválido. }
  *       404: { description: Indicador inexistente. }

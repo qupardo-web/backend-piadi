@@ -566,31 +566,89 @@ const getEnabledKpis = async (departmentKey) => {
   return kpis.filter((kpi) => kpi.enabled !== false);
 };
 
-const getIndicatorDetail = async (indicatorKey, query = {}) => {
+/**
+ * Vista detallada de un indicador: metadatos + serie por año + tabla + comparación.
+ * Fuente del endpoint GET /api/indicators/:key/detail.
+ *
+ * Sin groupBy -> serie por año (fase 1). Con groupBy -> desagregado por categoría (fase 2).
+ * Acepta year/fromYear/toYear y groupBy (debe estar en allowedGroupBy del indicador).
+ */
+const getIndicatorDetailView = async (indicatorKey, query = {}) => {
   const key = ensureIndicatorKey(indicatorKey);
   const kpi = await provider.getKpi('institucional', key);
   if (!kpi) {
     throw new ServiceError(404, 'KPI_NOT_FOUND', 'El indicador solicitado no existe', { indicatorKey: key });
   }
-  const seriesResult = await module.exports.getIndicatorSeries(key, {
-    ...query,
-    department: kpi.departmentId,
-    groupBy: kpi.departmentId === 'admision' ? 'periodo' : 'year'
-  });
-  const points = seriesResult?.data?.points || [];
-  const segmentedPoints = (seriesResult?.data?.series || []).flatMap((segment) => (
-    segment.points.map((point) => ({
-      period: `${point.year}-P${segment.label}`,
-      value: point.value
-    }))
-  ));
+
+  const department = kpi.departmentId;
+  const baseQuery = { ...query, department };
+  const config = getIndicatorConfig(key, kpi) || { allowedGroupBy: [] };
+
+  const requestedGroupBy = query.groupBy || null;
+  const groupBy = requestedGroupBy && Array.isArray(config.allowedGroupBy) && config.allowedGroupBy.includes(requestedGroupBy)
+    ? requestedGroupBy
+    : null;
+
+  const valueResult = await module.exports.getIndicatorValue(key, baseQuery);
+  const total = valueResult.data.value;
+  const hasData = valueResult.data.hasData;
+
+  const seriesBase = await module.exports.getIndicatorSeries(key, baseQuery);
+  const points = seriesBase.data.points || [];
+  const years = points.map((point) => Number(point.year)).filter((year) => Number.isFinite(year));
+  const period = years.length
+    ? { from: Math.min(...years), to: Math.max(...years) }
+    : { from: null, to: null };
+
+  let comparison = null;
+  if (points.length >= 2) {
+    const current = points[points.length - 1];
+    const previous = points[points.length - 2];
+    comparison = {
+      previousYear: previous.year,
+      previousValue: previous.value,
+      diff: current.value - previous.value
+    };
+  }
+
+  let table;
+  let series;
+  if (groupBy) {
+    const breakdownResult = await module.exports.getIndicatorBreakdown(key, { ...baseQuery, groupBy });
+    table = (breakdownResult.data.items || []).map((item) => ({ label: item.label, value: item.value }));
+    const seriesResult = await module.exports.getIndicatorSeries(key, { ...baseQuery, groupBy });
+    series = seriesResult.data.series || [];
+  } else {
+    table = points.map((point) => ({ year: point.year, value: point.value }));
+    series = points;
+  }
+
   return {
-    title: kpi.name,
-    description: kpi.description,
-    data: points.length
-      ? points.map((point) => ({ period: point.year, value: point.value }))
-      : segmentedPoints
+    data: {
+      indicatorKey: key,
+      department,
+      title: kpi.name,
+      description: kpi.description,
+      unit: kpi.unit,
+      format: kpi.format,
+      total,
+      formattedTotal: hasData ? formatValue(total, kpi.format) : null,
+      hasData,
+      disaggregated: Boolean(groupBy),
+      groupBy,
+      period,
+      comparison,
+      table,
+      series,
+      filters: valueResult.data.filters,
+      meta: { source: 'postgresql', formulaKey: kpi.formulaKey }
+    }
   };
+};
+
+const getIndicatorDetail = async (indicatorKey, query = {}) => {
+  const result = await getIndicatorDetailView(indicatorKey, query);
+  return result.data;
 };
 
 module.exports = {
@@ -608,6 +666,7 @@ module.exports = {
   deleteKpi,
   getEnabledKpis,
   getIndicatorDetail,
+  getIndicatorDetailView,
   getDepartmentFilters,
   getIndicatorValue,
   getIndicatorSeries,
