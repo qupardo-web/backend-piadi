@@ -593,17 +593,25 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
   const total = valueResult.data.value;
   const hasData = valueResult.data.hasData;
 
-  const seriesBase = await module.exports.getIndicatorSeries(key, baseQuery);
-  const points = seriesBase.data.points || [];
-  const years = points.map((point) => Number(point.year)).filter((year) => Number.isFinite(year));
+  // Serie anual COMPLETA (sin groupBy ni filtro de año): período y comparación.
+  const { groupBy: _omitGroupBy, year: _omitYear, fromYear: _omitFrom, toYear: _omitTo, ...annualQuery } = baseQuery;
+  const annualSeries = await module.exports.getIndicatorSeries(key, annualQuery);
+  const annualPoints = annualSeries.data.points || [];
+  const years = annualPoints.map((point) => Number(point.year)).filter((year) => Number.isFinite(year));
   const period = years.length
     ? { from: Math.min(...years), to: Math.max(...years) }
     : { from: null, to: null };
 
+  // Año de referencia: el pedido por query, o el más reciente.
+  const refYear = query.year !== undefined && query.year !== null && query.year !== ''
+    ? Number(query.year)
+    : (annualPoints.length ? Number(annualPoints[annualPoints.length - 1].year) : null);
+  const refIndex = annualPoints.findIndex((point) => Number(point.year) === refYear);
+
   let comparison = null;
-  if (points.length >= 2) {
-    const current = points[points.length - 1];
-    const previous = points[points.length - 2];
+  if (refIndex > 0) {
+    const current = annualPoints[refIndex];
+    const previous = annualPoints[refIndex - 1];
     comparison = {
       previousYear: previous.year,
       previousValue: previous.value,
@@ -619,8 +627,8 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
     const seriesResult = await module.exports.getIndicatorSeries(key, { ...baseQuery, groupBy });
     series = seriesResult.data.series || [];
   } else {
-    table = points.map((point) => ({ year: point.year, value: point.value }));
-    series = points;
+    table = annualPoints.map((point) => ({ year: point.year, value: point.value }));
+    series = annualPoints;
   }
 
   return {
