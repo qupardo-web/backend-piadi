@@ -4,6 +4,8 @@ const { JWT_SECRET } = require('../middleware/authMiddleware');
 const { ValidationError, UnauthorizedError } = require('../utils/errors');
 const auditService = require('../services/auditService');
 
+const getJwtExpiration = () => process.env.JWT_EXPIRATION || '2h';
+
 /**
  * Controller to handle user login authentication.
  */
@@ -92,8 +94,7 @@ const login = async (req, res, next) => {
       departmentId: departmentId || null
     };
 
-    // Sign the token with an expiration of 2 hours
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '2h' });
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: getJwtExpiration() });
 
     auditService.recordSession({
       userId: user.id,
@@ -132,5 +133,6 @@ const logout = async (req, res, next) => {
 
 module.exports = {
   login,
-  logout
+  logout,
+  getJwtExpiration
 };
