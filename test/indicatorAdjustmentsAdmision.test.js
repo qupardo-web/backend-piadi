@@ -136,14 +136,21 @@ test('distribuciones de caracterización cuentan un estudiante por identidad', a
   }
 });
 
-test('rango_etario queda protegido mientras no existan tramos institucionales', async () => {
+test('rango_etario agrega estudiantes con tramo etario y desagrega por tramo', async () => {
   stubKpi('rango_etario');
   stub(provider, 'getAdmissionCharacterizationRows', async () => [
-    { codCli: 'A', rut: 1, anio: 2026, periodo: 1, edad: 20, rangoEtario: null }
+    { codCli: 'A', rut: 1, anio: 2026, periodo: 1, edad: 20, rangoEtario: '20 a 24' },
+    { codCli: 'B', rut: 2, anio: 2026, periodo: 1, edad: 26, rangoEtario: '25 a 29' }
   ]);
-  const result = await indicatorService.getIndicatorValue('rango_etario', { department: 'admision', year: '2026' });
-  assert.equal(result.data.value, null);
-  assert.equal(result.data.hasData, false);
+  const value = await indicatorService.getIndicatorValue('rango_etario', { department: 'admision', year: '2026' });
+  assert.equal(value.data.value, 2);
+  assert.equal(value.data.hasData, true);
+
+  const breakdown = await indicatorService.getIndicatorBreakdown('rango_etario', {
+    department: 'admision', year: '2026', groupBy: 'rangoEtario'
+  });
+  const items = Object.fromEntries(breakdown.data.items.map((item) => [item.label, item.value]));
+  assert.deepEqual(items, { '20 a 24': 1, '25 a 29': 1 });
 });
 
 test('período admite aliases 1/2, rechaza 3/4 y groupBy=periodo se conserva', async () => {
@@ -158,7 +165,7 @@ test('período admite aliases 1/2, rechaza 3/4 y groupBy=periodo se conserva', a
   assert.equal(periodoValidation.max, 2);
 });
 
-test('las 13 fórmulas están registradas y reutilizan el conteo común salvo rango etario', () => {
+test('las 13 fórmulas están registradas y reutilizan el conteo común', () => {
   for (const [key, formulaKey] of Object.entries(formulas)) {
     assert.equal(typeof formulaService.formulaRegistry[formulaKey], 'function', `${key} debe registrar ${formulaKey}`);
   }
@@ -166,7 +173,7 @@ test('las 13 fórmulas están registradas y reutilizan el conteo común salvo ra
     value: 3, hasData: true
   });
   assert.deepEqual(formulaService.apply('DISTRIBUTION_ADMISSION_AGE_RANGE', { admissionUniqueCount: 3 }), {
-    value: null, hasData: false
+    value: 3, hasData: true
   });
 });
 
