@@ -56,13 +56,20 @@ const INNOVACION_DEPARTMENT_SEED = {
   name: 'Innovación',
   description: 'Dirección de innovación, desarrollo y transferencia de conocimiento.',
   enabled: true,
-  hasData: false,
+  hasData: true,
   order: 4
 };
 
 const INNOVACION_KPI_SEED = [
-  { key: 'proyectos_innovacion', name: 'Proyectos de innovación', description: 'Cantidad de proyectos de innovación adjudicados o desarrollados.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_INNOVATION_PROJECTS', enabled: true },
-  { key: 'patentes_solicitadas', name: 'Patentes solicitadas', description: 'Cantidad de patentes, registros de propiedad intelectual o marcas solicitadas.', unit: 'registros', format: 'number', formulaKey: 'COUNT_PATENTS', enabled: true }
+  { key: 'proyectos_innovacion', name: 'Proyectos de innovación', description: 'Cantidad de proyectos de innovación adjudicados o desarrollados.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_INNOVATION_PROJECTS', enabled: false },
+  { key: 'patentes_solicitadas', name: 'Patentes solicitadas', description: 'Cantidad de patentes, registros de propiedad intelectual o marcas solicitadas.', unit: 'registros', format: 'number', formulaKey: 'COUNT_PATENTS', enabled: false },
+  { key: 'proyectos_activos', name: 'Proyectos activos', description: 'Cantidad de proyectos de innovación activos durante el año consultado.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', enabled: true },
+  { key: 'total_proyectos', name: 'Total de proyectos', description: 'Cantidad de proyectos de innovación iniciados en el período.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', enabled: true },
+  { key: 'financiamiento_obtenido', name: 'Financiamiento obtenido', description: 'Monto externo adjudicado a proyectos de innovación.', unit: 'CLP', format: 'currency', formulaKey: 'SUM_INNOVATION_FINANCING', enabled: true },
+  { key: 'proyectos_con_financiamiento_externo', name: 'Proyectos con financiamiento externo', description: 'Cantidad de proyectos de Innovación que cuentan con financiamiento externo.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_EXTERNAL_FINANCED_PROJECTS', enabled: true },
+  { key: 'proyectos_finalizados', name: 'Innovaciones implementadas', description: 'Cantidad de proyectos de innovación finalizados en el año consultado.', unit: 'proyectos', format: 'number', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', enabled: true },
+  { key: 'secciones_curso', name: 'Secciones del curso de innovación', description: 'Cantidad de secciones del curso Emprendimiento e Innovación, agrupables por año y semestre.', unit: 'secciones', format: 'number', formulaKey: 'COUNT_INNOVATION_SECTIONS', enabled: true },
+  { key: 'docentes_involucrados', name: 'Docentes involucrados', description: 'Cantidad de docentes involucrados en proyectos de innovación iniciados en el período.', unit: 'docentes', format: 'number', formulaKey: 'SUM_INNOVATION_TEACHERS', enabled: true }
 ];
 
 const CURRICULAR_DEPARTMENT_SEED = {
@@ -77,6 +84,34 @@ const CURRICULAR_DEPARTMENT_SEED = {
 const CURRICULAR_KPI_SEED = [
   { key: 'programas_actualizados', name: 'Programas de estudio actualizados', description: 'Porcentaje o cantidad de programas de estudio actualizados o rediseñados.', unit: 'programas', format: 'number', formulaKey: 'COUNT_CURRICULUM_UPDATED', enabled: true },
   { key: 'innovaciones_pedagogicas', name: 'Innovaciones pedagógicas', description: 'Cantidad de innovaciones pedagógicas o metodologías activas implementadas en el aula.', unit: 'innovaciones', format: 'number', formulaKey: 'COUNT_PEDAGOGICAL_INNOVATIONS', enabled: true }
+];
+
+const ADMISION_DEPARTMENT_SEED = {
+  key: 'admision',
+  name: 'Admisión',
+  description: 'Dirección de Admisión y Registro Académico.',
+  enabled: true,
+  hasData: true,
+  order: 6
+};
+
+const ADMISION_KPI_SEED = [
+  // Sección Matrícula y Académico (admission_enrollment)
+  { key: 'matricula_total', name: 'Matrícula total por período', description: 'Cantidad total de matrículas registradas en el período académico.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_ENROLLMENT_TOTAL', enabled: true },
+  { key: 'nuevos_vs_antiguos', name: 'Estudiantes nuevos vs antiguos', description: 'Distribución de matrícula entre estudiantes de primer ingreso y cursos superiores.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_NEW_VS_OLD', enabled: true },
+  { key: 'matricula_por_asignatura', name: 'Matrícula por asignatura', description: 'Cantidad de inscripciones activas desglosadas por asignatura.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_BY_COURSE', enabled: true },
+  { key: 'matricula_por_seccion', name: 'Matrícula por sección', description: 'Cantidad de estudiantes inscritos por sección de curso.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_BY_SECTION', enabled: true },
+  { key: 'matricula_por_estado_academico', name: 'Matrícula por estado académico', description: 'Distribución de estudiantes según su estado académico actual.', unit: 'estudiantes', format: 'number', formulaKey: 'COUNT_ADMISSION_BY_ACADEMIC_STATUS', enabled: true },
+
+  // Sección Caracterización del Estudiante (admission_characterization)
+  { key: 'nivel_socioeconomico', name: 'Nivel socioeconómico (NSE)', description: 'Distribución de estudiantes matriculados según clasificación de nivel socioeconómico.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_SOCIOECONOMIC', enabled: true },
+  { key: 'situacion_familiar', name: 'Situación familiar', description: 'Clasificación de estudiantes según su entorno y situación familiar declarada.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_FAMILY_SITUATION', enabled: true },
+  { key: 'procedencia_geografica', name: 'Procedencia geográfica', description: 'Distribución geográfica de estudiantes por región y comuna de residencia.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_GEOGRAPHY', enabled: true },
+  { key: 'tipo_colegio', name: 'Tipo de colegio de procedencia', description: 'Distribución de estudiantes según tipo de establecimiento de egreso de enseñanza media.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_SCHOOL_TYPE', enabled: true },
+  { key: 'via_acceso', name: 'Vía de acceso institucional', description: 'Distribución de estudiantes según la modalidad o vía de admisión a la institución.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_ACCESS_ROUTE', enabled: true },
+  { key: 'beneficios_becas', name: 'Beneficios y becas', description: 'Cantidad y tipo de beneficios estudiantiles, gratuidad o becas asignadas.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_BENEFITS', enabled: true },
+  { key: 'distribucion_sexo', name: 'Distribución por sexo', description: 'Distribución porcentual y cuantitativa de estudiantes matriculados por sexo.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_GENDER', enabled: true },
+  { key: 'rango_etario', name: 'Distribución por rango etario', description: 'Distribución de estudiantes matriculados agrupados por tramos de edad.', unit: 'estudiantes', format: 'number', formulaKey: 'DISTRIBUTION_ADMISSION_AGE_RANGE', enabled: true }
 ];
 
 async function seedIndicators() {
@@ -108,12 +143,25 @@ async function seedIndicators() {
 
   // 4. Seed Innovación
   await Department.findOrCreate({ where: { key: INNOVACION_DEPARTMENT_SEED.key }, defaults: INNOVACION_DEPARTMENT_SEED });
+  await Department.update(
+    { hasData: true },
+    { where: { key: INNOVACION_DEPARTMENT_SEED.key } }
+  );
   for (const kpi of INNOVACION_KPI_SEED) {
     await IndicatorDefinition.findOrCreate({
       where: { departmentId: INNOVACION_DEPARTMENT_SEED.key, key: kpi.key },
       defaults: { ...kpi, departmentId: INNOVACION_DEPARTMENT_SEED.key }
     });
   }
+  await IndicatorDefinition.update(
+    { enabled: false },
+    {
+      where: {
+        departmentId: INNOVACION_DEPARTMENT_SEED.key,
+        key: ['proyectos_innovacion', 'patentes_solicitadas']
+      }
+    }
+  );
 
   // 5. Seed Desarrollo Curricular
   await Department.findOrCreate({ where: { key: CURRICULAR_DEPARTMENT_SEED.key }, defaults: CURRICULAR_DEPARTMENT_SEED });
@@ -121,6 +169,15 @@ async function seedIndicators() {
     await IndicatorDefinition.findOrCreate({
       where: { departmentId: CURRICULAR_DEPARTMENT_SEED.key, key: kpi.key },
       defaults: { ...kpi, departmentId: CURRICULAR_DEPARTMENT_SEED.key }
+    });
+  }
+
+  // 6. Seed Admisión 
+  await Department.findOrCreate({ where: { key: ADMISION_DEPARTMENT_SEED.key }, defaults: ADMISION_DEPARTMENT_SEED });
+  for (const kpi of ADMISION_KPI_SEED) {
+    await IndicatorDefinition.findOrCreate({
+      where: { departmentId: ADMISION_DEPARTMENT_SEED.key, key: kpi.key },
+      defaults: { ...kpi, departmentId: ADMISION_DEPARTMENT_SEED.key }
     });
   }
 }

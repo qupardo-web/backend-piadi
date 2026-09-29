@@ -1,5 +1,6 @@
-const { Meta } = require('../models');
+const { Meta, MetaMetric } = require('../models');
 const { ValidationError, UnauthorizedError, ForbiddenError, NotFoundError } = require('../utils/errors');
+const { isRectoria } = require('./rectoriaAuthorization');
 
 const requireMetaOwnership = async (req, res, next) => {
   try {
@@ -10,13 +11,14 @@ const requireMetaOwnership = async (req, res, next) => {
     if (!Number.isInteger(id) || id <= 0) {
       throw new ValidationError('El id de la meta debe ser un entero positivo');
     }
-    const meta = await Meta.findByPk(id);
+    const meta = await Meta.findByPk(id, {
+      include: [{ model: MetaMetric, as: 'metrics' }]
+    });
     if (!meta) {
       throw new NotFoundError('La meta solicitada no existe');
     }
     const isOwner = Number(meta.creatorId) === Number(req.user.id);
-    const isRectoria = req.user.roleGroup === 'Rectoria';
-    if (!isOwner && !isRectoria) {
+    if (!isOwner && !isRectoria(req.user)) {
       throw new ForbiddenError('Solo el creador de la meta o Rectoría puede modificarla o eliminarla');
     }
     req.meta = meta;

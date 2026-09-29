@@ -13,12 +13,20 @@ const {
   Participacion,
   ArticulacionTP,
   Proyecto,
-  Financiamiento
+  Financiamiento,
+  Seccion,
+  Alumno,
+  MatriculaPorAsignatura,
+  Asignatura,
+  CaracterizacionEstudiante
 } = require('../models');
 
-const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio'];
+const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio', 'innovacion', 'admision'];
+const INNOVATION_PROJECT_TYPES = ['Estudiantil', 'Institucional'];
+const INNOVATION_COURSE = 'Emprendimiento e Innovación';
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
 const TRUTHY_VALUES = ['si', 'sí', 'true', '1', 'x', 'verdadero'];
+const EXTERNAL_FINANCING_VALUES = [...TRUTHY_VALUES, 'fondo concursable externo'];
 
 const buildCaseInsensitiveEquals = (value) => ({
   [Op.iLike]: value
@@ -44,6 +52,11 @@ const isTruthyFlag = (value) => {
     return false;
   }
   return TRUTHY_VALUES.includes(String(value).trim().toLowerCase());
+};
+
+const isExternalFinancing = (value) => {
+  if (value === null || value === undefined) return false;
+  return EXTERNAL_FINANCING_VALUES.includes(String(value).trim().toLowerCase());
 };
 
 const isConnected = async () => {
@@ -127,6 +140,66 @@ const buildVcmCommonWhere = (filters = {}, yearField = 'anio') => {
     where[yearField] = { [Op.between]: [from, to] };
   }
   return where;
+};
+
+// --- Filtros y derivados de Admisión ---
+const buildAdmissionEnrollmentWhere = (filters = {}) => {
+  const where = {};
+  if (filters.year !== null && filters.year !== undefined) {
+    where.anio = filters.year;
+  } else if (filters.fromYear !== null || filters.toYear !== null) {
+    const from = filters.fromYear !== null ? filters.fromYear : filters.toYear;
+    const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
+    where.anio = { [Op.between]: [from, to] };
+  }
+  if (filters.periodo && filters.periodo.length) where.periodo = { [Op.in]: filters.periodo.map(Number) };
+  if (filters.seccion && filters.seccion.length) where.seccion = { [Op.in]: filters.seccion.map(Number) };
+  const academicStatuses = filters.estadoAcademico && filters.estadoAcademico.length
+    ? filters.estadoAcademico
+    : filters.estado;
+  if (academicStatuses && academicStatuses.length) where.estadoCad = buildCaseInsensitiveIn(academicStatuses);
+  return where;
+};
+
+const buildAdmissionCharacterizationWhere = (filters = {}) => {
+  const where = {};
+  const mappings = [
+    ['sexo', 'sexo'],
+    ['region', 'region'],
+    ['comuna', 'comuna'],
+    ['tipoColegio', 'tipoColegio'],
+    ['viaAcceso', 'viaAcceso'],
+    ['nivelSocioeconomico', 'nivelSocioeconomico'],
+    ['situacionFamiliar', 'situacionFamiliar'],
+    ['beneficios', 'beneficios']
+  ];
+  mappings.forEach(([filterKey, field]) => {
+    if (filters[filterKey] && filters[filterKey].length) {
+      where[field] = buildCaseInsensitiveIn(filters[filterKey]);
+    }
+  });
+  return where;
+};
+
+const calculateAge = (birthDate, referenceDate) => {
+  if (!birthDate || !referenceDate) return null;
+  const birth = new Date(`${birthDate}T00:00:00Z`);
+  const reference = new Date(referenceDate);
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(reference.getTime()) || birth > reference) return null;
+  let age = reference.getUTCFullYear() - birth.getUTCFullYear();
+  const beforeBirthday = reference.getUTCMonth() < birth.getUTCMonth()
+    || (reference.getUTCMonth() === birth.getUTCMonth() && reference.getUTCDate() < birth.getUTCDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+};
+
+const admissionReferenceDate = (filters = {}) => {
+  // Contrato PIADI-318: cierre del año consultado; sin year explícito,
+  // el cierre del año actual se usa sólo como referencia técnica.
+  const referenceYear = filters.year !== null && filters.year !== undefined
+    ? filters.year
+    : new Date().getFullYear();
+  return new Date(Date.UTC(referenceYear, 11, 31, 23, 59, 59));
 };
 
 // --- Providers Educación Continua ---
@@ -338,6 +411,233 @@ const getVcmProyectoRows = async (filters = {}) => {
   });
 };
 
+// --- Providers Admisión ---
+const getAdmissionEnrollmentRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'admision') return [];
+
+  const subjectWhere = {};
+  if (filters.asignatura && filters.asignatura.length) {
+    subjectWhere.nombre = buildCaseInsensitiveIn(filters.asignatura);
+  }
+
+  const enrollments = await MatriculaPorAsignatura.findAll({
+    where: buildAdmissionEnrollmentWhere(filters),
+    attributes: ['codCli', 'ramoEquiv', 'anio', 'periodo', 'seccion', 'estadoCad'],
+    include: [
+      {
+        model: Alumno,
+        as: 'alumno',
+        attributes: ['rut'],
+        required: true
+      },
+      {
+        model: Asignatura,
+        as: 'asignatura',
+        attributes: ['nombre'],
+        required: Object.keys(subjectWhere).length > 0,
+        where: Object.keys(subjectWhere).length > 0 ? subjectWhere : undefined
+      }
+    ]
+  });
+
+  const studentCodes = [...new Set(enrollments.map((row) => row.codCli).filter(Boolean))];
+  const firstYears = studentCodes.length
+    ? await MatriculaPorAsignatura.findAll({
+      where: { codCli: { [Op.in]: studentCodes } },
+      attributes: ['codCli', [sequelize.fn('MIN', sequelize.col('anio')), 'firstYear']],
+      group: ['codCli'],
+      raw: true
+    })
+    : [];
+  const firstYearByStudent = new Map(firstYears.map((row) => [row.codCli, Number(row.firstYear)]));
+
+  return enrollments
+    .map((enrollment) => {
+      const year = Number(enrollment.anio);
+      const firstYear = firstYearByStudent.get(enrollment.codCli);
+      const nuevoAntiguo = Number.isFinite(firstYear)
+        ? (firstYear === year ? 'nuevo' : (firstYear < year ? 'antiguo' : null))
+        : null;
+      return {
+        codCli: enrollment.codCli,
+        rut: enrollment.alumno ? enrollment.alumno.rut : null,
+        anio: year,
+        periodo: Number(enrollment.periodo),
+        ramoEquiv: enrollment.ramoEquiv,
+        asignatura: enrollment.asignatura ? enrollment.asignatura.nombre : null,
+        seccion: Number(enrollment.seccion),
+        estadoAcademico: enrollment.estadoCad,
+        nuevoAntiguo
+      };
+    })
+    .filter((row) => !filters.nuevoAntiguo || !filters.nuevoAntiguo.length
+      || filters.nuevoAntiguo.map((value) => String(value).toLowerCase()).includes(row.nuevoAntiguo));
+};
+
+const getAdmissionCharacterizationRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'admision') return [];
+
+  const characterizationWhere = buildAdmissionCharacterizationWhere(filters);
+  const enrollments = await MatriculaPorAsignatura.findAll({
+    where: buildAdmissionEnrollmentWhere(filters),
+    attributes: ['codCli', 'anio', 'periodo'],
+    include: [{
+      model: Alumno,
+      as: 'alumno',
+      attributes: ['rut'],
+      required: true,
+      include: [{
+        model: CaracterizacionEstudiante,
+        as: 'caracterizacion',
+        attributes: [
+          'rut', 'sexo', 'fechaNacimiento', 'region', 'comuna', 'tipoColegio',
+          'viaAcceso', 'nivelSocioeconomico', 'situacionFamiliar', 'beneficios'
+        ],
+        required: true,
+        where: Object.keys(characterizationWhere).length > 0 ? characterizationWhere : undefined
+      }]
+    }]
+  });
+
+  const referenceDate = admissionReferenceDate(filters);
+  const uniqueRows = new Map();
+  enrollments.forEach((enrollment) => {
+    const student = enrollment.alumno || {};
+    const characterization = student.caracterizacion || {};
+    const key = `${enrollment.codCli}|${enrollment.anio}|${enrollment.periodo}`;
+    if (uniqueRows.has(key)) return;
+    uniqueRows.set(key, {
+      rut: student.rut ?? characterization.rut ?? null,
+      codCli: enrollment.codCli,
+      anio: Number(enrollment.anio),
+      periodo: Number(enrollment.periodo),
+      sexo: characterization.sexo ?? null,
+      fechaNacimiento: characterization.fechaNacimiento ?? null,
+      edad: calculateAge(characterization.fechaNacimiento, referenceDate),
+      // No existen tramos etarios institucionales configurados en el repositorio.
+      rangoEtario: null,
+      region: characterization.region ?? null,
+      comuna: characterization.comuna ?? null,
+      tipoColegio: characterization.tipoColegio ?? null,
+      viaAcceso: characterization.viaAcceso ?? null,
+      nivelSocioeconomico: characterization.nivelSocioeconomico ?? null,
+      situacionFamiliar: characterization.situacionFamiliar ?? null,
+      beneficios: characterization.beneficios ?? null
+    });
+  });
+  return [...uniqueRows.values()].filter((row) => {
+    if (filters.minAge !== null && filters.minAge !== undefined
+      && (row.edad === null || row.edad < filters.minAge)) return false;
+    if (filters.maxAge !== null && filters.maxAge !== undefined
+      && (row.edad === null || row.edad > filters.maxAge)) return false;
+    // rangoEtario no se filtra hasta que existan tramos institucionales oficiales.
+    if (filters.rangoEtario && filters.rangoEtario.length) return false;
+    return true;
+  });
+};
+
+// --- Datos de Innovación ---
+const getFilterYearRange = (filters = {}) => {
+  if (filters.year !== null && filters.year !== undefined) {
+    return { from: filters.year, to: filters.year, singleYear: true };
+  }
+  const hasFrom = filters.fromYear !== null && filters.fromYear !== undefined;
+  const hasTo = filters.toYear !== null && filters.toYear !== undefined;
+  if (!hasFrom && !hasTo) return null;
+  const from = hasFrom ? filters.fromYear : filters.toYear;
+  const to = hasTo ? filters.toYear : filters.fromYear;
+  return { from, to, singleYear: from === to };
+};
+
+const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false, finalizedInYear = false } = {}) => {
+  const conditions = [{ tipoProyecto: buildCaseInsensitiveIn(INNOVATION_PROJECT_TYPES) }];
+  if (filters.tipo && filters.tipo.length) {
+    conditions.push({ tipoProyecto: buildCaseInsensitiveIn(filters.tipo) });
+  }
+  if (filters.estado && filters.estado.length) {
+    conditions.push({ estado: buildCaseInsensitiveIn(filters.estado) });
+  }
+  if (filters.area && filters.area.length) {
+    conditions.push({ areaTematica: buildCaseInsensitiveIn(filters.area) });
+  }
+
+  const range = getFilterYearRange(filters);
+
+  if (finalizedInYear) {
+    conditions.push({ estado: buildCaseInsensitiveEquals('Finalizado') });
+    if (range) {
+      conditions.push({ anioTermino: range.singleYear ? range.from : { [Op.between]: [range.from, range.to] } });
+    } else {
+      conditions.push({ anioTermino: new Date().getFullYear() });
+    }
+  } else if (activeDuringYear) {
+    const activeRange = range || {
+      from: new Date().getFullYear(),
+      to: new Date().getFullYear()
+    };
+    conditions.push({ anioInicio: { [Op.lte]: activeRange.to } });
+    conditions.push({ anioTermino: { [Op.gte]: activeRange.from } });
+  } else if (range) {
+    conditions.push({ anioInicio: range.singleYear ? range.from : { [Op.between]: [range.from, range.to] } });
+  }
+
+  return { [Op.and]: conditions };
+};
+
+const getInnovationProjectRows = async (filters = {}, options = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'innovacion') return [];
+  const projects = await Proyecto.findAll({
+    where: buildInnovationProjectWhere(filters, options)
+  });
+  return projects.map((project) => ({
+    idProyecto: project.idProyecto,
+    anio: Number(options.finalizedInYear ? project.anioTermino : project.anioInicio),
+    anioInicio: Number(project.anioInicio),
+    anioTermino: Number(project.anioTermino),
+    tipoProyecto: project.tipoProyecto,
+    estado: project.estado,
+    areaTematica: project.areaTematica,
+    nDocentes: Number(project.nDocentes || 0)
+  }));
+};
+
+const getInnovationSectionRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'innovacion') return [];
+  const where = { curso: buildCaseInsensitiveEquals(INNOVATION_COURSE) };
+  const range = getFilterYearRange(filters);
+  if (range) {
+    where.anio = range.singleYear ? range.from : { [Op.between]: [range.from, range.to] };
+  }
+  if (filters.semesters && filters.semesters.length) {
+    where.semestre = buildCaseInsensitiveIn(filters.semesters);
+  }
+  const sections = await Seccion.findAll({ where });
+  return sections.map((section) => ({
+    idSeccion: section.idSeccion,
+    anio: Number(section.anio),
+    semestre: section.semestre,
+    curso: section.curso
+  }));
+};
+
+const getInnovationFinancingRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'innovacion') return [];
+  const projects = await Proyecto.findAll({
+    where: buildInnovationProjectWhere(filters),
+    include: [{ model: Financiamiento, required: true }]
+  });
+  return projects
+    .filter((project) => project.Financiamiento && isExternalFinancing(project.Financiamiento.financiamientoExterno))
+    .map((project) => ({
+      idProyecto: project.idProyecto,
+      anio: Number(project.anioInicio),
+      tipoProyecto: project.tipoProyecto,
+      estado: project.estado,
+      fuente: project.Financiamiento.fuenteFinanciamiento,
+      montoAdjudicado: Number(project.Financiamiento.montoAdjudicado || 0)
+    }));
+};
+
 const distinctValues = (rows, key) => {
   const set = new Set();
   rows.forEach((r) => {
@@ -426,6 +726,52 @@ const getFilterOptions = async (department, filters = {}) => {
       ]),
       sectores: distinctValues(convenios, 'sector').sort()
     };
+  } else if (deptKey === 'innovacion') {
+    const proyectos = await Proyecto.findAll({ raw: true });
+    const financiamientos = await Financiamiento.findAll({ raw: true });
+
+    const years = new Set([
+      ...proyectos.map(p => Number(p.anioInicio)).filter(Boolean),
+      ...proyectos.map(p => Number(p.anioTermino)).filter(Boolean)
+    ]);
+
+    return {
+      years: [...years].sort((a, b) => a - b),
+      semesters: distinctValues(proyectos, 'semestreInicio').sort(),
+      startMonths: [],
+      areas: distinctTextValues(proyectos, 'areaTematica'),
+      tipos: distinctValues(proyectos, 'tipoProyecto').sort(),
+      modalidades: [],
+      sexos: [],
+      rangosEdad: [],
+      estados: distinctValues(proyectos, 'estado').sort(),
+      fuentes: distinctValues(financiamientos, 'fuenteFinanciamiento').sort()
+    };
+  } else if (deptKey === 'admision') {
+    const enrollmentRows = await getAdmissionEnrollmentRows(filters);
+    const characterizationRows = await getAdmissionCharacterizationRows(filters);
+    return {
+      years: distinctValues(enrollmentRows, 'anio').map(Number).sort((a, b) => a - b),
+      semesters: distinctValues(enrollmentRows, 'periodo').map(Number).sort((a, b) => a - b),
+      startMonths: [],
+      areas: [],
+      tipos: [],
+      modalidades: [],
+      sexos: distinctTextValues(characterizationRows, 'sexo'),
+      rangosEdad: [],
+      edades: distinctValues(characterizationRows, 'edad').map(Number).sort((a, b) => a - b),
+      asignaturas: distinctTextValues(enrollmentRows, 'asignatura'),
+      secciones: distinctValues(enrollmentRows, 'seccion').map(Number).sort((a, b) => a - b),
+      estadosAcademicos: distinctTextValues(enrollmentRows, 'estadoAcademico'),
+      nuevosAntiguos: distinctTextValues(enrollmentRows, 'nuevoAntiguo'),
+      regiones: distinctTextValues(characterizationRows, 'region'),
+      comunas: distinctTextValues(characterizationRows, 'comuna'),
+      tiposColegio: distinctTextValues(characterizationRows, 'tipoColegio'),
+      viasAcceso: distinctTextValues(characterizationRows, 'viaAcceso'),
+      nivelesSocioeconomicos: distinctTextValues(characterizationRows, 'nivelSocioeconomico'),
+      situacionesFamiliares: distinctTextValues(characterizationRows, 'situacionFamiliar'),
+      beneficios: distinctTextValues(characterizationRows, 'beneficios')
+    };
   }
 
   return empty;
@@ -501,6 +847,7 @@ const deleteKpi = async (departmentId, indicatorKey) => {
 };
 
 module.exports = {
+  isExternalFinancing,
   isConnected,
   getProgramRows,
   getParticipantRows,
@@ -509,6 +856,12 @@ module.exports = {
   getVcmParticipacionRows,
   getVcmArticulacionRows,
   getVcmProyectoRows,
+  getInnovationProjectRows,
+  getInnovationFinancingRows,
+  getInnovationSectionRows,
+  getAdmissionEnrollmentRows,
+  getAdmissionCharacterizationRows,
+  calculateAge,
   getFilterOptions,
   getDepartments,
   getDepartmentByKey,

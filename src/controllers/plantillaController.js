@@ -3,6 +3,7 @@ const plantillaService = require('../services/plantillaService');
 const { validarArchivo } = require('../services/carga/validacionService');
 const { procesarCarga } = require('../services/carga/cargaService');
 const { NotFoundError, ValidationError, ConflictError, UnprocessableEntityError } = require('../utils/errors');
+const { normalizeUploadedFilename } = require('../utils/filenameEncoding');
 
 const getPlantillas = async (req, res, next) => {
   try {
@@ -96,7 +97,19 @@ const createCargarArchivo = ({
       throw new UnprocessableEntityError('Debe enviar un archivo Excel');
     }
 
-    const { valido, errores, campos, workbook } = await validateFile(req.file.path, id);
+    const originalName = normalizeUploadedFilename(req.file.originalname || req.file.path);
+    const validacion = await validateFile(req.file.path, id, originalName);
+    const {
+      valido,
+      errores,
+      advertencias = [],
+      metadata = {},
+      campos,
+      workbook
+    } = validacion;
+    const contextoValidacion = Object.hasOwn(validacion, 'advertencias') || Object.hasOwn(validacion, 'metadata')
+      ? { advertencias, ...metadata }
+      : {};
 
     if (!valido) {
       const errorMsg = `Error de validación en carga: ${errores.map(e => e.mensaje).join('. ')}`;
@@ -107,14 +120,22 @@ const createCargarArchivo = ({
           hoja: e.hoja || 'General',
           fila: e.fila || '',
           columna: e.campo || '',
-          celda: e.celda || ''
+          celda: e.celda || '',
+          valor: e.valor ?? '',
+          esperado: e.esperado || '',
+          ...(e.codigo ? { codigo: e.codigo } : {}),
+          ...(e.severidad ? { severidad: e.severidad } : {})
         })),
+        ...contextoValidacion,
         success: false
       });
     }
 
     const resultado = await processUpload(workbook, campos);
-    res.json(resultado);
+    res.json({
+      ...resultado,
+      ...contextoValidacion
+    });
   } catch (err) {
     next(err);
   } finally {
@@ -147,7 +168,13 @@ const subirTemplate = async (req, res, next) => {
       throw new ValidationError('Debe enviar un archivo Excel');
     }
 
-    const plantilla = await plantillaService.guardarArchivoTemplate(id, req.file.buffer, req.file.originalname);
+    const originalname = normalizeUploadedFilename(req.file.originalname);
+    const plantilla = await plantillaService.guardarArchivoTemplate(
+      id,
+      req.file.buffer,
+      originalname,
+      req.plantilla
+    );
     res.json({
       success: true,
       message: 'Archivo de plantilla guardado exitosamente en base de datos',

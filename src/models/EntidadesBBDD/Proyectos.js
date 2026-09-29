@@ -31,8 +31,7 @@ const Proyecto = sequelize.define('Proyecto', {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
-      notEmpty: true,
-      is: /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'\-]+$/i
+      notEmpty: true
     }
   },
   socioContraparte: {
@@ -79,6 +78,10 @@ const Proyecto = sequelize.define('Proyecto', {
   tipoProyecto: {
     type: DataTypes.STRING,
     allowNull: false
+  },
+  financiamientoExterno: {
+    type: DataTypes.STRING,
+    allowNull: true
   },
   resultadoPrincipal: {
     type: DataTypes.TEXT,

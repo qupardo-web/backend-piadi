@@ -72,6 +72,14 @@ const User = sequelize.define('User', {
       model: 'roles',
       key: 'id'
     }
+  },
+  departmentId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    references: {
+      model: 'departments',
+      key: 'key'
+    }
   }
 }, {
   tableName: 'users',

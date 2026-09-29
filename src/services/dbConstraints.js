@@ -4,6 +4,26 @@ async function initDbConstraints() {
   try {
     console.log('Applying database-level constraints, triggers, and SQL documentation for VCM...');
 
+    // Identidad departamental nullable: no se infieren asignaciones para usuarios históricos.
+    await sequelize.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS "departmentId" VARCHAR(255);
+    `);
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_department ON users ("departmentId");
+    `);
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_department'
+        ) THEN
+          ALTER TABLE users
+            ADD CONSTRAINT fk_users_department FOREIGN KEY ("departmentId")
+            REFERENCES departments(key) ON UPDATE CASCADE ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `);
+
     // Compatibilidad PIADI-198: sequelize.sync() no agrega columnas a tablas existentes.
     await sequelize.query(`
       ALTER TABLE metas ADD COLUMN IF NOT EXISTS "creatorId" INTEGER;
@@ -16,6 +36,8 @@ async function initDbConstraints() {
       ALTER TABLE meta_metrics ADD COLUMN IF NOT EXISTS "upperLimit" DECIMAL(12, 2);
       ALTER TABLE indicator_definitions ADD COLUMN IF NOT EXISTS "name" VARCHAR(255);
       ALTER TABLE indicator_definitions ADD COLUMN IF NOT EXISTS "description" TEXT;
+      ALTER TABLE plantillas ADD COLUMN IF NOT EXISTS "variante" VARCHAR(50);
+      ALTER TABLE alumnos ADD COLUMN IF NOT EXISTS "fonoAct" VARCHAR(20);
     `);
     await sequelize.query(`
       CREATE INDEX IF NOT EXISTS idx_metas_creator ON metas ("creatorId");
@@ -433,7 +455,225 @@ async function initDbConstraints() {
         COALESCE(SUM(f."montoAdjudicado"), 0)::numeric AS value
       FROM proyectos p
       LEFT JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
-      GROUP BY p."anioInicio";
+      GROUP BY p."anioInicio"
+
+      -- --- 3. INNOVACION INDICATORS ---
+      UNION ALL
+
+      -- 18. Innovación - secciones_curso
+      SELECT 
+        'secciones_curso'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        anio AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM secciones
+      WHERE LOWER(curso) = 'emprendimiento e innovacion' OR LOWER(curso) = 'emprendimiento e innovación'
+      GROUP BY anio
+
+      UNION ALL
+
+      SELECT 
+        'secciones_curso'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        anio AS anio,
+        CASE WHEN LOWER(semestre) IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM secciones
+      WHERE LOWER(curso) = 'emprendimiento e innovacion' OR LOWER(curso) = 'emprendimiento e innovación'
+      GROUP BY anio, CASE WHEN LOWER(semestre) IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 19. Innovación - proyectos_activos
+      SELECT 
+        'proyectos_activos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        y.anio AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(p."idProyecto")::numeric AS value
+      FROM (
+        SELECT DISTINCT "anioInicio" AS anio FROM proyectos WHERE "anioInicio" IS NOT NULL
+        UNION
+        SELECT DISTINCT "anioTermino" AS anio FROM proyectos WHERE "anioTermino" IS NOT NULL
+        UNION
+        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL
+        UNION
+        SELECT generate_series(2020, 2030) AS anio
+      ) y
+      LEFT JOIN proyectos p ON LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND p."anioInicio" <= y.anio AND p."anioTermino" >= y.anio
+      GROUP BY y.anio
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_activos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        y.anio AS anio,
+        sem.periodo::varchar AS periodo,
+        COUNT(p."idProyecto")::numeric AS value
+      FROM (
+        SELECT DISTINCT "anioInicio" AS anio FROM proyectos WHERE "anioInicio" IS NOT NULL
+        UNION
+        SELECT DISTINCT "anioTermino" AS anio FROM proyectos WHERE "anioTermino" IS NOT NULL
+        UNION
+        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL
+        UNION
+        SELECT generate_series(2020, 2030) AS anio
+      ) y
+      CROSS JOIN (VALUES ('Semestre 1'), ('Semestre 2')) AS sem(periodo)
+      LEFT JOIN proyectos p ON LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND p."anioInicio" <= y.anio AND p."anioTermino" >= y.anio
+      GROUP BY y.anio, sem.periodo
+
+      UNION ALL
+
+      -- 20. Innovación - total_proyectos
+      SELECT 
+        'total_proyectos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'total_proyectos'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio", CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 21. Innovación - financiamiento_obtenido
+      SELECT 
+        'financiamiento_obtenido'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COALESCE(SUM(f."montoAdjudicado"), 0)::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'financiamiento_obtenido'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COALESCE(SUM(f."montoAdjudicado"), 0)::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio", CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 22. Innovación - proyectos_con_financiamiento_externo
+      SELECT 
+        'proyectos_con_financiamiento_externo'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(DISTINCT p."idProyecto")::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_con_financiamiento_externo'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        p."anioInicio" AS anio,
+        CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(DISTINCT p."idProyecto")::numeric AS value
+      FROM proyectos p
+      JOIN financiamientos f ON p."idProyecto" = f."idProyecto"
+      WHERE LOWER(p."tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(f."financiamientoExterno") IN ('si', 'sí', 'true', '1', 'x', 'verdadero', 'fondo concursable externo')
+      GROUP BY p."anioInicio", CASE WHEN LOWER(p."semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 23. Innovación - proyectos_finalizados
+      SELECT 
+        'proyectos_finalizados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioTermino" AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(estado) = 'finalizado'
+      GROUP BY "anioTermino"
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_finalizados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioTermino" AS anio,
+        'Semestre 1'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(estado) = 'finalizado'
+      GROUP BY "anioTermino"
+
+      UNION ALL
+
+      SELECT 
+        'proyectos_finalizados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioTermino" AS anio,
+        'Semestre 2'::varchar AS periodo,
+        0::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+        AND LOWER(estado) = 'finalizado'
+      GROUP BY "anioTermino"
+
+      UNION ALL
+
+      -- 24. Innovación - docentes_involucrados
+      SELECT 
+        'docentes_involucrados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        'Anual'::varchar AS periodo,
+        COALESCE(SUM("nDocentes"), 0)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio"
+
+      UNION ALL
+
+      SELECT 
+        'docentes_involucrados'::varchar AS "indicatorKey",
+        'innovacion'::varchar AS "departmentId",
+        "anioInicio" AS anio,
+        CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COALESCE(SUM("nDocentes"), 0)::numeric AS value
+      FROM proyectos
+      WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
+      GROUP BY "anioInicio", CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END;
     `);
 
     await sequelize.query(`
@@ -448,7 +688,7 @@ async function initDbConstraints() {
         p_end_date DATE
       ) RETURNS NUMERIC AS $$
       DECLARE
-        v_value NUMERIC := 0;
+        v_value NUMERIC := NULL;
         v_year INT := EXTRACT(YEAR FROM p_start_date);
         v_period VARCHAR := 'Anual';
       BEGIN
@@ -464,7 +704,7 @@ async function initDbConstraints() {
           AND anio = v_year 
           AND periodo = v_period;
           
-        RETURN COALESCE(v_value, 0);
+        RETURN v_value;
       END;
       $$ LANGUAGE plpgsql;
     `);
@@ -598,6 +838,339 @@ async function initDbConstraints() {
 
     await sequelize.query(`
       COMMENT ON VIEW v_landing_metas IS 'Vista consolidada optimizada para la Landing Page, limitada a las 10 metas más recientes por departamento.';
+    `);
+
+    // ══════════════════════════════════════════════════════════════
+    // PIADI-273: Restricciones de Integridad y Triggers para Innovación
+    // ══════════════════════════════════════════════════════════════
+    console.log('Applying database-level constraints, triggers, and SQL documentation for Innovación (PIADI-273)...');
+
+    // 1. Foreign Key: financiamientos.idProyecto -> proyectos.idProyecto
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_financiamientos_proyecto'
+        ) THEN
+          ALTER TABLE financiamientos
+            ADD CONSTRAINT fk_financiamientos_proyecto
+            FOREIGN KEY ("idProyecto")
+            REFERENCES proyectos("idProyecto")
+            ON UPDATE CASCADE
+            ON DELETE RESTRICT;
+        END IF;
+      END $$;
+    `);
+
+    // 2. CHECK Constraints en Proyectos
+    await sequelize.query(`
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_fechas;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_fechas CHECK ("fechaCierreEstimada" >= "fechaInicio");
+
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_anios;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_anios CHECK ("anioTermino" >= "anioInicio" AND "anioInicio" >= 1900 AND "anioTermino" >= 1900);
+
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_participantes;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_participantes CHECK ("nEstudiantes" >= 0 AND "nDocentes" >= 0 AND "nFuncionarios" >= 0);
+
+      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_tipo;
+      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_tipo CHECK ("tipoProyecto" IN ('Estudiantil', 'Institucional'));
+    `);
+
+    // 3. CHECK Constraints en Financiamientos y Secciones
+    await sequelize.query(`
+      ALTER TABLE financiamientos DROP CONSTRAINT IF EXISTS chk_financiamientos_montos;
+      ALTER TABLE financiamientos ADD CONSTRAINT chk_financiamientos_montos CHECK ("montoAdjudicado" >= 0 AND "montoEjecutadoEstimado" >= 0);
+
+      ALTER TABLE secciones DROP CONSTRAINT IF EXISTS chk_secciones_valores;
+      ALTER TABLE secciones ADD CONSTRAINT chk_secciones_valores CHECK ("anio" >= 1900 AND "nProyectos" >= 0 AND "nEstudiantes" >= 0);
+    `);
+
+    // 4. Triggers de validación de integridad referencial y coherencia
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_proyecto_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW."fechaCierreEstimada" < NEW."fechaInicio" THEN
+          RAISE EXCEPTION 'La fecha de cierre estimada (%) no puede ser anterior a la fecha de inicio (%).',
+            NEW."fechaCierreEstimada", NEW."fechaInicio";
+        END IF;
+        IF NEW."anioTermino" < NEW."anioInicio" THEN
+          RAISE EXCEPTION 'El año de término (%) no puede ser menor al año de inicio (%).',
+            NEW."anioTermino", NEW."anioInicio";
+        END IF;
+        IF NEW."nEstudiantes" < 0 OR NEW."nDocentes" < 0 OR NEW."nFuncionarios" < 0 THEN
+          RAISE EXCEPTION 'Las cantidades de participantes no pueden ser negativas.';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_proyecto_integrity ON proyectos;
+      CREATE TRIGGER trg_check_proyecto_integrity
+      BEFORE INSERT OR UPDATE ON proyectos
+      FOR EACH ROW EXECUTE FUNCTION check_proyecto_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_financiamiento_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM proyectos WHERE "idProyecto" = NEW."idProyecto") THEN
+          RAISE EXCEPTION 'El proyecto asociado con ID "%" no existe en la tabla proyectos.', NEW."idProyecto";
+        END IF;
+        IF NEW."montoAdjudicado" < 0 THEN
+          RAISE EXCEPTION 'El monto adjudicado (%) no puede ser negativo.', NEW."montoAdjudicado";
+        END IF;
+        IF NEW."montoEjecutadoEstimado" < 0 THEN
+          RAISE EXCEPTION 'El monto ejecutado estimado (%) no puede ser negativo.', NEW."montoEjecutadoEstimado";
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_financiamiento_integrity ON financiamientos;
+      CREATE TRIGGER trg_check_financiamiento_integrity
+      BEFORE INSERT OR UPDATE ON financiamientos
+      FOR EACH ROW EXECUTE FUNCTION check_financiamiento_integrity();
+    `);
+
+    // 5. Documentación SQL: Comentarios en tablas y columnas
+    await sequelize.query(`
+      COMMENT ON TABLE proyectos IS 'Tabla de proyectos de innovación institucional y estudiantil.';
+      COMMENT ON COLUMN proyectos."idProyecto" IS 'Identificador único del proyecto de innovación.';
+      COMMENT ON COLUMN proyectos."nombreProyecto" IS 'Nombre del proyecto de innovación.';
+      COMMENT ON COLUMN proyectos."areaTematica" IS 'Área temática del proyecto.';
+      COMMENT ON COLUMN proyectos."cursoLinea" IS 'Curso o línea formativa asociada.';
+      COMMENT ON COLUMN proyectos.estado IS 'Estado del proyecto (ej. En Curso, Finalizado).';
+      COMMENT ON COLUMN proyectos."unidadResponsable" IS 'Unidad académica o administrativa responsable.';
+      COMMENT ON COLUMN proyectos."responsableDocente" IS 'Docente o responsable a cargo del proyecto.';
+      COMMENT ON COLUMN proyectos."socioContraparte" IS 'Socio o contraparte externa vinculada.';
+      COMMENT ON COLUMN proyectos."anioInicio" IS 'Año de inicio del proyecto.';
+      COMMENT ON COLUMN proyectos."anioTermino" IS 'Año de término del proyecto.';
+      COMMENT ON COLUMN proyectos."semestreInicio" IS 'Semestre de inicio (1 o 2).';
+      COMMENT ON COLUMN proyectos."fechaInicio" IS 'Fecha exacta de inicio.';
+      COMMENT ON COLUMN proyectos."fechaCierreEstimada" IS 'Fecha estimada de cierre.';
+      COMMENT ON COLUMN proyectos."tipoProyecto" IS 'Tipo de proyecto (Institucional o Estudiantil).';
+      COMMENT ON COLUMN proyectos."resultadoPrincipal" IS 'Resultado o producto principal obtenido.';
+      COMMENT ON COLUMN proyectos."nEstudiantes" IS 'Cantidad de estudiantes participantes.';
+      COMMENT ON COLUMN proyectos."nFuncionarios" IS 'Cantidad de funcionarios participantes.';
+      COMMENT ON COLUMN proyectos."nDocentes" IS 'Cantidad de docentes participantes.';
+      COMMENT ON COLUMN proyectos."evidenciaPrincipal" IS 'Evidencia o entregable principal.';
+      COMMENT ON COLUMN proyectos.observacion IS 'Observaciones adicionales del proyecto.';
+
+      COMMENT ON TABLE financiamientos IS 'Tabla de financiamiento y presupuestos de proyectos de innovación.';
+      COMMENT ON COLUMN financiamientos."idProyecto" IS 'Identificador foráneo del proyecto de innovación asociado.';
+      COMMENT ON COLUMN financiamientos."nombreProyecto" IS 'Nombre del proyecto financiado.';
+      COMMENT ON COLUMN financiamientos."montoAdjudicado" IS 'Monto adjudicado en pesos chilenos (CLP).';
+      COMMENT ON COLUMN financiamientos."montoEjecutadoEstimado" IS 'Monto ejecutado estimado en pesos chilenos (CLP).';
+      COMMENT ON COLUMN financiamientos."estadoFinanciero" IS 'Estado del financiamiento.';
+      COMMENT ON COLUMN financiamientos."financiamientoExterno" IS 'Indica si cuenta con financiamiento externo.';
+      COMMENT ON COLUMN financiamientos."fuenteFinanciamiento" IS 'Fuente o fondo otorgante del financiamiento.';
+      COMMENT ON COLUMN financiamientos.observacion IS 'Observaciones del financiamiento.';
+    `);
+
+    // =========================================================================
+    // PIADI-335: RESTRICCIONES, TRIGGERS Y DOCUMENTACIÓN SQL PARA ADMISIÓN
+    // =========================================================================
+    console.log('Applying database-level constraints, triggers, and SQL documentation for Admisión...');
+
+    // 1. Foreign Key Constraints para tablas de Admisión
+    await sequelize.query(`
+      CREATE INDEX IF NOT EXISTS idx_alumnos_rut ON alumnos (rut);
+      CREATE INDEX IF NOT EXISTS idx_matricula_codcli ON matriculas_por_asignatura ("codCli");
+      CREATE INDEX IF NOT EXISTS idx_matricula_ramo ON matriculas_por_asignatura ("ramoEquiv");
+      CREATE INDEX IF NOT EXISTS idx_matricula_anio_periodo ON matriculas_por_asignatura (anio, periodo);
+      CREATE INDEX IF NOT EXISTS idx_caracterizacion_rut ON caracterizacion_estudiante (rut);
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_matricula_alumnos'
+        ) THEN
+          ALTER TABLE matriculas_por_asignatura
+            ADD CONSTRAINT fk_matricula_alumnos
+            FOREIGN KEY ("codCli")
+            REFERENCES alumnos("codCli")
+            ON UPDATE CASCADE
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_matricula_asignaturas'
+        ) THEN
+          ALTER TABLE matriculas_por_asignatura
+            ADD CONSTRAINT fk_matricula_asignaturas
+            FOREIGN KEY ("ramoEquiv")
+            REFERENCES asignaturas("ramoEquiv")
+            ON UPDATE CASCADE
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_caracterizacion_alumnos'
+        ) THEN
+          ALTER TABLE caracterizacion_estudiante
+            ADD CONSTRAINT fk_caracterizacion_alumnos
+            FOREIGN KEY (rut)
+            REFERENCES alumnos(rut)
+            ON UPDATE CASCADE
+            ON DELETE CASCADE;
+        END IF;
+      END $$;
+    `);
+
+    // 2. CHECK Constraints en Alumnos, Asignaturas, Matriculas y Caracterización
+    await sequelize.query(`
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_codCli_ramoEquiv_key";
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_ramoEquiv_codCli_unique";
+
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_rut;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_rut CHECK (rut > 0 AND rut <= 99999999);
+
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_dig;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_dig CHECK ("digitoVerificador" ~* '^[0-9Kk]$');
+
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_codcli;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_codcli CHECK (TRIM("codCli") <> '');
+
+      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_nombres;
+      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_nombres CHECK (TRIM(nombre) <> '' AND TRIM("apellidoPat") <> '' AND TRIM("apellidoMat") <> '');
+
+      ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_ramo;
+      ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_ramo CHECK (TRIM("ramoEquiv") <> '');
+
+      ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_nombre;
+      ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_nombre CHECK (TRIM(nombre) <> '');
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_anio;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_anio CHECK (anio >= 1990 AND anio <= 2100);
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_periodo;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_periodo CHECK (periodo >= 1 AND periodo <= 2);
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_seccion;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_seccion CHECK (seccion >= 1);
+
+      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_estadocad;
+      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_estadocad CHECK (TRIM("estadoCad") <> '');
+
+      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_rut;
+      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_rut CHECK (rut > 0 AND rut <= 99999999);
+
+      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_dig;
+      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_dig CHECK (dig IS NULL OR dig ~* '^[0-9Kk]$');
+
+      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_fecha_nac;
+      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_fecha_nac CHECK ("fechaNacimiento" IS NULL OR ("fechaNacimiento" >= '1920-01-01' AND "fechaNacimiento" <= CURRENT_DATE));
+    `);
+
+    // 3. Triggers de validación de integridad referencial y coherencia
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_alumno_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NEW.rut <= 0 THEN
+          RAISE EXCEPTION 'El RUT del alumno (%) debe ser un número positivo.', NEW.rut;
+        END IF;
+        IF TRIM(NEW."codCli") = '' THEN
+          RAISE EXCEPTION 'El código de cliente (codCli) no puede estar vacío.';
+        END IF;
+        IF TRIM(NEW.nombre) = '' OR TRIM(NEW."apellidoPat") = '' OR TRIM(NEW."apellidoMat") = '' THEN
+          RAISE EXCEPTION 'El nombre y apellidos del alumno no pueden estar vacíos.';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_alumno_integrity ON alumnos;
+      CREATE TRIGGER trg_check_alumno_integrity
+      BEFORE INSERT OR UPDATE ON alumnos
+      FOR EACH ROW EXECUTE FUNCTION check_alumno_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_matricula_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM alumnos WHERE "codCli" = NEW."codCli") THEN
+          RAISE EXCEPTION 'El estudiante con código "%" no existe en la tabla alumnos.', NEW."codCli";
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM asignaturas WHERE "ramoEquiv" = NEW."ramoEquiv") THEN
+          RAISE EXCEPTION 'La asignatura con código "%" no existe en la tabla asignaturas.', NEW."ramoEquiv";
+        END IF;
+        IF NEW.seccion < 1 THEN
+          RAISE EXCEPTION 'El número de sección (%) debe ser mayor o igual a 1.', NEW.seccion;
+        END IF;
+        IF NEW.anio < 1990 OR NEW.anio > 2100 THEN
+          RAISE EXCEPTION 'El año de matrícula (%) debe estar entre 1990 y 2100.', NEW.anio;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_matricula_integrity ON matriculas_por_asignatura;
+      CREATE TRIGGER trg_check_matricula_integrity
+      BEFORE INSERT OR UPDATE ON matriculas_por_asignatura
+      FOR EACH ROW EXECUTE FUNCTION check_matricula_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_caracterizacion_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM alumnos WHERE rut = NEW.rut) THEN
+          RAISE EXCEPTION 'El estudiante con RUT "%" no existe en la tabla alumnos.', NEW.rut;
+        END IF;
+        IF NEW."fechaNacimiento" IS NOT NULL AND NEW."fechaNacimiento" > CURRENT_DATE THEN
+          RAISE EXCEPTION 'La fecha de nacimiento (%) no puede ser futura.', NEW."fechaNacimiento";
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_caracterizacion_integrity ON caracterizacion_estudiante;
+      CREATE TRIGGER trg_check_caracterizacion_integrity
+      BEFORE INSERT OR UPDATE ON caracterizacion_estudiante
+      FOR EACH ROW EXECUTE FUNCTION check_caracterizacion_integrity();
+    `);
+
+    // 4. Documentación SQL: Comentarios en tablas y columnas de Admisión
+    await sequelize.query(`
+      COMMENT ON TABLE alumnos IS 'Tabla de estudiantes de pregrado matriculados en la institución.';
+      COMMENT ON COLUMN alumnos."codCli" IS 'Código único de cliente/estudiante asignado en el sistema académico institucional.';
+      COMMENT ON COLUMN alumnos.rut IS 'Número de Rol Único Tributario (RUT) del estudiante (sin dígito verificador).';
+      COMMENT ON COLUMN alumnos."digitoVerificador" IS 'Dígito verificador del RUT (0-9 o K).';
+      COMMENT ON COLUMN alumnos.nombre IS 'Nombre de pila del estudiante.';
+      COMMENT ON COLUMN alumnos."apellidoPat" IS 'Apellido paterno del estudiante.';
+      COMMENT ON COLUMN alumnos."apellidoMat" IS 'Apellido materno del estudiante.';
+      COMMENT ON COLUMN alumnos.mail IS 'Correo electrónico institucional o de contacto.';
+      COMMENT ON COLUMN alumnos."fonoAct" IS 'Teléfono de contacto actualizado.';
+
+      COMMENT ON TABLE asignaturas IS 'Catálogo de asignaturas y ramos equivalentes de la carrera Contador Auditor.';
+      COMMENT ON COLUMN asignaturas."ramoEquiv" IS 'Código identificador de ramo equivalente de la asignatura.';
+      COMMENT ON COLUMN asignaturas.nombre IS 'Nombre descriptivo de la asignatura curricular.';
+
+      COMMENT ON TABLE matriculas_por_asignatura IS 'Registro de inscripciones y matrículas de estudiantes por asignatura, sección y período académico.';
+      COMMENT ON COLUMN matriculas_por_asignatura."codCli" IS 'Identificador foráneo del alumno matriculado.';
+      COMMENT ON COLUMN matriculas_por_asignatura."ramoEquiv" IS 'Identificador foráneo de la asignatura inscrita.';
+      COMMENT ON COLUMN matriculas_por_asignatura.seccion IS 'Número de sección en que cursa la asignatura.';
+      COMMENT ON COLUMN matriculas_por_asignatura.anio IS 'Año académico de la matrícula.';
+      COMMENT ON COLUMN matriculas_por_asignatura.periodo IS 'Período académico semestral (1 o 2).';
+      COMMENT ON COLUMN matriculas_por_asignatura."estadoCad" IS 'Estado académico del estudiante en la asignatura (Regular, Aprobado, Reprobado, etc.).';
+
+      COMMENT ON TABLE caracterizacion_estudiante IS 'Datos sociodemográficos, procedencia escolar y caracterización socioeconómica de los estudiantes de pregrado.';
+      COMMENT ON COLUMN caracterizacion_estudiante.rut IS 'Número de RUT del estudiante (clave primaria y foránea hacia alumnos.rut).';
+      COMMENT ON COLUMN caracterizacion_estudiante.dig IS 'Dígito verificador del RUT.';
+      COMMENT ON COLUMN caracterizacion_estudiante.sexo IS 'Sexo registral declarado por el estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante."fechaNacimiento" IS 'Fecha de nacimiento del estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante.region IS 'Región de residencia del estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante.comuna IS 'Comuna de residencia del estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante."tipoColegio" IS 'Tipo de establecimiento de egreso de enseñanza media (Municipal, Particular Subvencionado, Técnico Profesional, etc.).';
+      COMMENT ON COLUMN caracterizacion_estudiante."viaAcceso" IS 'Vía de ingreso a la institución (Admisión Directa, PSU / PAES, etc.).';
+      COMMENT ON COLUMN caracterizacion_estudiante."nivelSocioeconomico" IS 'Clasificación o tramo socioeconómico del estudiante (NSE).';
+      COMMENT ON COLUMN caracterizacion_estudiante."situacionFamiliar" IS 'Situación y entorno familiar declarado por el estudiante.';
+      COMMENT ON COLUMN caracterizacion_estudiante.beneficios IS 'Beneficios estudiantiles, gratuidad o becas asignadas al estudiante.';
     `);
 
     console.log('Database-level constraints, triggers, and SQL documentation applied successfully.');

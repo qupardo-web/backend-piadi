@@ -15,12 +15,14 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *   post:
  *     tags: [Departamentos]
  *     summary: Crea un departamento
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       201:
  *         description: Departamento creado.
  */
 router.get('/departments', authenticateToken, indicatorController.listDepartments);
-router.post('/departments', indicatorController.createDepartment);
+router.post('/departments', authenticateToken, indicatorController.createDepartment);
 
 /**
  * @openapi
@@ -28,6 +30,8 @@ router.post('/departments', indicatorController.createDepartment);
  *   put:
  *     tags: [Departamentos]
  *     summary: Actualiza un departamento por su key
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -39,6 +43,8 @@ router.post('/departments', indicatorController.createDepartment);
  *   delete:
  *     tags: [Departamentos]
  *     summary: Elimina un departamento por su key
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -48,8 +54,8 @@ router.post('/departments', indicatorController.createDepartment);
  *       200:
  *         description: Departamento eliminado.
  */
-router.put('/departments/:departmentKey', indicatorController.updateDepartment);
-router.delete('/departments/:departmentKey', indicatorController.deleteDepartment);
+router.put('/departments/:departmentKey', authenticateToken, indicatorController.updateDepartment);
+router.delete('/departments/:departmentKey', authenticateToken, indicatorController.deleteDepartment);
 
 /**
  * @openapi
@@ -100,6 +106,8 @@ router.get('/departments/:departmentKey/filters', authenticateToken, indicatorCo
  *   post:
  *     tags: [Departamentos]
  *     summary: Crea una definición de KPI para un departamento
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -110,7 +118,7 @@ router.get('/departments/:departmentKey/filters', authenticateToken, indicatorCo
  *         description: KPI creado.
  */
 router.get('/departments/:departmentKey/kpis', authenticateToken, indicatorController.listDepartmentKpis);
-router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
+router.post('/departments/:departmentKey/kpis', authenticateToken, indicatorController.createKpi);
 
 /**
  * @openapi
@@ -118,6 +126,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *   put:
  *     tags: [Departamentos]
  *     summary: Actualiza una definición de KPI
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -134,6 +144,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *   delete:
  *     tags: [Departamentos]
  *     summary: Elimina una definición de KPI
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: departmentKey
@@ -147,8 +159,8 @@ router.post('/departments/:departmentKey/kpis', indicatorController.createKpi);
  *       200:
  *         description: KPI eliminado.
  */
-router.put('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.updateKpi);
-router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorController.deleteKpi);
+router.put('/departments/:departmentKey/kpis/:indicatorKey', authenticateToken, indicatorController.updateKpi);
+router.delete('/departments/:departmentKey/kpis/:indicatorKey', authenticateToken, indicatorController.deleteKpi);
 
 /**
  * @openapi
@@ -160,7 +172,10 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         schema: { type: string }
+ *         description: Innovación admite proyectos_activos, total_proyectos, proyectos_finalizados, financiamiento_obtenido, proyectos_con_financiamiento_externo, secciones_curso y docentes_involucrados.
+ *         schema:
+ *           type: string
+ *           example: proyectos_activos
  *       - in: query
  *         name: department
  *         required: true
@@ -181,14 +196,23 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *         name: semesters
  *         schema: { type: string }
  *       - in: query
+ *         name: periodo
+ *         description: En Admisión acepta 1, 2 y aliases de primer/segundo semestre.
+ *         schema: { type: string }
+ *       - in: query
  *         name: startMonth
  *         schema: { type: integer }
  *       - in: query
  *         name: area
+ *         description: En Innovación filtra Proyecto.areaTematica.
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
- *         description: En VCM se aplica a tipoConvenio o tipoActividad según el indicador.
+ *         description: En Innovación se aplica a tipoProyecto; en VCM depende del indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: estado
+ *         description: Estado del proyecto de Innovación.
  *         schema: { type: string }
  *       - in: query
  *         name: sector
@@ -209,6 +233,37 @@ router.delete('/departments/:departmentKey/kpis/:indicatorKey', indicatorControl
  *       - in: query
  *         name: maxAge
  *         schema: { type: integer }
+ *       - in: query
+ *         name: nuevoAntiguo
+ *         description: En Admisión filtra estudiantes nuevos o antiguos según su primera matrícula histórica.
+ *         schema: { type: string, enum: [nuevo, antiguo] }
+ *       - in: query
+ *         name: asignatura
+ *         description: Nombre de asignatura de Admisión.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: seccion
+ *         description: Número de sección de Admisión.
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: estadoAcademico
+ *         description: Estado académico de la matrícula de Admisión.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: tipoColegio
+ *         schema: { type: string }
+ *       - in: query
+ *         name: viaAcceso
+ *         schema: { type: string }
+ *       - in: query
+ *         name: nivelSocioeconomico
+ *         schema: { type: string }
+ *       - in: query
+ *         name: situacionFamiliar
+ *         schema: { type: string }
+ *       - in: query
+ *         name: beneficios
+ *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Valor del indicador (hasData false si faltan datos).
@@ -225,8 +280,8 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Para este contrato VCM use convenios_activos.
- *         schema: { type: string, example: convenios_activos }
+ *         description: Clave del indicador. Innovación admite series de proyectos, secciones_curso, docentes_involucrados, financiamiento_obtenido y proyectos_con_financiamiento_externo.
+ *         schema: { type: string, example: docentes_involucrados }
  *       - in: query
  *         name: department
  *         required: true
@@ -248,10 +303,15 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         schema: { type: integer }
  *       - in: query
  *         name: area
+ *         description: En Innovación filtra Proyecto.areaTematica y es alias público de groupBy=areaTematica.
  *         schema: { type: string }
  *       - in: query
  *         name: tipo
- *         description: En VCM se aplica a tipoConvenio o tipoActividad según el indicador.
+ *         description: En Innovación se aplica a tipoProyecto; en VCM depende del indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: estado
+ *         description: Estado del proyecto de Innovación.
  *         schema: { type: string }
  *       - in: query
  *         name: sector
@@ -263,11 +323,26 @@ router.get('/indicators/:indicatorKey/values', authenticateToken, indicatorContr
  *         name: groupBy
  *         schema:
  *           type: string
- *           description: anio es alias externo de year; tipo se resuelve según la entidad VCM.
- *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, sector]
+ *           description: anio es alias externo de year. En Innovación, area es alias contextual de areaTematica; financiamiento anual usa Proyecto.anioInicio. En Admisión, periodo representa el semestre 1/2 y nuevoAntiguo deriva de la primera matrícula histórica.
+ *           enum: [year, anio, area, areaTematica, semestre, periodo, tipo, modalidad, programa, sexo, rangoEdad, asignatura, seccion, estadoAcademico, nuevoAntiguo, edad, tipoColegio, viaAcceso, nivelSocioeconomico, situacionFamiliar, region, comuna, beneficios, sector, fuente]
  *     responses:
  *       200:
- *         description: Serie simple (points) o segmentada (series) según groupBy.
+ *         description: Serie simple (points) o segmentada (series) según groupBy. Si existe una única meta aplicable, incluye targetLine.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     targetLine:
+ *                       type: object
+ *                       description: Campo opcional; se omite cuando no existe una meta aplicable.
+ *                       properties:
+ *                         value: { type: number, example: 100 }
+ *                         label: { type: string, example: Meta }
  */
 router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorController.getIndicatorSeries);
 
@@ -281,8 +356,8 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *       - in: path
  *         name: indicatorKey
  *         required: true
- *         description: Clave del indicador. Para este contrato VCM use actividades_realizadas.
- *         schema: { type: string, example: actividades_realizadas }
+ *         description: Clave del indicador. Innovación admite proyectos, financiamiento_obtenido, proyectos_con_financiamiento_externo, secciones_curso y docentes_involucrados.
+ *         schema: { type: string, example: secciones_curso }
  *       - in: query
  *         name: department
  *         required: true
@@ -292,14 +367,18 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *         required: true
  *         schema:
  *           type: string
- *           description: anio es alias de year; para actividades VCM tipo representa tipoActividad.
- *           enum: [year, anio, area, tipo, modalidad, programa, sexo, rangoEdad, region, nivelDeEstudio, tipoParticipante, sectorEconomico, sector]
+ *           description: anio es alias de year; area es alias contextual de areaTematica para proyectos de Innovación; secciones_curso admite semestre; financiamiento_obtenido admite fuente y year usando Proyecto.anioInicio. En Admisión, periodo representa el semestre 1/2 y nuevoAntiguo deriva de la primera matrícula histórica.
+ *           enum: [year, anio, area, areaTematica, semestre, periodo, tipo, modalidad, programa, sexo, rangoEdad, asignatura, seccion, estadoAcademico, nuevoAntiguo, edad, tipoColegio, viaAcceso, nivelSocioeconomico, situacionFamiliar, region, comuna, beneficios, nivelDeEstudio, tipoParticipante, sectorEconomico, sector, fuente]
  *       - in: query
  *         name: year
  *         schema: { type: integer }
  *       - in: query
  *         name: tipo
- *         description: En actividades VCM filtra tipoActividad.
+ *         description: En Innovación se aplica a tipoProyecto; en VCM depende del indicador.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: estado
+ *         description: Estado del proyecto de Innovación.
  *         schema: { type: string }
  *       - in: query
  *         name: sector
@@ -312,7 +391,24 @@ router.get('/indicators/:indicatorKey/series', authenticateToken, indicatorContr
  *         schema: { type: integer }
  *     responses:
  *       200:
- *         description: Items de distribución { label, value }.
+ *         description: Items de distribución { label, value }. La información de meta es opcional.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     metaTarget:
+ *                       type: number
+ *                       description: Objetivo de la MetaMetric aplicable; se omite si no existe.
+ *                       example: 100
+ *                     metaStatus:
+ *                       type: string
+ *                       description: Estado calculado por el motor de progreso; se omite si no existe meta aplicable.
+ *                       enum: [cumplida, en_progreso, en_riesgo, no_cumplida]
  */
 router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorController.getIndicatorBreakdown);
 
@@ -321,16 +417,74 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  * /api/indicators/{indicatorKey}/detail:
  *   get:
  *     tags: [Indicadores]
- *     summary: Obtiene el detalle (título y descripción) de un indicador desde la base de datos
+ *     summary: Obtiene metadata, serie por año, tabla y comparación de un indicador
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: indicatorKey
  *         required: true
  *         schema: { type: string }
+ *       - in: query
+ *         name: year
+ *         description: Año de referencia para la card y la comparación. Alias anio, año.
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: semestre
+ *         description: Filtra por semestre. Alias semester.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: groupBy
+ *         description: Dimensión de desagregación; debe estar en allowedGroupBy del indicador.
+ *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Detalle del indicador.
+ *         description: Detalle del indicador con serie por año, tabla y comparación.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               required: [title, description]
+ *               properties:
+ *                 indicatorKey: { type: string }
+ *                 department: { type: string }
+ *                 title: { type: string }
+ *                 description: { type: string }
+ *                 unit: { type: string }
+ *                 format: { type: string }
+ *                 total: { type: number }
+ *                 formattedTotal: { type: string, nullable: true }
+ *                 hasData: { type: boolean }
+ *                 disaggregated: { type: boolean }
+ *                 groupBy: { type: string, nullable: true }
+ *                 allowedGroupBy:
+ *                   type: array
+ *                   items: { type: string }
+ *                 dimensionLabels:
+ *                   type: object
+ *                   additionalProperties: { type: string }
+ *                 period:
+ *                   type: object
+ *                   properties:
+ *                     from: { type: integer, nullable: true }
+ *                     to: { type: integer, nullable: true }
+ *                 comparison:
+ *                   nullable: true
+ *                   type: object
+ *                   properties:
+ *                     previousYear: { type: integer }
+ *                     previousValue: { type: number }
+ *                     diff: { type: number }
+ *                 table:
+ *                   type: array
+ *                   items: { type: object }
+ *                 series:
+ *                   type: array
+ *                   items: { type: object }
+ *       400: { description: Filtros inválidos. }
+ *       401: { description: Token ausente o inválido. }
+ *       404: { description: Indicador inexistente. }
  */
-router.get('/indicators/:indicatorKey/detail', indicatorController.getIndicatorDetail);
+router.get('/indicators/:indicatorKey/detail', authenticateToken, indicatorController.getIndicatorDetail);
 
 module.exports = router;

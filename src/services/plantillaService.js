@@ -1,4 +1,32 @@
-const { Plantilla, Role } = require('../models');
+const { Plantilla, Role, Department, CampoPlantilla } = require('../models');
+
+const plantillaAuthorizationAssociations = [
+  { model: Role, as: 'role' },
+  { model: Department, as: 'department' }
+];
+
+const buildRequirementSheets = (fields) => {
+  const sheets = new Map();
+
+  for (const field of fields) {
+    const sheetName = field.hoja_origen;
+    if (!sheets.has(sheetName)) {
+      sheets.set(sheetName, { nombre: sheetName, campos: [], seen: new Set() });
+    }
+
+    const sheet = sheets.get(sheetName);
+    const publicKey = JSON.stringify([field.columna_excel, field.requerido]);
+    if (sheet.seen.has(publicKey)) continue;
+
+    sheet.seen.add(publicKey);
+    sheet.campos.push({
+      columna: field.columna_excel,
+      requerido: field.requerido
+    });
+  }
+
+  return [...sheets.values()].map(({ nombre, campos }) => ({ nombre, campos }));
+};
 
 const getAllPlantillas = async () => {
   return await Plantilla.findAll({
@@ -14,19 +42,30 @@ const getPlantillaById = async (id) => {
   if (!plantilla) {
     throw new Error('Plantilla no encontrada');
   }
-  return plantilla;
+
+  const fields = await CampoPlantilla.findAll({
+    where: { plantillaId: id },
+    attributes: ['id', 'hoja_origen', 'columna_excel', 'requerido'],
+    order: [['id', 'ASC']]
+  });
+  const plantillaData = typeof plantilla.toJSON === 'function' ? plantilla.toJSON() : { ...plantilla };
+
+  return {
+    ...plantillaData,
+    hojas: buildRequirementSheets(fields)
+  };
 }
 
 const createNewPlantilla = async (plantillaData) => {
-  const { name, description, roleId } = plantillaData;
-  if (!name || !roleId) {
-    throw new Error('Nombre y roleId son requeridos');
+  const { name, description, roleId, departmentId, variante } = plantillaData;
+  if (!name || !roleId || !departmentId) {
+    throw new Error('Nombre, roleId y departmentId son requeridos');
   }
   const existente = await Plantilla.findOne({ where: { name } });
   if (existente) {
     throw new Error('Ya existe una plantilla con ese nombre');
   }
-  return await Plantilla.create({ name, description, roleId });
+  return await Plantilla.create({ name, description, roleId, departmentId, variante });
 }
 
 const updatePlantillaById = async (id, plantillaData) => {
@@ -34,14 +73,18 @@ const updatePlantillaById = async (id, plantillaData) => {
   if (!plantilla) {
     throw new Error('Plantilla no encontrada');
   }
-  const { name, description, roleId } = plantillaData;
+  const { name, description, roleId, departmentId, variante } = plantillaData;
   if (name && name !== plantilla.name) {
     const existente = await Plantilla.findOne({ where: { name } });
     if (existente) {
       throw new Error('Ya existe una plantilla con ese nombre');
     }
   }
-  await plantilla.update({ name, description, roleId });
+  const fieldsToUpdate = { name, description, roleId, departmentId };
+  if (variante !== undefined) {
+    fieldsToUpdate.variante = variante;
+  }
+  await plantilla.update(fieldsToUpdate);
   return plantilla;
 }
 
@@ -63,8 +106,12 @@ const getPlantillaWithArchivo = async (id) => {
   return plantilla;
 }
 
-const guardarArchivoTemplate = async (id, buffer, originalname) => {
-  const plantilla = await Plantilla.unscoped().findByPk(id);
+const getPlantillaForAuthorization = async (id) => Plantilla.findByPk(id, {
+  include: plantillaAuthorizationAssociations
+});
+
+const guardarArchivoTemplate = async (id, buffer, originalname, resolvedPlantilla = null) => {
+  const plantilla = resolvedPlantilla || await Plantilla.unscoped().findByPk(id);
   if (!plantilla) {
     throw new Error('Plantilla no encontrada');
   }
@@ -82,5 +129,6 @@ module.exports = {
   updatePlantillaById,
   deletePlantillaById,
   getPlantillaWithArchivo,
+  getPlantillaForAuthorization,
   guardarArchivoTemplate
 }

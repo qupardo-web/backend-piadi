@@ -1,38 +1,3 @@
-const GROUP_BY_DIMENSIONS = [
-  // Campos de Educación Continua
-  'year',
-  'area',
-  'tipo',
-  'modalidad',
-  'programa',
-  'sexo',
-  'rangoEdad',
-  'region',
-  'nivelDeEstudio',
-  'tipoParticipante',
-  'sectorEconomico',
-  'cohorte',
-  'jornada',
-  'periodo',
-
-  // Campos de Vinculación con el Medio (VcM)
-  'sector',
-  'tipoConvenio',
-  'areaVinculada',
-  'contraparte',
-  'responsableEcas',
-  'lineaVcM',
-  'tipoActividad',
-  'comuna',
-  'publicoObjetivo',
-  'plataformaFoco',
-  'tipoArticulacion',
-  'especialidadTP',
-  'colegioLiceoTP',
-  'institucion',
-  'internosExternos'
-];
-
 class FilterError extends Error {
   constructor(code, message, details = {}) {
     super(message);
@@ -76,12 +41,36 @@ const normalizeSemester = (value) => {
   return [token];
 };
 
-const normalizeGroupBy = (value) => {
+const ADMISSION_PERIOD_ALIASES = {
+  '1': 1,
+  'primer semestre': 1,
+  '1er semestre': 1,
+  'semestre 1': 1,
+  '2': 2,
+  'segundo semestre': 2,
+  '2do semestre': 2,
+  'semestre 2': 2
+};
+
+const normalizeAdmissionPeriod = (value) => {
+  const token = String(value).trim().toLocaleLowerCase('es');
+  const normalized = ADMISSION_PERIOD_ALIASES[token];
+  if (!normalized) {
+    throw new FilterError('INVALID_PERIOD', 'El período de Admisión debe corresponder al semestre 1 o 2', {
+      periodo: value,
+      allowed: [1, 2]
+    });
+  }
+  return normalized;
+};
+
+const normalizeGroupBy = (value, department = null) => {
   if (value === undefined || value === null || value === '') {
     return null;
   }
   const g = String(value).trim();
   if (g === 'anio') return 'year';
+  if (g === 'periodo' && String(department || '').toLocaleLowerCase('es') !== 'admision') return 'year';
   return g === 'ageRange' ? 'rangoEdad' : g;
 };
 
@@ -90,6 +79,8 @@ const isFourDigitYear = (value) => /^\d{4}$/.test(String(value));
 const uniq = (arr) => [...new Set(arr)];
 
 const parseIndicatorFilters = (query = {}) => {
+  const requestedYear = query.year !== undefined ? query.year
+    : (query.anio !== undefined ? query.anio : query['año']);
   const filters = {
     department: query.department ? String(query.department).trim() : null,
     year: null,
@@ -100,12 +91,13 @@ const parseIndicatorFilters = (query = {}) => {
     months: [],
     area: normalizeArrayParam(query.area),
     tipo: normalizeArrayParam(query.tipo),
+    estado: normalizeArrayParam(query.estado),
     modalidad: normalizeArrayParam(query.modalidad),
     sexo: normalizeArrayParam(query.sexo),
     rangoEdad: uniq([...normalizeArrayParam(query.ageRange), ...normalizeArrayParam(query.rangoEdad)]),
     minAge: normalizeNumber(query.minAge),
     maxAge: normalizeNumber(query.maxAge),
-    groupBy: normalizeGroupBy(query.groupBy),
+    groupBy: normalizeGroupBy(query.groupBy, query.department),
     
     // Vinculación con el Medio
     sector: normalizeArrayParam(query.sector),
@@ -131,14 +123,28 @@ const parseIndicatorFilters = (query = {}) => {
     cohorte: normalizeArrayParam(query.cohorte),
     jornada: normalizeArrayParam(query.jornada),
     periodo: normalizeArrayParam(query.periodo),
-    region: normalizeArrayParam(query.region)
+    region: normalizeArrayParam(query.region),
+    // Admisión
+    asignatura: normalizeArrayParam(query.asignatura),
+    seccion: normalizeArrayParam(query.seccion),
+    estadoAcademico: uniq([
+      ...normalizeArrayParam(query.estadoAcademico),
+      ...normalizeArrayParam(query.estadoCad)
+    ]),
+    nuevoAntiguo: normalizeArrayParam(query.nuevoAntiguo),
+    rangoEtario: normalizeArrayParam(query.rangoEtario),
+    tipoColegio: normalizeArrayParam(query.tipoColegio),
+    viaAcceso: normalizeArrayParam(query.viaAcceso),
+    nivelSocioeconomico: normalizeArrayParam(query.nivelSocioeconomico),
+    situacionFamiliar: normalizeArrayParam(query.situacionFamiliar),
+    beneficios: normalizeArrayParam(query.beneficios)
   };
 
-  if (query.year !== undefined && query.year !== '') {
-    if (!isFourDigitYear(query.year)) {
-      throw new FilterError('INVALID_YEAR', 'El parámetro "year" debe ser un año numérico de 4 dígitos', { year: query.year });
+  if (requestedYear !== undefined && requestedYear !== '') {
+    if (!isFourDigitYear(requestedYear)) {
+      throw new FilterError('INVALID_YEAR', 'El parámetro de año debe ser un año numérico de 4 dígitos', { year: requestedYear });
     }
-    filters.year = Number(query.year);
+    filters.year = Number(requestedYear);
   } else {
     if (query.fromYear !== undefined && query.fromYear !== '') {
       if (!isFourDigitYear(query.fromYear)) {
@@ -160,9 +166,20 @@ const parseIndicatorFilters = (query = {}) => {
     }
   }
 
-  const semesterTokens = uniq([...normalizeArrayParam(query.semester), ...normalizeArrayParam(query.semesters)]);
+  const semesterTokens = uniq([
+    ...normalizeArrayParam(query.semester),
+    ...normalizeArrayParam(query.semesters),
+    ...normalizeArrayParam(query.semestre)
+  ]);
   filters.semesterLabels = semesterTokens;
   filters.semesters = uniq(semesterTokens.flatMap((t) => normalizeSemester(t)));
+
+  if (String(filters.department || '').toLocaleLowerCase('es') === 'admision') {
+    filters.periodo = uniq([
+      ...filters.periodo,
+      ...semesterTokens
+    ].map(normalizeAdmissionPeriod));
+  }
 
   const monthTokens = uniq([...normalizeArrayParam(query.month), ...normalizeArrayParam(query.startMonth)]);
   for (const token of monthTokens) {
@@ -174,21 +191,10 @@ const parseIndicatorFilters = (query = {}) => {
   }
   filters.months = uniq(filters.months);
 
-  if (filters.groupBy !== null && !GROUP_BY_DIMENSIONS.includes(filters.groupBy)) {
-    throw new FilterError('INVALID_GROUP_BY', 'El parámetro "groupBy" no es una dimensión válida', {
-      groupBy: filters.groupBy,
-      allowed: GROUP_BY_DIMENSIONS
-    });
-  }
+  // La validación de groupBy es por indicador (validateGroupBy en indicatorService),
+  // que devuelve los allowedGroupBy del indicador. Aquí no se valida globalmente.
 
   return filters;
-};
-
-const validateIndicatorFilters = (filters) => {
-  if (filters.groupBy !== null && !GROUP_BY_DIMENSIONS.includes(filters.groupBy)) {
-    throw new FilterError('INVALID_GROUP_BY', 'El parámetro "groupBy" no es una dimensión válida', { groupBy: filters.groupBy });
-  }
-  return true;
 };
 
 const buildFilterMeta = (filters) => {
@@ -200,6 +206,7 @@ const buildFilterMeta = (filters) => {
   if (filters.months.length) meta.startMonths = filters.months;
   if (filters.area.length) meta.area = filters.area;
   if (filters.tipo.length) meta.tipo = filters.tipo;
+  if (filters.estado.length) meta.estado = filters.estado;
   if (filters.modalidad.length) meta.modalidad = filters.modalidad;
   if (filters.sexo.length) meta.sexo = filters.sexo;
   if (filters.rangoEdad.length) meta.rangoEdad = filters.rangoEdad;
@@ -228,16 +235,25 @@ const buildFilterMeta = (filters) => {
   if (filters.cohorte.length) meta.cohorte = filters.cohorte;
   if (filters.jornada.length) meta.jornada = filters.jornada;
   if (filters.periodo.length) meta.periodo = filters.periodo;
+  if (filters.asignatura.length) meta.asignatura = filters.asignatura;
+  if (filters.seccion.length) meta.seccion = filters.seccion;
+  if (filters.estadoAcademico.length) meta.estadoAcademico = filters.estadoAcademico;
+  if (filters.nuevoAntiguo.length) meta.nuevoAntiguo = filters.nuevoAntiguo;
+  if (filters.rangoEtario.length) meta.rangoEtario = filters.rangoEtario;
+  if (filters.tipoColegio.length) meta.tipoColegio = filters.tipoColegio;
+  if (filters.viaAcceso.length) meta.viaAcceso = filters.viaAcceso;
+  if (filters.nivelSocioeconomico.length) meta.nivelSocioeconomico = filters.nivelSocioeconomico;
+  if (filters.situacionFamiliar.length) meta.situacionFamiliar = filters.situacionFamiliar;
+  if (filters.beneficios.length) meta.beneficios = filters.beneficios;
   
   return meta;
 };
 
 module.exports = {
   FilterError,
-  GROUP_BY_DIMENSIONS,
   parseIndicatorFilters,
-  validateIndicatorFilters,
   normalizeSemester,
+  normalizeAdmissionPeriod,
   normalizeArrayParam,
   normalizeNumber,
   buildFilterMeta

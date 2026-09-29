@@ -1,40 +1,185 @@
 const XLSX = require('xlsx');
+const path = require('node:path');
 const { CampoPlantilla, sequelize } = require('../../models');
+const { obtenerValidador } = require('./validadores');
 
 const estaVacio = (valor) => valor === null ||
   valor === undefined ||
   (typeof valor === 'string' && valor.trim() === '');
 
-const esTipoCompatible = (valor, tipoDato) => {
-  const tipo = String(tipoDato || '').trim().toLowerCase();
+const TIPOS_NUMERICOS = new Set(['INTEGER', 'BIGINT', 'FLOAT', 'REAL', 'DOUBLE PRECISION', 'DECIMAL']);
+const TIPOS_ENTEROS = new Set(['INTEGER', 'BIGINT']);
 
-  if (tipo === 'number') {
-    if (typeof valor === 'number') return Number.isFinite(valor);
-    if (typeof valor !== 'string' || valor.trim() === '') return false;
-    return Number.isFinite(Number(valor.trim()));
-  }
-
-  if (tipo === 'string') {
-    return typeof valor === 'string' ||
-      typeof valor === 'number' ||
-      typeof valor === 'boolean' ||
-      (valor instanceof Date && !Number.isNaN(valor.getTime()));
-  }
-
-  return true;
+const tipoModelo = (Model, campo) => {
+  const attr = Model && Model.rawAttributes[campo.columna_destino];
+  return attr && attr.type && (attr.type.key || attr.type.constructor?.name);
 };
 
-const validarArchivo = async (filePath, plantillaId) => {
-  const campos = await CampoPlantilla.findAll({
-    where: { plantillaId }
-  });
+const resolverTipoEsperado = (campo, Model) => {
+  const modelType = tipoModelo(Model, campo);
+  if (TIPOS_ENTEROS.has(modelType)) return 'integer';
+  if (TIPOS_NUMERICOS.has(modelType)) return 'number';
+  if (modelType === 'DATE' || modelType === 'DATEONLY') return 'date';
+  if (modelType === 'BOOLEAN') return 'boolean';
 
-  if (campos.length === 0) {
-    throw new Error('No hay campos configurados para esta plantilla');
+  const configuredType = String(campo.tipo_dato || '').trim().toLowerCase();
+  if (['integer', 'number', 'date', 'boolean', 'string'].includes(configuredType)) {
+    return configuredType;
+  }
+  return 'string';
+};
+
+const serializarValorSeguro = (valor) => {
+  if (valor === null || valor === undefined) return '';
+  const text = valor instanceof Date ? valor.toISOString() : String(valor);
+  const clean = text.replace(/[\r\n\t]/g, ' ').trim();
+  return clean.length > 80 ? `${clean.slice(0, 77)}...` : clean;
+};
+
+const normalizarFecha = (valor) => {
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    return { valido: true, valor: valor.toISOString().split('T')[0] };
   }
 
+  if (typeof valor === 'number') {
+    const parsed = XLSX.SSF.parse_date_code(valor);
+    if (parsed) {
+      return {
+        valido: true,
+        valor: `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`
+      };
+    }
+    return { valido: false, valor };
+  }
+
+  if (typeof valor !== 'string') return { valido: false, valor };
+  const text = valor.trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$|^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
+  if (!match) return { valido: false, valor };
+
+  const year = Number(match[1] || match[6]);
+  const month = Number(match[2] || match[5]);
+  const day = Number(match[3] || match[4]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return { valido: false, valor };
+  }
+  return { valido: true, valor: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` };
+};
+
+const validarTipo = (valor, tipo) => {
+  if (tipo === 'integer' || tipo === 'number') {
+    const numericValue = typeof valor === 'string' ? Number(valor.trim()) : valor;
+    const valido = typeof numericValue === 'number' && Number.isFinite(numericValue) &&
+      (tipo !== 'integer' || Number.isInteger(numericValue));
+    return { valido, valor: numericValue };
+  }
+
+  if (tipo === 'date') return normalizarFecha(valor);
+  if (tipo === 'boolean') return { valido: typeof valor === 'boolean', valor };
+  return {
+    valido: typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean' ||
+      (valor instanceof Date && !Number.isNaN(valor.getTime())),
+    valor
+  };
+};
+
+const detalleTipo = (tipo) => {
+  if (tipo === 'integer') {
+    return { esperado: 'número entero', correccion: 'Ingrese un número sin decimales, texto ni símbolos.' };
+  }
+  if (tipo === 'number') {
+    return { esperado: 'valor numérico', correccion: 'Ingrese solo un número, sin texto ni símbolos.' };
+  }
+  if (tipo === 'date') {
+    return { esperado: 'fecha válida', correccion: 'Use una fecha de Excel o el formato YYYY-MM-DD, DD-MM-YYYY o DD/MM/YYYY.' };
+  }
+  if (tipo === 'boolean') {
+    return { esperado: 'valor booleano', correccion: 'Ingrese un valor booleano válido.' };
+  }
+  return { esperado: 'texto', correccion: 'Ingrese un valor de texto válido.' };
+};
+
+const crearErrorTipo = ({ hoja, fila, columna, celda, valor, tipo }) => {
+  const { esperado, correccion } = detalleTipo(tipo);
+  const valorSeguro = serializarValorSeguro(valor);
+  return {
+    hoja,
+    campo: columna,
+    fila,
+    celda,
+    valor: valorSeguro,
+    esperado,
+    mensaje: `Formato inválido en la hoja "${hoja}", fila ${fila}, columna "${columna}". ` +
+      `Se esperaba ${esperado}, pero se recibió "${valorSeguro}". ${correccion}`
+  };
+};
+
+const normalizarTexto = (s) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const limpiarNombreHojaParaComparar = (s) => {
+  let norm = normalizarTexto(s).replace(/\s+/g, ' ');
+  // Quitar sufijos o menciones de año como "(2024)", "( 2025 )", "2026", "- 2024", etc.
+  norm = norm.replace(/\(?\b(19\d{2}|20\d{2})\b\)?/g, '').trim();
+  // Quitar caracteres no alfanuméricos sobrantes al final como "( )", "-", "_"
+  norm = norm.replace(/[\(\)\-_]+$/g, '').trim();
+  // Normalizar variaciones de plurales comunes (pregrados -> pregrado, estudiantes -> estudiante)
+  norm = norm.replace(/\bpregrados\b/g, 'pregrado');
+  norm = norm.replace(/\bestudiantes\b/g, 'estudiante');
+  return norm;
+};
+
+const encontrarNombreHoja = (workbook, nombreEsperado) => {
+  const sheetNames = workbook.SheetNames || Object.keys(workbook.Sheets || {});
+  if (sheetNames.includes(nombreEsperado)) return nombreEsperado;
+
+  const esperadoNorm = normalizarTexto(nombreEsperado);
+  const exactNorm = sheetNames.find(name => normalizarTexto(name) === esperadoNorm);
+  if (exactNorm) return exactNorm;
+
+  const esperadoLimpio = limpiarNombreHojaParaComparar(nombreEsperado);
+
+  // 1. Coincidencia limpia exacta (sin año, sin plurales/mayúsculas/acentos)
+  const limpioExacto = sheetNames.find(name => limpiarNombreHojaParaComparar(name) === esperadoLimpio);
+  if (limpioExacto) return limpioExacto;
+
+  // 2. Coincidencia por prefijo (ej: 'estudiante pregrado (2024)' coincide con 'Estudiantes Pregrados')
+  const porPrefijo = sheetNames.find(name => {
+    const nameLimpio = limpiarNombreHojaParaComparar(name);
+    return nameLimpio.startsWith(esperadoLimpio) || esperadoLimpio.startsWith(nameLimpio);
+  });
+  if (porPrefijo) return porPrefijo;
+
+  return null;
+};
+
+const validarArchivo = async (filePath, plantillaId, sourceName = filePath) => {
+  const campos = await CampoPlantilla.findAll({
+    where: { plantillaId },
+    order: [['orden_insercion', 'ASC'], ['id', 'ASC']]
+  });
+
   const workbook = XLSX.readFile(filePath);
+  Object.defineProperty(workbook, '__piadiSourceName', {
+    value: path.parse(sourceName).name,
+    configurable: true
+  });
   const errores = [];
+  if (campos.length === 0) {
+    return {
+      valido: false,
+      errores: [{
+        hoja: 'General',
+        campo: 'plantillaId',
+        valor: String(plantillaId),
+        esperado: 'plantilla existente con campos configurados',
+        mensaje: `La plantilla ${plantillaId} no existe o no tiene campos configurados`
+      }],
+      campos,
+      workbook,
+      hojasEsperadas: {}
+    };
+  }
 
   // Agrupar campos por hoja_origen
   const hojasEsperadas = {};
@@ -45,9 +190,29 @@ const validarArchivo = async (filePath, plantillaId) => {
     hojasEsperadas[campo.hoja_origen].push(campo);
   }
 
+  const validador = obtenerValidador({ campos });
+  const nombresHojas = Object.keys(hojasEsperadas);
+  const preparacion = await validador.prepare({
+    workbook,
+    campos,
+    nombresHojas,
+    resolverHoja: (nombreHoja) => encontrarNombreHoja(workbook, nombreHoja)
+  });
+  const resoluciones = preparacion.resoluciones;
+  const hojasResueltas = new Map();
+  errores.push(...(preparacion.errores || []));
+
   // Validar cada hoja esperada
   for (const [nombreHoja, camposDeHoja] of Object.entries(hojasEsperadas)) {
-    if (!workbook.SheetNames.includes(nombreHoja)) {
+    const resolucion = resoluciones.get(nombreHoja);
+    const hojaReal = resolucion.nombre;
+    if (!hojaReal) {
+      if (validador.omitirHojaFaltante({
+        nombreHoja,
+        resolucion,
+        cantidadHojas: nombresHojas.length,
+        campos: camposDeHoja
+      })) continue;
       errores.push({
         hoja: nombreHoja,
         mensaje: `La hoja "${nombreHoja}" no existe en el archivo`
@@ -55,8 +220,16 @@ const validarArchivo = async (filePath, plantillaId) => {
       continue;
     }
 
-    const hoja = workbook.Sheets[nombreHoja];
+    const hoja = workbook.Sheets[hojaReal];
     const datos = XLSX.utils.sheet_to_json(hoja, { defval: null });
+
+    hojasResueltas.set(nombreHoja, {
+      nombreEsperado: nombreHoja,
+      nombreReal: hojaReal,
+      filas: datos,
+      datosNormalizados: [],
+      campos: camposDeHoja
+    });
 
     if (datos.length === 0) {
       errores.push({
@@ -69,12 +242,32 @@ const validarArchivo = async (filePath, plantillaId) => {
     const columnasArchivo = Object.keys(datos[0]);
     const columnasPresentes = new Set(columnasArchivo);
 
+    const resolverColumnaReal = (colEsperada) => {
+      if (columnasPresentes.has(colEsperada)) return colEsperada;
+      const norm = normalizarTexto(validador.normalizarNombreColumna({ valor: colEsperada }));
+      return columnasArchivo.find(c =>
+        normalizarTexto(validador.normalizarNombreColumna({ valor: c })) === norm
+      ) || null;
+    };
+
+    const columnasResueltas = new Map(camposDeHoja.map((campo) => [
+      campo.columna_excel,
+      resolverColumnaReal(campo.columna_excel)
+    ]));
+    Object.assign(hojasResueltas.get(nombreHoja), {
+      columnas: columnasArchivo,
+      columnasResueltas,
+      resolverColumna: resolverColumnaReal
+    });
+
     // 1. Validar la existencia de las columnas requeridas
     for (const campo of camposDeHoja) {
-      if (campo.requerido && !columnasPresentes.has(campo.columna_excel)) {
+      if (campo.requerido && !resolverColumnaReal(campo.columna_excel)) {
         errores.push({
           hoja: nombreHoja,
           campo: campo.columna_excel,
+          valor: '',
+          esperado: 'columna obligatoria',
           mensaje: `La columna requerida ${campo.columna_excel} no existe en la hoja ${nombreHoja}`
         });
       }
@@ -83,7 +276,7 @@ const validarArchivo = async (filePath, plantillaId) => {
     // 2. Si no hay error de columnas faltantes en esta hoja, validar celdas vacías fila por fila
     // Evitamos duplicar validaciones si una misma columna de Excel se mapea a múltiples tablas de base de datos
     const columnasUnicas = new Map();
-    camposDeHoja.filter(c => c.requerido && columnasPresentes.has(c.columna_excel)).forEach(c => {
+    camposDeHoja.filter(c => c.requerido && columnasResueltas.get(c.columna_excel)).forEach(c => {
       if (!columnasUnicas.has(c.columna_excel)) {
         columnasUnicas.set(c.columna_excel, c);
       }
@@ -93,7 +286,10 @@ const validarArchivo = async (filePath, plantillaId) => {
     for (const [index, fila] of datos.entries()) {
       const numeroFilaExcel = index + 2; // Fila 1 es el encabezado en Excel
       for (const campo of columnasRequeridasPresentes) {
-        const valorCelda = fila[campo.columna_excel];
+        const columnaReal = columnasResueltas.get(campo.columna_excel);
+        const valorCelda = fila[columnaReal];
+        const columnaIndex = columnasArchivo.indexOf(columnaReal);
+        const celda = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
         
         // Comprobar si el valor es null, undefined, o un string vacío tras hacer trim
         if (estaVacio(valorCelda)) {
@@ -101,39 +297,81 @@ const validarArchivo = async (filePath, plantillaId) => {
             hoja: nombreHoja,
             campo: campo.columna_excel,
             fila: numeroFilaExcel,
+            celda,
+            valor: '',
+            esperado: 'campo obligatorio',
             mensaje: `Fila ${numeroFilaExcel}: El campo requerido ${campo.columna_excel} está vacío en la hoja ${nombreHoja}`
           });
         }
       }
 
-      // Validar las reglas del modelo en memoria (ej: formato RUT, formato email, fechas, etc.)
+      // Validar las reglas del modelo en memoria (ej: formato, email, fechas, etc.)
       const dataByTable = {};
       const tiposValidados = new Set();
+      const tablasConTipoInvalido = new Set();
       for (const campo of camposDeHoja) {
         if (!dataByTable[campo.tabla_destino]) {
           dataByTable[campo.tabla_destino] = {};
         }
-        let valor = fila[campo.columna_excel];
+        const columnaReal = columnasResueltas.get(campo.columna_excel);
+        let valor = columnaReal ? fila[columnaReal] : undefined;
+        valor = validador.normalizarValor({ valor, campo, fila, nombreHoja, nombreReal: hojaReal });
+        const columnaIndex = columnasArchivo.indexOf(columnaReal);
+        const celda = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
+        const Model = sequelize.models[campo.tabla_destino];
+        const tipoEsperado = resolverTipoEsperado(campo, Model);
 
-        const tipoKey = `${campo.columna_excel}:${campo.tipo_dato}`;
+        const tipoKey = `${campo.columna_excel}:${tipoEsperado}`;
         if (!estaVacio(valor) && !tiposValidados.has(tipoKey)) {
           tiposValidados.add(tipoKey);
-          if (!esTipoCompatible(valor, campo.tipo_dato)) {
-            errores.push({
-              hoja: nombreHoja,
-              campo: campo.columna_excel,
+          const validacionTipo = validador.validarValor({
+            valor,
+            campo,
+            tipoEsperado,
+            hoja: hojaReal,
+            fila: numeroFilaExcel,
+            celda
+          }) || validarTipo(valor, tipoEsperado);
+          if (!validacionTipo.valido) {
+            tablasConTipoInvalido.add(campo.tabla_destino);
+            errores.push(validacionTipo.error
+              ? validacionTipo.error({
+                hoja: hojaReal,
+                fila: numeroFilaExcel,
+                celda,
+                serializarValor: serializarValorSeguro
+              })
+              : crearErrorTipo({
+                hoja: hojaReal,
+                fila: numeroFilaExcel,
+                columna: campo.columna_excel,
+                celda,
+                valor,
+                tipo: tipoEsperado
+              }));
+          } else {
+            valor = validacionTipo.valor;
+            const erroresSemanticos = validador.validarSemantica({
+              valor,
+              campo,
+              hoja: hojaReal,
               fila: numeroFilaExcel,
-              mensaje: `Fila ${numeroFilaExcel}: El campo ${campo.columna_excel} debe ser de tipo ${campo.tipo_dato} en la hoja ${nombreHoja}`
+              celda,
+              serializarValor: serializarValorSeguro
             });
+            if (erroresSemanticos.length > 0) {
+              tablasConTipoInvalido.add(campo.tabla_destino);
+              errores.push(...erroresSemanticos);
+            }
           }
         }
 
         // Normalizar fechas antes de la validación en memoria
-        const Model = sequelize.models[campo.tabla_destino];
         if (Model) {
           const attrType = Model.rawAttributes[campo.columna_destino];
           if (attrType) {
             const typeKey = attrType.type && (attrType.type.key || (attrType.type.constructor && attrType.type.constructor.name));
+            valor = validador.normalizarValorModelo({ valor, campo, tipoModelo: typeKey });
             if (typeKey === 'DATEONLY' || typeKey === 'DATE') {
               // DD-MM-YYYY o DD/MM/YYYY → YYYY-MM-DD
               if (typeof valor === 'string') {
@@ -154,9 +392,11 @@ const validarArchivo = async (filePath, plantillaId) => {
         dataByTable[campo.tabla_destino][campo.columna_destino] = valor;
       }
 
+      hojasResueltas.get(nombreHoja).datosNormalizados.push(dataByTable);
+
       for (const [tabla, registro] of Object.entries(dataByTable)) {
         const Model = sequelize.models[tabla];
-        if (!Model) continue;
+        if (!Model || tablasConTipoInvalido.has(tabla)) continue;
 
         const instance = Model.build(registro);
         try {
@@ -166,6 +406,12 @@ const validarArchivo = async (filePath, plantillaId) => {
             for (const errItem of err.errors) {
               const campoConfig = camposDeHoja.find(c => c.columna_destino === errItem.path && c.tabla_destino === tabla);
               const campoExcel = campoConfig ? campoConfig.columna_excel : errItem.path;
+              const columnaIndex = columnasArchivo.indexOf(campoExcel);
+              const celdaExcel = columnaIndex >= 0 ? XLSX.utils.encode_cell({ r: index + 1, c: columnaIndex }) : '';
+              const tipoEsperado = resolverTipoEsperado(
+                campoConfig || { columna_destino: errItem.path, tipo_dato: 'string' },
+                Model
+              );
 
               let cleanMsg = errItem.message;
               if (cleanMsg.includes('cannot be null')) {
@@ -193,6 +439,9 @@ const validarArchivo = async (filePath, plantillaId) => {
                   hoja: nombreHoja,
                   campo: campoExcel,
                   fila: numeroFilaExcel,
+                  celda: celdaExcel,
+                  valor: serializarValorSeguro(fila[columnasResueltas.get(campoExcel) || campoExcel]),
+                  esperado: detalleTipo(tipoEsperado).esperado,
                   mensaje: `Fila ${numeroFilaExcel}: ${cleanMsg}`
                 });
               }
@@ -201,15 +450,45 @@ const validarArchivo = async (filePath, plantillaId) => {
         }
       }
     }
+
+    errores.push(...validador.validarHoja({
+      nombreEsperado: nombreHoja,
+      nombreReal: hojaReal,
+      filas: datos,
+      campos: camposDeHoja,
+      resolverColumna: resolverColumnaReal
+    }));
   }
 
-  return {
+  const resultadoEspecifico = await validador.validateSpecific({
+    workbook,
+    campos,
+    resoluciones,
+    hojasResueltas,
+    models: sequelize.models,
+    context: preparacion.context
+  });
+  errores.push(...(resultadoEspecifico.errores || []));
+
+  const resultado = {
     valido: errores.length === 0,
     errores,
     campos,
     workbook,
     hojasEsperadas
   };
+  if (Object.hasOwn(resultadoEspecifico, 'advertencias')) {
+    resultado.advertencias = resultadoEspecifico.advertencias;
+  }
+  if (Object.hasOwn(resultadoEspecifico, 'metadata')) {
+    resultado.metadata = resultadoEspecifico.metadata;
+  }
+  return resultado;
 };
 
-module.exports = { validarArchivo };
+module.exports = {
+  validarArchivo,
+  resolverTipoEsperado,
+  validarTipo,
+  serializarValorSeguro
+};

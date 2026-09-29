@@ -18,6 +18,62 @@ const VCM_ARTICULACION_GROUP_BY = [
   'plataformaFoco', 'colegioLiceoTP'
 ];
 const VCM_PROYECTO_GROUP_BY = ['year'];
+const INNOVACION_PROJECT_GROUP_BY = ['year', 'areaTematica'];
+const INNOVACION_SECTION_GROUP_BY = ['year', 'semestre'];
+const INNOVACION_FINANCING_GROUP_BY = ['fuente', 'year'];
+
+const ADMISSION_ENROLLMENT_GROUP_BY = ['year', 'periodo', 'asignatura', 'seccion', 'estadoAcademico', 'nuevoAntiguo'];
+const ADMISSION_CHARACTERIZATION_GROUP_BY = [
+  'year', 'periodo', 'sexo', 'rangoEtario', 'edad', 'region', 'comuna',
+  'tipoColegio', 'viaAcceso', 'nivelSocioeconomico', 'situacionFamiliar', 'beneficios'
+];
+
+const DIMENSION_LABELS = {
+  area: 'Área',
+  areaTematica: 'Área Temática',
+  areaVinculada: 'Área Vinculada',
+  asignatura: 'Asignatura',
+  beneficios: 'Beneficios',
+  cohorte: 'Cohorte',
+  colegioLiceoTP: 'Colegio/Liceo TP',
+  comuna: 'Comuna',
+  contraparte: 'Contraparte',
+  edad: 'Edad',
+  especialidadTP: 'Especialidad TP',
+  estado: 'Estado',
+  estadoAcademico: 'Estado Académico',
+  fuente: 'Fuente',
+  institucion: 'Institución',
+  internosExternos: 'Internos/Externos',
+  lineaVcM: 'Línea VcM',
+  modalidad: 'Modalidad',
+  nivel: 'Nivel',
+  nivelDeEstudio: 'Nivel de Estudio',
+  nivelSocioeconomico: 'Nivel Socioeconómico',
+  nuevoAntiguo: 'Nuevo/Antiguo',
+  periodo: 'Período',
+  plataformaFoco: 'Plataforma Foco',
+  programa: 'Programa',
+  rangoEdad: 'Rango de Edad',
+  rangoEtario: 'Rango Etario',
+  region: 'Región',
+  responsableEcas: 'Responsable ECAS',
+  seccion: 'Sección',
+  sector: 'Sector',
+  sectorEconomico: 'Sector Económico',
+  semestre: 'Semestre',
+  sexo: 'Sexo',
+  situacionFamiliar: 'Situación Familiar',
+  tipo: 'Tipo',
+  tipoActividad: 'Tipo de Actividad',
+  tipoArticulacion: 'Tipo de Articulación',
+  tipoColegio: 'Tipo de Colegio',
+  tipoConvenio: 'Tipo de Convenio',
+  tipoParticipante: 'Tipo de Participante',
+  tipoPractica: 'Tipo de Práctica',
+  viaAcceso: 'Vía de Acceso',
+  year: 'Año',
+};
 
 const INDICATORS = {
   // Educación Continua
@@ -40,7 +96,33 @@ const INDICATORS = {
   participaciones: { kind: 'vcm_participacion', formulaKey: 'PARTICIPACIONES_SUM', allowedGroupBy: VCM_PARTICIPACION_GROUP_BY },
   articulaciones_tp: { kind: 'vcm_articulacion', formulaKey: 'COUNT_ARTICULACIONES', allowedGroupBy: VCM_ARTICULACION_GROUP_BY },
   proyectos_vcm: { kind: 'vcm_proyecto', formulaKey: 'COUNT_PROJECTS', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
-  financiamiento_vcm: { kind: 'vcm_proyecto', formulaKey: 'FINANCING_SUM', allowedGroupBy: VCM_PROYECTO_GROUP_BY }
+  financiamiento_vcm: { kind: 'vcm_proyecto', formulaKey: 'FINANCING_SUM', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
+
+  // Innovación 
+  proyectos_activos: { kind: 'innovation_active_project', formulaKey: 'COUNT_ACTIVE_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
+  total_proyectos: { kind: 'innovation_project', formulaKey: 'COUNT_ALL_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
+  financiamiento_obtenido: { kind: 'innovation_financing', formulaKey: 'SUM_INNOVATION_FINANCING', allowedGroupBy: INNOVACION_FINANCING_GROUP_BY },
+  proyectos_con_financiamiento_externo: { kind: 'innovation_external_financing_projects', formulaKey: 'COUNT_EXTERNAL_FINANCED_PROJECTS', allowedGroupBy: ['year'] },
+  proyectos_finalizados: { kind: 'innovation_finalized_project', formulaKey: 'COUNT_FINALIZED_INNOVATION_PROJECTS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
+  secciones_curso: { kind: 'innovation_section', formulaKey: 'COUNT_INNOVATION_SECTIONS', allowedGroupBy: INNOVACION_SECTION_GROUP_BY },
+  docentes_involucrados: { kind: 'innovation_project', formulaKey: 'SUM_INNOVATION_TEACHERS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
+
+  // Admisión - Matrícula y Académico
+  matricula_total: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_ENROLLMENT_TOTAL', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY },
+  nuevos_vs_antiguos: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_NEW_VS_OLD', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY },
+  matricula_por_asignatura: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_BY_COURSE', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY },
+  matricula_por_seccion: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_BY_SECTION', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY },
+  matricula_por_estado_academico: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_BY_ACADEMIC_STATUS', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY },
+
+  // Admisión - Caracterización del Estudiante
+  nivel_socioeconomico: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_SOCIOECONOMIC', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+  situacion_familiar: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_FAMILY_SITUATION', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+  procedencia_geografica: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_GEOGRAPHY', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+  tipo_colegio: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_SCHOOL_TYPE', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+  via_acceso: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_ACCESS_ROUTE', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+  beneficios_becas: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_BENEFITS', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+  distribucion_sexo: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_GENDER', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+  rango_etario: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_AGE_RANGE', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY }
 };
 
 const PARTICIPANT_FORMULAS = ['UNIQUE_PARTICIPANTS', 'PARTICIPANT_PROFILE', 'TRAINING_RECURRENCE'];
@@ -55,6 +137,25 @@ const VCM_FORMULAS_MAP = {
   FINANCING_SUM: 'vcm_proyecto'
 };
 
+const ADMISSION_ENROLLMENT_FORMULAS = [
+  'COUNT_ADMISSION_ENROLLMENT_TOTAL',
+  'COUNT_ADMISSION_NEW_VS_OLD',
+  'COUNT_ADMISSION_BY_COURSE',
+  'COUNT_ADMISSION_BY_SECTION',
+  'COUNT_ADMISSION_BY_ACADEMIC_STATUS'
+];
+
+const ADMISSION_CHARACTERIZATION_FORMULAS = [
+  'DISTRIBUTION_ADMISSION_SOCIOECONOMIC',
+  'DISTRIBUTION_ADMISSION_FAMILY_SITUATION',
+  'DISTRIBUTION_ADMISSION_GEOGRAPHY',
+  'DISTRIBUTION_ADMISSION_SCHOOL_TYPE',
+  'DISTRIBUTION_ADMISSION_ACCESS_ROUTE',
+  'DISTRIBUTION_ADMISSION_BENEFITS',
+  'DISTRIBUTION_ADMISSION_GENDER',
+  'DISTRIBUTION_ADMISSION_AGE_RANGE'
+];
+
 const getIndicatorConfig = (indicatorKey, definition = null) => {
   if (INDICATORS[indicatorKey]) {
     return INDICATORS[indicatorKey];
@@ -65,6 +166,10 @@ const getIndicatorConfig = (indicatorKey, definition = null) => {
       kind = 'participant';
     } else if (VCM_FORMULAS_MAP[definition.formulaKey]) {
       kind = VCM_FORMULAS_MAP[definition.formulaKey];
+    } else if (ADMISSION_ENROLLMENT_FORMULAS.includes(definition.formulaKey)) {
+      kind = 'admission_enrollment';
+    } else if (ADMISSION_CHARACTERIZATION_FORMULAS.includes(definition.formulaKey)) {
+      kind = 'admission_characterization';
     }
     return {
       kind,
@@ -75,4 +180,4 @@ const getIndicatorConfig = (indicatorKey, definition = null) => {
   return null;
 };
 
-module.exports = { INDICATORS, getIndicatorConfig };
+module.exports = { INDICATORS, DIMENSION_LABELS, getIndicatorConfig };

@@ -76,10 +76,10 @@ const Actividad = sequelize.define('Actividad', {
         allowNull: false
     },
     horas: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.FLOAT,
         allowNull: false,
         validate: {
-            min: 1
+            min: 0
         }
     },
     fecha: {

@@ -2,6 +2,12 @@ const express = require('express');
 const metaController = require('../controllers/metaController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { requireMetaOwnership } = require('../middleware/metaOwnership');
+const {
+  requireRectoria,
+  requireRectoriaForInstitutionalCreation,
+  requireMetaDepartmentAccess
+} = require('../middleware/rectoriaAuthorization');
+const { auditMetaOperation } = require('../middleware/metaAudit');
 
 const router = express.Router();
 
@@ -22,7 +28,7 @@ const router = express.Router();
  *         upperLimit: { type: number, nullable: true, example: 80 }
  *     MetaInput:
  *       type: object
- *       required: [anio, periodo, metrics]
+ *       required: [anio, periodo, nombre, fechaInicio, fechaLimite, metrics]
  *       properties:
  *         departmentId:
  *           type: string
@@ -30,6 +36,9 @@ const router = express.Router();
  *           example: educacion-continua
  *         anio: { type: integer, minimum: 1900, example: 2026 }
  *         periodo: { type: string, example: Anual }
+ *         nombre: { type: string, example: Aumentar participación institucional }
+ *         fechaInicio: { type: string, format: date-time }
+ *         fechaLimite: { type: string, format: date-time }
  *         metrics:
  *           type: array
  *           minItems: 1
@@ -96,9 +105,10 @@ const router = express.Router();
  *                 data: { $ref: '#/components/schemas/Meta' }
  *       400: { description: Payload o suma de pesos inválida. }
  *       401: { description: Token ausente o inválido. }
+ *       403: { description: Solo Rectoría puede crear una meta institucional. }
  *       404: { description: Departamento o indicador inexistente. }
  */
-router.post('/', authenticateToken, metaController.create);
+router.post('/', authenticateToken, requireRectoriaForInstitutionalCreation, requireMetaDepartmentAccess, auditMetaOperation('CREATE'), metaController.create);
 
 /**
  * @openapi
@@ -106,6 +116,7 @@ router.post('/', authenticateToken, metaController.create);
  *   get:
  *     tags: [Metas]
  *     summary: Lista metas enriquecidas con progreso ponderado y estado calculado
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: query
  *         name: departmentId
@@ -130,8 +141,37 @@ router.post('/', authenticateToken, metaController.create);
  *                   type: array
  *                   items: { $ref: '#/components/schemas/MetaProgress' }
  *       400: { description: Filtro status inválido o periodo de meta no reconocido. }
+ *       401: { description: Token ausente, inválido o expirado. }
  */
-router.get('/', metaController.listWithProgress);
+router.get('/', authenticateToken, metaController.listWithProgress);
+
+/**
+ * @openapi
+ * /api/metas/institucional/progress:
+ *   get:
+ *     tags: [Metas]
+ *     summary: Obtiene el cumplimiento global de las metas institucionales
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Promedio del progreso ponderado de las metas institucionales. }
+ *       401: { description: Token ausente o inválido. }
+ *       403: { description: El usuario no pertenece a Rectoría. }
+ */
+router.get('/institucional/progress', authenticateToken, requireRectoria, metaController.getInstitutionalProgress);
+
+/**
+ * @openapi
+ * /api/metas/institucional:
+ *   get:
+ *     tags: [Metas]
+ *     summary: Lista metas institucionales con progreso y breakdown por métrica
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Metas cuyo departmentId es null. }
+ *       401: { description: Token ausente o inválido. }
+ *       403: { description: El usuario no pertenece a Rectoría. }
+ */
+router.get('/institucional', authenticateToken, requireRectoria, metaController.listInstitutional);
 
 /**
  * @openapi
@@ -139,6 +179,7 @@ router.get('/', metaController.listWithProgress);
  *   get:
  *     tags: [Metas]
  *     summary: Obtiene el detalle de progreso ponderado de una meta
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
  *         name: id
@@ -155,9 +196,10 @@ router.get('/', metaController.listWithProgress);
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/MetaProgress' }
  *       400: { description: ID o periodo inválido. }
+ *       401: { description: Token ausente, inválido o expirado. }
  *       404: { description: Meta o indicador inexistente. }
  */
-router.get('/:id/progress', metaController.getProgress);
+router.get('/:id/progress', authenticateToken, metaController.getProgress);
 
 /**
  * @openapi
@@ -165,6 +207,7 @@ router.get('/:id/progress', metaController.getProgress);
  *   get:
  *     tags: [Metas]
  *     summary: Obtiene una meta con todas sus métricas
+ *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
  *         name: id
@@ -181,6 +224,7 @@ router.get('/:id/progress', metaController.getProgress);
  *                 success: { type: boolean, example: true }
  *                 data: { $ref: '#/components/schemas/Meta' }
  *       404: { description: Meta inexistente. }
+ *       401: { description: Token ausente, inválido o expirado. }
  *   put:
  *     tags: [Metas]
  *     summary: Actualiza una meta y reemplaza completamente sus métricas
@@ -216,8 +260,8 @@ router.get('/:id/progress', metaController.getProgress);
  *       403: { description: El usuario no es creador ni pertenece a Rectoría. }
  *       404: { description: Meta inexistente. }
  */
-router.get('/:id', metaController.getById);
-router.put('/:id', authenticateToken, requireMetaOwnership, metaController.update);
-router.delete('/:id', authenticateToken, requireMetaOwnership, metaController.remove);
+router.get('/:id', authenticateToken, metaController.getById);
+router.put('/:id', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, auditMetaOperation('UPDATE'), metaController.update);
+router.delete('/:id', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, auditMetaOperation('DELETE'), metaController.remove);
 
 module.exports = router;

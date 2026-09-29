@@ -1,4 +1,5 @@
 const indicatorService = require('./indicatorService');
+const metaIndicatorIntegrationService = require('./metaIndicatorIntegrationService');
 const { parseIndicatorFilters, buildFilterMeta } = require('./indicatorFilters');
 
 const ALLOWED_SORT = ['name', 'department', 'value'];
@@ -46,6 +47,7 @@ const emptySummary = (yearLabel, filterMeta, sourceConnected) => ({
   data: {
     year: yearLabel,
     departments: [],
+    metas: { total: 0, cumplidas: 0, enRiesgo: 0, cumplimientoGlobal: 0 },
     meta: { totalDepartments: 0, departmentsWithIndicators: 0, totalCards: 0, sourceConnected },
     filters: filterMeta
   }
@@ -106,11 +108,13 @@ const getSummary = async (query = {}) => {
 
   const totalCards = departments.reduce((sum, dept) => sum + dept.cards.length, 0);
   const departmentsWithIndicators = departments.filter((dept) => dept.hasIndicators).length;
+  const metas = await metaIndicatorIntegrationService.getDashboardMetaSummary(query);
 
   return {
     data: {
       year: yearLabel,
       departments,
+      metas,
       meta: {
         totalDepartments: departments.length,
         departmentsWithIndicators,

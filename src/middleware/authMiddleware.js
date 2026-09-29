@@ -1,7 +1,11 @@
 const jwt = require('jsonwebtoken');
 const { UnauthorizedError, ForbiddenError } = require('../utils/errors');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret-secreto-super-seguro';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET no configurado.');
+  process.exit(1);
+}
 
 /**
  * Middleware to authenticate requests using JWT.

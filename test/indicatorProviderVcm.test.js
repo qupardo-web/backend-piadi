@@ -5,6 +5,7 @@ const { Op } = require('sequelize');
 const models = require('../src/models');
 const provider = require('../src/services/indicatorProvider');
 const indicatorService = require('../src/services/indicatorService');
+const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 const { parseIndicatorFilters } = require('../src/services/indicatorFilters');
 
 const originals = [];
@@ -21,6 +22,10 @@ test.afterEach(() => {
 });
 
 const filters = (query = {}) => parseIndicatorFilters({ department: 'vinculacion_medio', ...query });
+
+test.beforeEach(() => {
+  stub(metaIndicatorIntegrationService, 'getIndicatorMetaContext', async () => null);
+});
 
 const captureConvenioWhere = async (query) => {
   let captured;

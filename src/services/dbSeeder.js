@@ -1,4 +1,19 @@
-const { User, Role, Plantilla, CampoPlantilla } = require('../models');
+const { User, Role, Department, Plantilla, CampoPlantilla } = require('../models');
+const {
+  INNOVACION_TEMPLATE_NAME,
+  createInnovationPlantilla,
+  createInnovationFields
+} = require('../config/plantillaInnovacion');
+const {
+  ADMISION_COMBINADA_NAME,
+  ADMISION_MATRICULA_NAME,
+  ADMISION_CARACTERIZACION_NAME,
+  VARIANTE_COMBINADA,
+  VARIANTE_MATRICULA,
+  VARIANTE_CARACTERIZACION,
+  createAllAdmisionPlantillas,
+  createAdmisionFields
+} = require('../config/plantillaAdmision');
 
 async function seedDatabase() {
   try {
@@ -30,57 +45,120 @@ async function seedDatabase() {
     }
     console.log('Roles ensured in database.');
 
-    // 2. Seed Users
-    const userCount = await User.count();
-    if (userCount === 0) {
-      console.log('No users found in database. Seeding default users...');
+    // 1.5 Seed Departments (required for User.departmentId foreign key constraint)
+    const departmentsToSeed = [
+      { key: 'educacion_continua', name: 'Educación Continua', description: 'Dirección de Educación Continua', enabled: true, order: 1 },
+      { key: 'vinculacion_medio', name: 'Vinculación con el Medio', description: 'Dirección de Vinculación con el Medio', enabled: true, order: 2 },
+      { key: 'institucional', name: 'Institucional', description: 'Metas institucionales', enabled: true, order: 3 },
+      { key: 'innovacion', name: 'Innovación', description: 'Dirección de Innovación', enabled: true, order: 4 },
+      { key: 'desarrollo_curricular', name: 'Desarrollo Curricular', description: 'Dirección de Desarrollo Curricular', enabled: true, order: 5 },
+      { key: 'admision', name: 'Admisión', description: 'Dirección de Admisión y Registro Académico', enabled: true, order: 6 }
+    ];
 
-      await User.create({
+    for (const deptData of departmentsToSeed) {
+      await Department.findOrCreate({
+        where: { key: deptData.key },
+        defaults: deptData
+      });
+    }
+    console.log('Departments ensured in database.');
+
+    // 2. Seed Users
+    const usersToSeed = [
+      {
         email: 'educacioncontinua@ecas.cl',
         username: 'educacioncontinua@ecas.cl',
         name: 'Paola Sanchez',
         password: 'admin123',
-        roleId: roleMap['Educación Continua']
-      });
-
-      await User.create({
+        roleId: roleMap['Educación Continua'],
+        departmentId: 'educacion_continua'
+      },
+      {
         email: 'rectoria@ecas.cl',
         username: 'rectoria@ecas.cl',
         name: 'Pablo Marquez',
         password: 'admin123',
-        roleId: roleMap['Rector']
-      });
-
-      await User.create({
+        roleId: roleMap['Rector'],
+        departmentId: null
+      },
+      {
         email: 'calidad@ecas.cl',
         username: 'calidad@ecas.cl',
         name: 'Vicerrectoria de Calidad',
         password: 'admin123',
-        roleId: roleMap['Vicerrectoria de Calidad']
-      });
+        roleId: roleMap['Vicerrectoria de Calidad'],
+        departmentId: null
+      },
+      {
+        email: 'innovacion@ecas.cl',
+        username: 'innovacion@ecas.cl',
+        name: 'Dirección de Innovación',
+        password: 'admin123',
+        roleId: roleMap['Innovación'],
+        departmentId: 'innovacion'
+      },
+      {
+        email: 'vcm@ecas.cl',
+        username: 'vcm@ecas.cl',
+        name: 'Dirección de Vinculación con el Medio',
+        password: 'admin123',
+        roleId: roleMap['Vinculación Con El Medio'],
+        departmentId: 'vinculacion_medio'
+      },
+      {
+        email: 'admision@ecas.cl',
+        username: 'admision@ecas.cl',
+        name: 'Dirección de Admisión',
+        password: 'admin123',
+        roleId: roleMap['Admisión'],
+        departmentId: 'admision'
+      }
+    ];
 
-      console.log('Default users seeded successfully.');
-    } else {
-      console.log('Users table already contains data. Skipping seeding.');
+    for (const userData of usersToSeed) {
+      if (!userData.roleId) continue;
+      const [user, created] = await User.findOrCreate({
+        where: { email: userData.email },
+        defaults: userData
+      });
+      if (!created) {
+        const updateFields = {};
+        if (user.roleId !== userData.roleId) updateFields.roleId = userData.roleId;
+        if (userData.departmentId && user.departmentId !== userData.departmentId) updateFields.departmentId = userData.departmentId;
+        if (Object.keys(updateFields).length > 0) {
+          await user.update(updateFields);
+        }
+      }
     }
+    console.log('Default users ensured successfully.');
 
     // 3. Seed Plantillas (findOrCreate to support incremental updates)
+    await Plantilla.sequelize.query(`
+      ALTER TABLE plantillas ADD COLUMN IF NOT EXISTS "variante" VARCHAR(50);
+    `);
+
     let plantillaMap = {};
     const plantillasToSeed = [
       { 
         name: 'Educación Continua', 
         description: 'Plantilla para carga de programas de educación continua', 
         roleId: roleMap['Educación Continua'],
+        departmentId: 'educacion_continua',
+        variante: null,
         archivoData: null,
         archivoNombre: null
       },
       { 
         name: 'Vinculación Con El Medio', 
         description: 'Plantilla para carga de convenios, actividades y articulaciones de VCM', 
-        roleId: roleMap['Dirección de Vinculación con el Medio'] || roleMap['Vinculación Con El Medio'],
+        roleId: roleMap['Vinculación Con El Medio'],
+        departmentId: 'vinculacion_medio',
+        variante: null,
         archivoData: null,
         archivoNombre: null
-      }
+      },
+      createInnovationPlantilla(roleMap[INNOVACION_TEMPLATE_NAME]),
+      ...createAllAdmisionPlantillas(roleMap['Admisión'])
     ];
 
     for (const data of plantillasToSeed) {
@@ -89,7 +167,21 @@ async function seedDatabase() {
         defaults: data
       });
       plantillaMap[data.name] = created.id;
+
+      const updateData = {};
+      if (created.roleId !== data.roleId) updateData.roleId = data.roleId;
+      if (created.departmentId !== data.departmentId) updateData.departmentId = data.departmentId;
+      if (data.variante !== undefined && created.variante !== data.variante) updateData.variante = data.variante;
+      if (data.description && created.description !== data.description) updateData.description = data.description;
+      if (data.archivoData) {
+        updateData.archivoData = data.archivoData;
+        updateData.archivoNombre = data.archivoNombre;
+      }
+      if (Object.keys(updateData).length > 0) {
+        await created.update(updateData);
+      }
     }
+    plantillaMap['Admisión'] = plantillaMap[ADMISION_COMBINADA_NAME];
     console.log('Plantillas ensured in database.');
 
     // 4. Seed CamposPlantilla (findOrCreate to support incremental updates)
@@ -244,7 +336,15 @@ async function seedDatabase() {
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Responsable ECAS',   columna_excel: 'Responsable ECAS',   hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'responsableEcas', tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'ID Actividad',      columna_excel: 'ID Actividad asociada', hoja_origen: 'Articulaciones TP',   tabla_destino: 'ArticulacionTP', columna_destino: 'idActividad',   tipo_dato: 'string', requerido: false, orden_insercion: 3, campo_lookup_tabla: 'Actividad', campo_lookup_columna_db: 'idActividad', campo_lookup_retorno: 'idActividad' },
       { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Evidencia',          columna_excel: 'Producto / evidencia', hoja_origen: 'Articulaciones TP',   tabla_destino: 'ArticulacionTP', columna_destino: 'evidencia',         tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
-      { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 }
+      { plantillaId: plantillaMap['Vinculación Con El Medio'], nombre_campo: 'Estado',             columna_excel: 'Estado',             hoja_origen: 'Articulaciones TP',      tabla_destino: 'ArticulacionTP', columna_destino: 'estado',            tipo_dato: 'string', requerido: true,  orden_insercion: 3 },
+
+      // INNOVACIÓN — Proyecto/Seccion (orden 1) y Financiamiento (orden 2)
+      ...createInnovationFields(plantillaMap[INNOVACION_TEMPLATE_NAME]),
+
+      // ADMISIÓN — 3 variantes
+      ...createAdmisionFields(plantillaMap[ADMISION_COMBINADA_NAME], VARIANTE_COMBINADA),
+      ...createAdmisionFields(plantillaMap[ADMISION_MATRICULA_NAME], VARIANTE_MATRICULA),
+      ...createAdmisionFields(plantillaMap[ADMISION_CARACTERIZACION_NAME], VARIANTE_CARACTERIZACION)
     ];
 
     for (const data of camposToSeed) {

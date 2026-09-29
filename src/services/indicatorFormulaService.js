@@ -43,6 +43,21 @@ const COUNT_ARTICULACIONES = (m = {}) => ({ value: m.articulacionesCount || 0, h
 const COUNT_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
 const FINANCING_SUM = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: true });
 
+// --- Fórmulas de Innovación ---
+const COUNT_ACTIVE_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosActivosCount || 0, hasData: true });
+const COUNT_ALL_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
+const COUNT_FINALIZED_INNOVATION_PROJECTS = (m = {}) => ({ value: m.proyectosCount || 0, hasData: true });
+const SUM_INNOVATION_FINANCING = (m = {}) => ({ value: m.financiamientoSum || 0, hasData: true });
+const COUNT_EXTERNAL_FINANCED_PROJECTS = (m = {}) => ({ value: m.proyectosExternosCount || 0, hasData: true });
+const COUNT_INNOVATION_SECTIONS = (m = {}) => ({ value: m.seccionesCount || 0, hasData: true });
+const SUM_INNOVATION_TEACHERS = (m = {}) => ({ value: m.docentesSum || 0, hasData: true });
+
+// --- Fórmulas de Admisión ---
+// Los providers conservan el detalle necesario para breakdown y la agregación
+// común garantiza que una persona se cuente una sola vez en cada grupo.
+const ADMISSION_UNIQUE_COUNT = (m = {}) => ({ value: m.admissionUniqueCount || 0, hasData: true });
+const ADMISSION_AGE_RANGE = () => ({ value: null, hasData: false });
+
 const formulaRegistry = {
   COUNT_PROGRAMMED_OFFER,
   COUNT_COURSES_DICTATED,
@@ -62,7 +77,28 @@ const formulaRegistry = {
   PARTICIPACIONES_SUM,
   COUNT_ARTICULACIONES,
   COUNT_PROJECTS,
-  FINANCING_SUM
+  FINANCING_SUM,
+  COUNT_ACTIVE_INNOVATION_PROJECTS,
+  COUNT_ALL_INNOVATION_PROJECTS,
+  COUNT_FINALIZED_INNOVATION_PROJECTS,
+  SUM_INNOVATION_FINANCING,
+  COUNT_EXTERNAL_FINANCED_PROJECTS,
+  COUNT_INNOVATION_SECTIONS,
+  SUM_INNOVATION_TEACHERS,
+  COUNT_ADMISSION_ENROLLMENT_TOTAL: ADMISSION_UNIQUE_COUNT,
+  COUNT_ADMISSION_NEW_VS_OLD: ADMISSION_UNIQUE_COUNT,
+  COUNT_ADMISSION_BY_COURSE: ADMISSION_UNIQUE_COUNT,
+  COUNT_ADMISSION_BY_SECTION: ADMISSION_UNIQUE_COUNT,
+  COUNT_ADMISSION_BY_ACADEMIC_STATUS: ADMISSION_UNIQUE_COUNT,
+  DISTRIBUTION_ADMISSION_SOCIOECONOMIC: ADMISSION_UNIQUE_COUNT,
+  DISTRIBUTION_ADMISSION_FAMILY_SITUATION: ADMISSION_UNIQUE_COUNT,
+  DISTRIBUTION_ADMISSION_GEOGRAPHY: ADMISSION_UNIQUE_COUNT,
+  DISTRIBUTION_ADMISSION_SCHOOL_TYPE: ADMISSION_UNIQUE_COUNT,
+  DISTRIBUTION_ADMISSION_ACCESS_ROUTE: ADMISSION_UNIQUE_COUNT,
+  DISTRIBUTION_ADMISSION_BENEFITS: ADMISSION_UNIQUE_COUNT,
+  DISTRIBUTION_ADMISSION_GENDER: ADMISSION_UNIQUE_COUNT,
+  // No hay tramos institucionales en el repositorio: el KPI queda protegido.
+  DISTRIBUTION_ADMISSION_AGE_RANGE: ADMISSION_AGE_RANGE
 };
 
 const apply = (formulaKey, metrics) => {

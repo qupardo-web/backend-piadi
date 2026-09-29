@@ -19,6 +19,7 @@ const MetaMetric = require('./EntidadesBBDD/MetaMetric');
 const Alumno = require('./EntidadesBBDD/Alumno');
 const Asignatura = require('./EntidadesBBDD/Asignatura');
 const MatriculaPorAsignatura = require('./EntidadesBBDD/MatriculaPorAsignatura');
+const CaracterizacionEstudiante = require('./EntidadesBBDD/CaracterizacionEstudiante');
 
 // --- Entidades BBDD de Programas y Alumnos Externos ---
 const AlumnoExterno = require('./EntidadesBBDD/AlumnoExterno');
@@ -40,8 +41,12 @@ const Seccion = require('./EntidadesBBDD/Seccion');
 // --- Asociaciones de Seguridad y Plantillas ---
 Role.hasMany(User, { foreignKey: 'roleId' });
 User.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
+Department.hasMany(User, { foreignKey: 'departmentId', sourceKey: 'key', as: 'users' });
+User.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
 Plantilla.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 Role.hasMany(Plantilla, { foreignKey: 'roleId' });
+Plantilla.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
+Department.hasMany(Plantilla, { foreignKey: 'departmentId', sourceKey: 'key', as: 'plantillas' });
 Plantilla.hasMany(CampoPlantilla, { foreignKey: 'plantillaId' });
 CampoPlantilla.belongsTo(Plantilla, { foreignKey: 'plantillaId', as: 'plantilla' });
 
@@ -54,12 +59,12 @@ AuditSesion.belongsTo(User, { foreignKey: 'usuarioId', as: 'usuario' });
 
 // --- Asociaciones Académicas (Relación N:M entre Alumno y Asignatura) ---
 Alumno.belongsToMany(Asignatura, { 
-  through: MatriculaPorAsignatura, 
+  through: { model: MatriculaPorAsignatura, unique: false }, 
   foreignKey: 'codCli', 
   otherKey: 'ramoEquiv' 
 });
 Asignatura.belongsToMany(Alumno, { 
-  through: MatriculaPorAsignatura, 
+  through: { model: MatriculaPorAsignatura, unique: false }, 
   foreignKey: 'ramoEquiv', 
   otherKey: 'codCli' 
 });
@@ -69,6 +74,10 @@ MatriculaPorAsignatura.belongsTo(Alumno, { foreignKey: 'codCli', as: 'alumno' })
 MatriculaPorAsignatura.belongsTo(Asignatura, { foreignKey: 'ramoEquiv', as: 'asignatura' });
 Alumno.hasMany(MatriculaPorAsignatura, { foreignKey: 'codCli' });
 Asignatura.hasMany(MatriculaPorAsignatura, { foreignKey: 'ramoEquiv' });
+
+// Relación 1:1 Alumno y Caracterización Estudiante por RUT (Admisión)
+Alumno.hasOne(CaracterizacionEstudiante, { foreignKey: 'rut', sourceKey: 'rut', as: 'caracterizacion', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+CaracterizacionEstudiante.belongsTo(Alumno, { foreignKey: 'rut', targetKey: 'rut', as: 'alumno' });
 
 // --- Asociaciones de Programas y Alumnos Externos ---
 Programa.hasOne(EstadoFinancieroPrograma, { foreignKey: 'idPrograma', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
@@ -134,6 +143,7 @@ module.exports = {
   Alumno,
   Asignatura,
   MatriculaPorAsignatura,
+  CaracterizacionEstudiante,
   AlumnoExterno,
   EstadoFinancieroPrograma,
   EstadoMatricula,

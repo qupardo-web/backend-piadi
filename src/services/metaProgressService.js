@@ -145,8 +145,10 @@ const createIndicatorResolver = () => {
               type: sequelize.QueryTypes.SELECT
             }
           );
-          const value = result && result[0] ? Number(result[0].value) : 0;
-          return { data: { value, hasData: true } };
+          if (result && result[0] && result[0].value !== null && result[0].value !== undefined) {
+            return { data: { value: Number(result[0].value), hasData: true } };
+          }
+          return indicatorService.getIndicatorValue(indicatorKey, query);
         } catch (err) {
           console.warn(`Fallback to JS indicator calculation for ${indicatorKey}:`, err.message);
           return indicatorService.getIndicatorValue(indicatorKey, query);
@@ -253,6 +255,18 @@ const listMetasWithProgress = async (filters = {}, options = {}) => {
   return filters.status ? enriched.filter((meta) => meta.status === filters.status) : enriched;
 };
 
+const listInstitutionalMetasWithProgress = (options = {}) => (
+  listMetasWithProgress({ departmentId: null }, options)
+);
+
+const getInstitutionalProgress = async (options = {}) => {
+  const metas = await listInstitutionalMetasWithProgress(options);
+  const totalProgress = metas.length === 0
+    ? 0
+    : metas.reduce((sum, meta) => sum + meta.totalProgress, 0) / metas.length;
+  return { totalProgress };
+};
+
 module.exports = {
   STATUSES,
   buildIndicatorQuery,
@@ -261,5 +275,7 @@ module.exports = {
   determineStatus,
   calculateProgress,
   getMetaProgress,
-  listMetasWithProgress
+  listMetasWithProgress,
+  listInstitutionalMetasWithProgress,
+  getInstitutionalProgress
 };

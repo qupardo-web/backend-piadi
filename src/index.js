@@ -17,7 +17,8 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
+app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false, credentials: true }));
 app.use(express.json());
 
 // Servir plantillas Excel estáticamente para descarga
@@ -51,9 +52,16 @@ async function initDb(retries = 5, delay = 2000) {
       
       await sequelize.sync();
       console.log('Database synced successfully. Models mapped to tables.');
+
+      const {
+        preparePlantillaDepartmentMigration,
+        migratePlantillaDepartments
+      } = require('./migrations/20260926-plantilla-department');
+      await preparePlantillaDepartmentMigration();
       
       const { seedDatabase } = require('./services/dbSeeder');
       await seedDatabase();
+      await migratePlantillaDepartments();
 
       const { seedIndicators } = require('./services/indicatorSeeder');
       await seedIndicators();

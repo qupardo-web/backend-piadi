@@ -19,6 +19,19 @@ const findGetRoute = (router, path) => router.stack.find(
   (layer) => layer.route?.path === path && layer.route.methods.get
 );
 
+const protectedMutations = [
+  ['post', '/departments'],
+  ['put', '/departments/:departmentKey'],
+  ['delete', '/departments/:departmentKey'],
+  ['post', '/departments/:departmentKey/kpis'],
+  ['put', '/departments/:departmentKey/kpis/:indicatorKey'],
+  ['delete', '/departments/:departmentKey/kpis/:indicatorKey']
+];
+
+const findRoute = (router, method, path) => router.stack.find(
+  (layer) => layer.route?.path === path && layer.route.methods[method]
+);
+
 const runMiddleware = (middleware, req) => new Promise((resolve) => {
   middleware(req, {}, (error) => resolve(error));
 });
@@ -34,6 +47,27 @@ test('todos los endpoints de lectura del dashboard exigen authenticateToken', ()
     const layer = findGetRoute(router, path);
     assert.ok(layer, `No se encontró GET ${path}`);
     assert.equal(layer.route.stack[0].handle, authenticateToken, `${path} no comienza con authenticateToken`);
+  }
+});
+
+test('todas las mutaciones de departamentos y KPIs exigen JWT antes del controller', async () => {
+  for (const [method, path] of protectedMutations) {
+    const layer = findRoute(indicatorRoutes, method, path);
+    assert.ok(layer, `No se encontró ${method.toUpperCase()} ${path}`);
+    assert.equal(layer.route.stack[0].handle, authenticateToken);
+
+    const withoutToken = await runMiddleware(layer.route.stack[0].handle, { headers: {} });
+    assert.equal(withoutToken.statusCode, 401);
+
+    const invalidToken = await runMiddleware(layer.route.stack[0].handle, {
+      headers: { authorization: 'Bearer token-invalido' }
+    });
+    assert.equal(invalidToken.statusCode, 401);
+
+    const req = { headers: { authorization: `Bearer ${tokenFor('Innovación')}` } };
+    assert.equal(await runMiddleware(layer.route.stack[0].handle, req), undefined);
+    assert.equal(req.user.role, 'Innovación');
+    assert.equal(layer.route.stack[1].handle.name.length > 0, true);
   }
 });
 
