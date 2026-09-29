@@ -150,6 +150,55 @@ const aggregateAdmissionCharacterization = (rows) => ({
   ).size
 });
 
+// (A) Primera matrícula dentro del año: cada alumno cuenta una sola vez, en el
+// primer semestre en que aparece ese año (Otoño=1, Primavera=2). Reasigna el
+// periodo de cada fila a esa primera matrícula para que el agrupamiento por
+// 'periodo' no recuente al alumno cuando continúa al semestre siguiente.
+const admissionFirstPeriodByYear = (rows) => {
+  const first = new Map();
+  rows.forEach((row) => {
+    const cod = row.codCli;
+    if (cod === null || cod === undefined || cod === '') return;
+    const key = `${cod}|${row.anio}`;
+    const periodo = Number(row.periodo);
+    if (!first.has(key) || periodo < first.get(key)) first.set(key, periodo);
+  });
+  return rows.map((row) => {
+    const cod = row.codCli;
+    if (cod === null || cod === undefined || cod === '') return row;
+    const periodo = first.get(`${cod}|${row.anio}`);
+    return periodo === undefined ? row : { ...row, periodo };
+  });
+};
+
+const admissionNeedsNuevoAntiguo = (definition, filters, groupBy) =>
+  definition.formulaKey === 'COUNT_ADMISSION_NEW_VS_OLD'
+  || groupBy === 'nuevoAntiguo'
+  || Boolean(filters.nuevoAntiguo && filters.nuevoAntiguo.length);
+
+const admissionUsesFirstPeriod = (definition, filters, groupBy) =>
+  definition.formulaKey === 'COUNT_ADMISSION_ENROLLMENT_TOTAL'
+  && ((filters.periodo && filters.periodo.length > 0) || groupBy === 'periodo');
+
+// Ajusta los filtros que recibe el provider de admisión: el historial de
+// primera matrícula (nuevoAntiguo) sólo se consulta cuando el indicador lo usa,
+// y en modo primera-matrícula el provider trae ambos semestres para que el
+// servicio deduplique en memoria (un alumno por año, en su primer semestre).
+const admissionFetchFilters = (config, definition, filters, groupBy) => {
+  if (config.kind !== 'admission_enrollment') return filters;
+  return {
+    ...filters,
+    needsNuevoAntiguo: admissionNeedsNuevoAntiguo(definition, filters, groupBy),
+    ...(admissionUsesFirstPeriod(definition, filters, groupBy) ? { primeraMatricula: true } : {})
+  };
+};
+
+const applyAdmissionFirstPeriod = (rows, filters) => {
+  const remapped = admissionFirstPeriodByYear(rows);
+  if (!filters.periodo || !filters.periodo.length) return remapped;
+  return remapped.filter((row) => filters.periodo.includes(Number(row.periodo)));
+};
+
 const aggregate = (config, rows) => {
   if (config.kind === 'participant') return aggregateParticipant(rows);
   if (config.kind === 'vcm_convenio') return aggregateVcmConvenio(rows);
@@ -273,7 +322,11 @@ const getIndicatorValue = async (indicatorKey, query = {}) => {
   await requireDepartment(departmentId);
   const { definition, config } = await resolveConfig(departmentId, key);
 
-  const rows = await getRows(config, filters);
+  const fetchFilters = admissionFetchFilters(config, definition, filters, null);
+  let rows = await getRows(config, fetchFilters);
+  if (fetchFilters.primeraMatricula) {
+    rows = applyAdmissionFirstPeriod(rows, filters);
+  }
   const { value, hasData } = computeFromRows(config, definition, rows);
 
   const data = {
@@ -301,7 +354,11 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
   const { definition, config } = await resolveConfig(departmentId, key);
   const groupBy = validateGroupBy(config, filters.groupBy);
 
-  let rows = await getRows(config, filters);
+  const fetchFilters = admissionFetchFilters(config, definition, filters, groupBy);
+  let rows = await getRows(config, fetchFilters);
+  if (fetchFilters.primeraMatricula) {
+    rows = applyAdmissionFirstPeriod(rows, filters);
+  }
   if (config.kind === 'innovation_active_project') {
     rows = expandActiveRowsByYear(rows, filters);
   }
@@ -388,7 +445,11 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   const requestedGroupBy = filters.groupBy;
   const groupBy = validateGroupBy(config, filters.groupBy);
 
-  let rows = await getRows(config, filters);
+  const fetchFilters = admissionFetchFilters(config, definition, filters, groupBy);
+  let rows = await getRows(config, fetchFilters);
+  if (fetchFilters.primeraMatricula) {
+    rows = applyAdmissionFirstPeriod(rows, filters);
+  }
   if (config.kind === 'innovation_active_project' && groupBy === 'year') {
     rows = expandActiveRowsByYear(rows, filters);
   }
