@@ -152,7 +152,9 @@ const buildAdmissionEnrollmentWhere = (filters = {}) => {
     const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
     where.anio = { [Op.between]: [from, to] };
   }
-  if (filters.periodo && filters.periodo.length) where.periodo = { [Op.in]: filters.periodo.map(Number) };
+  if (filters.periodo && filters.periodo.length && !filters.primeraMatricula) {
+    where.periodo = { [Op.in]: filters.periodo.map(Number) };
+  }
   if (filters.seccion && filters.seccion.length) where.seccion = { [Op.in]: filters.seccion.map(Number) };
   const academicStatuses = filters.estadoAcademico && filters.estadoAcademico.length
     ? filters.estadoAcademico
@@ -440,8 +442,9 @@ const getAdmissionEnrollmentRows = async (filters = {}) => {
     ]
   });
 
+  const wantsNuevoAntiguo = filters.needsNuevoAntiguo !== false;
   const studentCodes = [...new Set(enrollments.map((row) => row.codCli).filter(Boolean))];
-  const firstYears = studentCodes.length
+  const firstYears = wantsNuevoAntiguo && studentCodes.length
     ? await MatriculaPorAsignatura.findAll({
       where: { codCli: { [Op.in]: studentCodes } },
       attributes: ['codCli', [sequelize.fn('MIN', sequelize.col('anio')), 'firstYear']],
@@ -455,7 +458,7 @@ const getAdmissionEnrollmentRows = async (filters = {}) => {
     .map((enrollment) => {
       const year = Number(enrollment.anio);
       const firstYear = firstYearByStudent.get(enrollment.codCli);
-      const nuevoAntiguo = Number.isFinite(firstYear)
+      const nuevoAntiguo = wantsNuevoAntiguo && Number.isFinite(firstYear)
         ? (firstYear === year ? 'nuevo' : (firstYear < year ? 'antiguo' : null))
         : null;
       return {

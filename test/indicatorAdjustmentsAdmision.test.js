@@ -191,6 +191,63 @@ test('motor genérico entrega series por período y detail entrega serie por añ
   assert.deepEqual(detail.series, [{ year: 2026, value: 2 }]);
 });
 
+test('matricula_total por período cuenta la primera matrícula del año una sola vez', async () => {
+  stubKpi('matricula_total');
+  stub(provider, 'getAdmissionEnrollmentRows', async () => [
+    enrollment('A', { periodo: 1 }),
+    enrollment('A', { periodo: 2 }),
+    enrollment('B', { periodo: 2 })
+  ]);
+
+  const otono = await indicatorService.getIndicatorValue('matricula_total', {
+    department: 'admision', year: '2026', periodo: '1'
+  });
+  assert.equal(otono.data.value, 1);
+
+  const primavera = await indicatorService.getIndicatorValue('matricula_total', {
+    department: 'admision', year: '2026', periodo: '2'
+  });
+  assert.equal(primavera.data.value, 1);
+
+  const anual = await indicatorService.getIndicatorValue('matricula_total', {
+    department: 'admision', year: '2026'
+  });
+  assert.equal(anual.data.value, 2);
+});
+
+test('matricula_total por período agrupa por primera matrícula y no recuenta al continuar', async () => {
+  stubKpi('matricula_total');
+  stub(provider, 'getAdmissionEnrollmentRows', async () => [
+    enrollment('A', { periodo: 1 }),
+    enrollment('A', { periodo: 2 }),
+    enrollment('B', { periodo: 2 })
+  ]);
+
+  const series = await indicatorService.getIndicatorSeries('matricula_total', {
+    department: 'admision', year: '2026', groupBy: 'periodo'
+  });
+  assert.deepEqual(series.data.series, [
+    { label: '1', points: [{ year: 2026, value: 1 }] },
+    { label: '2', points: [{ year: 2026, value: 1 }] }
+  ]);
+});
+
+test('sólo los indicadores que usan nuevoAntiguo piden el historial de primera matrícula', async () => {
+  stubKpi('matricula_total');
+  let captured = null;
+  stub(provider, 'getAdmissionEnrollmentRows', async (filters) => {
+    captured = filters;
+    return [enrollment('A', { periodo: 1 })];
+  });
+  await indicatorService.getIndicatorValue('matricula_total', { department: 'admision', year: '2026' });
+  assert.equal(captured.needsNuevoAntiguo, false);
+
+  stubKpi('nuevos_vs_antiguos');
+  captured = null;
+  await indicatorService.getIndicatorValue('nuevos_vs_antiguos', { department: 'admision', year: '2026' });
+  assert.equal(captured.needsNuevoAntiguo, true);
+});
+
 test('Swagger documenta período y dimensiones de Admisión', () => {
   const valueParameters = swaggerDocs.paths['/api/indicators/{indicatorKey}/values'].get.parameters;
   assert.ok(valueParameters.some((parameter) => parameter.name === 'periodo'));
