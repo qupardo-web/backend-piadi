@@ -98,6 +98,24 @@ test('CacheService - flush clears everything', () => {
   assert.equal(cache.get('k1'), null);
 });
 
+test('CacheService - invalidateDepartment removes relevant caches for all departments', () => {
+  const cache = new CacheService();
+  cache.set('kpi:admision:detail:kpi_adm_1', { value: 150 });
+  cache.set('kpi:innovacion:val:kpi_inn_1', { value: 20 });
+  cache.set('kpi:vinculacion_medio:total', 10);
+  cache.set('filters:admision:all', ['carrera']);
+  cache.set('landing:metas', [{ id: 1 }]);
+  cache.set('kpi:educacion_continua:total', 20);
+
+  cache.invalidateDepartment('admision');
+
+  assert.equal(cache.get('kpi:admision:detail:kpi_adm_1'), null);
+  assert.equal(cache.get('filters:admision:all'), null);
+  assert.equal(cache.get('landing:metas'), null);
+  assert.deepEqual(cache.get('kpi:innovacion:val:kpi_inn_1'), { value: 20 });
+  assert.equal(cache.get('kpi:educacion_continua:total'), 20);
+});
+
 test('CacheService - maxItems evicts oldest entries', () => {
   const cache = new CacheService({ maxItems: 3 });
   cache.set('a', 1);
