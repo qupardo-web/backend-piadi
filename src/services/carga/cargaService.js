@@ -313,10 +313,6 @@ const procesarCarga = async (workbook, campos) => {
         }
 
         if (registrosAInsertar.length > 0) {
-          if (tabla === 'ResultadosPrograma') {
-            console.log("ResultadosPrograma rows to insert (first 5):", registrosAInsertar.slice(0, 5));
-            console.log("Total rows to insert:", registrosAInsertar.length);
-          }
           let insertados = [];
           const CHUNK_SIZE = 1000;
           

@@ -9,7 +9,7 @@ if (!databaseUrl) {
 
 const sequelize = new Sequelize(databaseUrl, {
   dialect: 'postgres',
-  logging: console.log,
+  logging: process.env.DB_LOGGING === 'true' ? console.log : false,
   pool: {
     max: 5,
     min: 0,
