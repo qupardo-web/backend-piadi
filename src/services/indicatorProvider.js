@@ -152,7 +152,9 @@ const buildAdmissionEnrollmentWhere = (filters = {}) => {
     const to = filters.toYear !== null ? filters.toYear : filters.fromYear;
     where.anio = { [Op.between]: [from, to] };
   }
-  if (filters.periodo && filters.periodo.length) where.periodo = { [Op.in]: filters.periodo.map(Number) };
+  if (filters.periodo && filters.periodo.length && !filters.primeraMatricula) {
+    where.periodo = { [Op.in]: filters.periodo.map(Number) };
+  }
   if (filters.seccion && filters.seccion.length) where.seccion = { [Op.in]: filters.seccion.map(Number) };
   const academicStatuses = filters.estadoAcademico && filters.estadoAcademico.length
     ? filters.estadoAcademico
@@ -191,6 +193,22 @@ const calculateAge = (birthDate, referenceDate) => {
     || (reference.getUTCMonth() === birth.getUTCMonth() && reference.getUTCDate() < birth.getUTCDate());
   if (beforeBirthday) age -= 1;
   return age;
+};
+
+// Tramos etarios institucionales de Admisión. El orden define el orden de presentación.
+const ADMISSION_AGE_RANGES = [
+  { min: 15, max: 19, label: '15 a 19' },
+  { min: 20, max: 24, label: '20 a 24' },
+  { min: 25, max: 29, label: '25 a 29' },
+  { min: 30, max: 34, label: '30 a 34' },
+  { min: 35, max: 39, label: '35 a 39' },
+  { min: 40, max: Infinity, label: '40 y más' }
+];
+
+const ageRangeLabel = (edad) => {
+  if (edad === null || edad === undefined || Number.isNaN(edad)) return null;
+  const range = ADMISSION_AGE_RANGES.find((tramo) => edad >= tramo.min && edad <= tramo.max);
+  return range ? range.label : null;
 };
 
 const admissionReferenceDate = (filters = {}) => {
@@ -440,8 +458,9 @@ const getAdmissionEnrollmentRows = async (filters = {}) => {
     ]
   });
 
+  const wantsNuevoAntiguo = filters.needsNuevoAntiguo !== false;
   const studentCodes = [...new Set(enrollments.map((row) => row.codCli).filter(Boolean))];
-  const firstYears = studentCodes.length
+  const firstYears = wantsNuevoAntiguo && studentCodes.length
     ? await MatriculaPorAsignatura.findAll({
       where: { codCli: { [Op.in]: studentCodes } },
       attributes: ['codCli', [sequelize.fn('MIN', sequelize.col('anio')), 'firstYear']],
@@ -455,7 +474,7 @@ const getAdmissionEnrollmentRows = async (filters = {}) => {
     .map((enrollment) => {
       const year = Number(enrollment.anio);
       const firstYear = firstYearByStudent.get(enrollment.codCli);
-      const nuevoAntiguo = Number.isFinite(firstYear)
+      const nuevoAntiguo = wantsNuevoAntiguo && Number.isFinite(firstYear)
         ? (firstYear === year ? 'nuevo' : (firstYear < year ? 'antiguo' : null))
         : null;
       return {
@@ -506,6 +525,7 @@ const getAdmissionCharacterizationRows = async (filters = {}) => {
     const characterization = student.caracterizacion || {};
     const key = `${enrollment.codCli}|${enrollment.anio}|${enrollment.periodo}`;
     if (uniqueRows.has(key)) return;
+    const edad = calculateAge(characterization.fechaNacimiento, referenceDate);
     uniqueRows.set(key, {
       rut: student.rut ?? characterization.rut ?? null,
       codCli: enrollment.codCli,
@@ -513,9 +533,8 @@ const getAdmissionCharacterizationRows = async (filters = {}) => {
       periodo: Number(enrollment.periodo),
       sexo: characterization.sexo ?? null,
       fechaNacimiento: characterization.fechaNacimiento ?? null,
-      edad: calculateAge(characterization.fechaNacimiento, referenceDate),
-      // No existen tramos etarios institucionales configurados en el repositorio.
-      rangoEtario: null,
+      edad,
+      rangoEtario: ageRangeLabel(edad),
       region: characterization.region ?? null,
       comuna: characterization.comuna ?? null,
       tipoColegio: characterization.tipoColegio ?? null,
@@ -530,8 +549,10 @@ const getAdmissionCharacterizationRows = async (filters = {}) => {
       && (row.edad === null || row.edad < filters.minAge)) return false;
     if (filters.maxAge !== null && filters.maxAge !== undefined
       && (row.edad === null || row.edad > filters.maxAge)) return false;
-    // rangoEtario no se filtra hasta que existan tramos institucionales oficiales.
-    if (filters.rangoEtario && filters.rangoEtario.length) return false;
+    if (filters.rangoEtario && filters.rangoEtario.length) {
+      const requested = filters.rangoEtario.map((value) => String(value).trim().toLocaleLowerCase('es'));
+      if (!row.rangoEtario || !requested.includes(row.rangoEtario.toLocaleLowerCase('es'))) return false;
+    }
     return true;
   });
 };
@@ -759,6 +780,9 @@ const getFilterOptions = async (department, filters = {}) => {
       modalidades: [],
       sexos: distinctTextValues(characterizationRows, 'sexo'),
       rangosEdad: [],
+      rangosEtarios: ADMISSION_AGE_RANGES
+        .map((tramo) => tramo.label)
+        .filter((label) => characterizationRows.some((row) => row.rangoEtario === label)),
       edades: distinctValues(characterizationRows, 'edad').map(Number).sort((a, b) => a - b),
       asignaturas: distinctTextValues(enrollmentRows, 'asignatura'),
       secciones: distinctValues(enrollmentRows, 'seccion').map(Number).sort((a, b) => a - b),

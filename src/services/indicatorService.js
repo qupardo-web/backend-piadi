@@ -151,6 +151,55 @@ const aggregateAdmissionCharacterization = (rows) => ({
   ).size
 });
 
+// (A) Primera matrícula dentro del año: cada alumno cuenta una sola vez, en el
+// primer semestre en que aparece ese año (Otoño=1, Primavera=2). Reasigna el
+// periodo de cada fila a esa primera matrícula para que el agrupamiento por
+// 'periodo' no recuente al alumno cuando continúa al semestre siguiente.
+const admissionFirstPeriodByYear = (rows) => {
+  const first = new Map();
+  rows.forEach((row) => {
+    const cod = row.codCli;
+    if (cod === null || cod === undefined || cod === '') return;
+    const key = `${cod}|${row.anio}`;
+    const periodo = Number(row.periodo);
+    if (!first.has(key) || periodo < first.get(key)) first.set(key, periodo);
+  });
+  return rows.map((row) => {
+    const cod = row.codCli;
+    if (cod === null || cod === undefined || cod === '') return row;
+    const periodo = first.get(`${cod}|${row.anio}`);
+    return periodo === undefined ? row : { ...row, periodo };
+  });
+};
+
+const admissionNeedsNuevoAntiguo = (definition, filters, groupBy) =>
+  definition.formulaKey === 'COUNT_ADMISSION_NEW_VS_OLD'
+  || groupBy === 'nuevoAntiguo'
+  || Boolean(filters.nuevoAntiguo && filters.nuevoAntiguo.length);
+
+const admissionUsesFirstPeriod = (definition, filters, groupBy) =>
+  definition.formulaKey === 'COUNT_ADMISSION_ENROLLMENT_TOTAL'
+  && ((filters.periodo && filters.periodo.length > 0) || groupBy === 'periodo');
+
+// Ajusta los filtros que recibe el provider de admisión: el historial de
+// primera matrícula (nuevoAntiguo) sólo se consulta cuando el indicador lo usa,
+// y en modo primera-matrícula el provider trae ambos semestres para que el
+// servicio deduplique en memoria (un alumno por año, en su primer semestre).
+const admissionFetchFilters = (config, definition, filters, groupBy) => {
+  if (config.kind !== 'admission_enrollment') return filters;
+  return {
+    ...filters,
+    needsNuevoAntiguo: admissionNeedsNuevoAntiguo(definition, filters, groupBy),
+    ...(admissionUsesFirstPeriod(definition, filters, groupBy) ? { primeraMatricula: true } : {})
+  };
+};
+
+const applyAdmissionFirstPeriod = (rows, filters) => {
+  const remapped = admissionFirstPeriodByYear(rows);
+  if (!filters.periodo || !filters.periodo.length) return remapped;
+  return remapped.filter((row) => filters.periodo.includes(Number(row.periodo)));
+};
+
 const aggregate = (config, rows) => {
   if (config.kind === 'participant') return aggregateParticipant(rows);
   if (config.kind === 'vcm_convenio') return aggregateVcmConvenio(rows);
@@ -274,28 +323,32 @@ const getIndicatorValue = async (indicatorKey, query = {}) => {
   await requireDepartment(departmentId);
 
   const cacheKey = `kpi:${departmentId}:val:${key}:${JSON.stringify(query)}`;
-  return cacheService.wrap(cacheKey, async () => {
-    const { definition, config } = await resolveConfig(departmentId, key);
+    return cacheService.wrap(cacheKey, async () => {
+      const { definition, config } = await resolveConfig(departmentId, key);
+      
+      const fetchFilters = admissionFetchFilters(config, definition, filters, null);
+      let rows = await getRows(config, fetchFilters);
+      if (fetchFilters.primeraMatricula) {
+        rows = applyAdmissionFirstPeriod(rows, filters);
+      }
+      const { value, hasData } = computeFromRows(config, definition, rows);
 
-    const rows = await getRows(config, filters);
-    const { value, hasData } = computeFromRows(config, definition, rows);
-
-    const data = {
-      indicatorKey: key,
-      department: departmentId,
-      value,
-      formattedValue: hasData ? formatValue(value, definition.format) : null,
-      unit: definition.unit,
-      format: definition.format,
-      hasData,
-      filters: buildFilterMeta(filters),
-      meta: { source: 'postgresql', formulaKey: definition.formulaKey }
-    };
-    if (!hasData) {
-      data.message = 'No existen datos suficientes para calcular este indicador.';
-    }
-    return { data };
-  });
+      const data = {
+        indicatorKey: key,
+        department: departmentId,
+        value,
+        formattedValue: hasData ? formatValue(value, definition.format) : null,
+        unit: definition.unit,
+        format: definition.format,
+        hasData,
+        filters: buildFilterMeta(filters),
+        meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+      };
+      if (!hasData) {
+        data.message = 'No existen datos suficientes para calcular este indicador.';
+      }
+      return { data };
+    });
 };
 
 const getIndicatorSeries = async (indicatorKey, query = {}) => {
@@ -305,48 +358,52 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
   await requireDepartment(departmentId);
 
   const cacheKey = `kpi:${departmentId}:series:${key}:${JSON.stringify(query)}`;
-  return cacheService.wrap(cacheKey, async () => {
-    const { definition, config } = await resolveConfig(departmentId, key);
-    const groupBy = validateGroupBy(config, filters.groupBy);
+    return cacheService.wrap(cacheKey, async () => {
+      const { definition, config } = await resolveConfig(departmentId, key);
+      const groupBy = validateGroupBy(config, filters.groupBy);
 
-    let rows = await getRows(config, filters);
-    if (config.kind === 'innovation_active_project') {
-      rows = expandActiveRowsByYear(rows, filters);
-    }
-    const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
+      const fetchFilters = admissionFetchFilters(config, definition, filters, groupBy);
+      let rows = await getRows(config, fetchFilters);
+      if (fetchFilters.primeraMatricula) {
+        rows = applyAdmissionFirstPeriod(rows, filters);
+      }
+      if (config.kind === 'innovation_active_project') {
+        rows = expandActiveRowsByYear(rows, filters);
+      }
+      const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
-    if (!groupBy || groupBy === 'year') {
-      const byYear = groupRowsBy(rows, 'year');
-      const points = [];
-      const requestedYears = getRequestedYearRange(filters);
-      const years = requestedYears && usesInnovationYearRange(config)
-        ? requestedYears
-        : [...byYear.keys()].sort((a, b) => Number(a) - Number(b));
-      years
-        .sort((a, b) => Number(a) - Number(b))
-        .forEach((year) => {
-          if (!byYear.has(year) && requestedYears && usesInnovationYearRange(config)) {
-            points.push({ year: Number(year), value: 0 });
-            return;
+      if (!groupBy || groupBy === 'year') {
+        const byYear = groupRowsBy(rows, 'year');
+        const points = [];
+        const requestedYears = getRequestedYearRange(filters);
+        const years = requestedYears && usesInnovationYearRange(config)
+          ? requestedYears
+          : [...byYear.keys()].sort((a, b) => Number(a) - Number(b));
+        years
+          .sort((a, b) => Number(a) - Number(b))
+          .forEach((year) => {
+            if (!byYear.has(year) && requestedYears && usesInnovationYearRange(config)) {
+              points.push({ year: Number(year), value: 0 });
+              return;
+            }
+            const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
+            if (hasData) {
+              points.push({ year: Number(year), value });
+            }
+          });
+        return {
+          data: {
+            indicatorKey: key,
+            department: departmentId,
+            groupBy: null,
+            points,
+            hasData: points.length > 0,
+            filters: buildFilterMeta(filters),
+            meta: { source: 'postgresql', formulaKey: definition.formulaKey },
+            ...(metaContext ? { targetLine: metaContext.targetLine } : {})
           }
-          const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
-          if (hasData) {
-            points.push({ year: Number(year), value });
-          }
-        });
-      return {
-        data: {
-          indicatorKey: key,
-          department: departmentId,
-          groupBy: null,
-          points,
-          hasData: points.length > 0,
-          filters: buildFilterMeta(filters),
-          meta: { source: 'postgresql', formulaKey: definition.formulaKey },
-          ...(metaContext ? { targetLine: metaContext.targetLine } : {})
-        }
-      };
-    }
+        };
+      }
 
     const bySegment = groupRowsBy(rows, groupBy);
     const series = [];
@@ -396,10 +453,13 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   }
   const requestedGroupBy = filters.groupBy;
   const groupBy = validateGroupBy(config, filters.groupBy);
-
   const cacheKey = `kpi:${departmentId}:breakdown:${key}:${JSON.stringify(query)}`;
   return cacheService.wrap(cacheKey, async () => {
-    let rows = await getRows(config, filters);
+    const fetchFilters = admissionFetchFilters(config, definition, filters, groupBy);
+    let rows = await getRows(config, fetchFilters);
+    if (fetchFilters.primeraMatricula) {
+      rows = applyAdmissionFirstPeriod(rows, filters);
+    }
     if (config.kind === 'innovation_active_project' && groupBy === 'year') {
       rows = expandActiveRowsByYear(rows, filters);
     }
@@ -410,7 +470,7 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
       const totalMujeres = rows.reduce((sum, r) => sum + (r.mujeres || 0), 0);
       const totalHombres = rows.reduce((sum, r) => sum + (r.hombres || 0), 0);
       const totalNoInforma = rows.reduce((sum, r) => sum + (r.noInforma || 0), 0);
-      
+
       const items = [];
       if (totalMujeres > 0) items.push({ label: 'mujeres', value: totalMujeres });
       if (totalHombres > 0) items.push({ label: 'hombres', value: totalHombres });
@@ -425,11 +485,7 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
           items,
           hasData: items.length > 0,
           filters: buildFilterMeta(filters),
-          meta: { source: 'postgresql', formulaKey: definition.formulaKey },
-          ...(metaContext ? {
-            metaTarget: metaContext.metaTarget,
-            metaStatus: metaContext.metaStatus
-          } : {})
+          meta: { source: 'postgresql', formulaKey: definition.formulaKey }
         }
       };
     }

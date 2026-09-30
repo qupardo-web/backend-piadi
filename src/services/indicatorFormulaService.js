@@ -56,7 +56,6 @@ const SUM_INNOVATION_TEACHERS = (m = {}) => ({ value: m.docentesSum || 0, hasDat
 // Los providers conservan el detalle necesario para breakdown y la agregación
 // común garantiza que una persona se cuente una sola vez en cada grupo.
 const ADMISSION_UNIQUE_COUNT = (m = {}) => ({ value: m.admissionUniqueCount || 0, hasData: true });
-const ADMISSION_AGE_RANGE = () => ({ value: null, hasData: false });
 
 const formulaRegistry = {
   COUNT_PROGRAMMED_OFFER,
@@ -97,8 +96,7 @@ const formulaRegistry = {
   DISTRIBUTION_ADMISSION_ACCESS_ROUTE: ADMISSION_UNIQUE_COUNT,
   DISTRIBUTION_ADMISSION_BENEFITS: ADMISSION_UNIQUE_COUNT,
   DISTRIBUTION_ADMISSION_GENDER: ADMISSION_UNIQUE_COUNT,
-  // No hay tramos institucionales en el repositorio: el KPI queda protegido.
-  DISTRIBUTION_ADMISSION_AGE_RANGE: ADMISSION_AGE_RANGE
+  DISTRIBUTION_ADMISSION_AGE_RANGE: ADMISSION_UNIQUE_COUNT
 };
 
 const apply = (formulaKey, metrics) => {
