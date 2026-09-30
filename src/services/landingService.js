@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const { Department, sequelize } = require('../models');
 const metaProgressService = require('./metaProgressService');
+const cacheService = require('./cacheService');
 
 const mapMetric = (metric) => ({
   indicatorKey: metric.indicatorKey,
@@ -13,10 +14,6 @@ const mapMetric = (metric) => ({
   weightedProgress: metric.weightedProgress,
   hasData: metric.hasData
 });
-
-let cachedData = null;
-let cacheTimestamp = 0;
-const CACHE_TTL = 60 * 1000; // 60 segundos
 
 const getLandingMetas = async () => {
   // En testing, usar la lógica mockeable para pasar los tests unitarios
@@ -46,34 +43,27 @@ const getLandingMetas = async () => {
     }));
   }
 
-  // En producción, consultar la vista optimizada v_landing_metas con caché de 60s
-  const now = Date.now();
-  if (cachedData && (now - cacheTimestamp < CACHE_TTL)) {
-    return cachedData;
-  }
+  // En producción, consultar la vista optimizada v_landing_metas con caché centralizado de 60s
+  return cacheService.wrap('landing:metas', async () => {
+    const result = await sequelize.query(
+      'SELECT * FROM v_landing_metas',
+      { type: sequelize.QueryTypes.SELECT }
+    );
 
-  const result = await sequelize.query(
-    'SELECT * FROM v_landing_metas',
-    { type: sequelize.QueryTypes.SELECT }
-  );
-
-  const mapped = result.map(r => ({
-    metaId: r.metaId,
-    metaName: r.metaName,
-    indicatorName: r.indicatorName,
-    targetValue: Number(r.targetValue),
-    currentValue: Number(r.currentValue),
-    progressPercent: Number(r.progressPercent),
-    status: r.status,
-    priority: r.priority,
-    daysRemaining: r.daysRemaining,
-    departmentName: r.departmentName,
-    departmentId: r.departmentId
-  }));
-
-  cachedData = mapped;
-  cacheTimestamp = now;
-  return mapped;
+    return result.map(r => ({
+      metaId: r.metaId,
+      metaName: r.metaName,
+      indicatorName: r.indicatorName,
+      targetValue: Number(r.targetValue),
+      currentValue: Number(r.currentValue),
+      progressPercent: Number(r.progressPercent),
+      status: r.status,
+      priority: r.priority,
+      daysRemaining: r.daysRemaining,
+      departmentName: r.departmentName,
+      departmentId: r.departmentId
+    }));
+  }, 60 * 1000);
 };
 
 module.exports = { getLandingMetas };

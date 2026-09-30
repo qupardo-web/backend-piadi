@@ -1,6 +1,7 @@
 const XLSX = require('xlsx');
 const { sequelize } = require('../../models');
 const { Op } = require('sequelize');
+const cacheService = require('../cacheService');
 const { normalizeAdmissionPeriod } = require('../indicatorFilters');
 const {
   ADMISION_TABLE_ORDER,
@@ -312,10 +313,6 @@ const procesarCarga = async (workbook, campos) => {
         }
 
         if (registrosAInsertar.length > 0) {
-          if (tabla === 'ResultadosPrograma') {
-            console.log("ResultadosPrograma rows to insert (first 5):", registrosAInsertar.slice(0, 5));
-            console.log("Total rows to insert:", registrosAInsertar.length);
-          }
           let insertados = [];
           const CHUNK_SIZE = 1000;
           
@@ -430,6 +427,7 @@ const procesarCarga = async (workbook, campos) => {
     await sequelize.query('REFRESH MATERIALIZED VIEW v_meta_indicator_values', { transaction });
 
     await transaction.commit();
+    cacheService.flush();
 
     return { success: true, resumen: resumenFinal };
   } catch (error) {
