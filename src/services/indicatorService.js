@@ -206,7 +206,7 @@ const aggregate = (config, rows) => {
   if (config.kind === 'vcm_actividad') return aggregateVcmActividad(rows);
   if (config.kind === 'vcm_participacion') return aggregateVcmParticipacion(rows);
   if (config.kind === 'vcm_articulacion') return aggregateVcmArticulacion(rows);
-  if (config.kind === 'vcm_proyecto') return aggregateVcmProyecto(rows);
+  if (config.kind === 'vcm_proyecto' || config.kind === 'vcm_active_project') return aggregateVcmProyecto(rows);
   if (config.kind === 'innovation_active_project') return aggregateInnovationProject(rows, true);
   if (config.kind === 'innovation_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_finalized_project') return aggregateInnovationProject(rows);
@@ -218,13 +218,20 @@ const aggregate = (config, rows) => {
   return aggregateProgram(rows);
 };
 
-const getRows = (config, filters) => {
+const hasTemporalFilter = (filters) => filters.year !== null && filters.year !== undefined
+  || filters.fromYear !== null && filters.fromYear !== undefined
+  || filters.toYear !== null && filters.toYear !== undefined;
+
+const getRows = (config, filters, { historical = false } = {}) => {
   if (config.kind === 'participant') return provider.getParticipantRows(filters);
   if (config.kind === 'vcm_convenio') return provider.getVcmConvenioRows(filters);
   if (config.kind === 'vcm_actividad') return provider.getVcmActividadRows(filters);
   if (config.kind === 'vcm_participacion') return provider.getVcmParticipacionRows(filters);
   if (config.kind === 'vcm_articulacion') return provider.getVcmArticulacionRows(filters);
   if (config.kind === 'vcm_proyecto') return provider.getVcmProyectoRows(filters);
+  if (config.kind === 'vcm_active_project') {
+    return provider.getVcmProyectoRows(filters, { intervalActivity: historical || hasTemporalFilter(filters) });
+  }
   if (config.kind === 'innovation_active_project') return provider.getInnovationProjectRows(filters, { activeDuringYear: true });
   if (config.kind === 'innovation_project') return provider.getInnovationProjectRows(filters);
   if (config.kind === 'innovation_finalized_project') return provider.getInnovationProjectRows(filters, { finalizedInYear: true });
@@ -249,7 +256,8 @@ const computeFromRows = (config, definition, rows) => {
 const groupRowsBy = (rows, dimension) => {
   const groups = new Map();
   rows.forEach((row) => {
-    const raw = dimension === 'year' ? row.anio : row[dimension];
+    const rawYear = Number(row.anio);
+    const raw = dimension === 'year' && Number.isFinite(rawYear) ? rawYear : row[dimension];
     const label = raw === null || raw === undefined || raw === '' ? 'Sin dato' : raw;
     if (!groups.has(label)) {
       groups.set(label, []);
@@ -290,8 +298,32 @@ const getRequestedYearRange = (filters) => {
   return Array.from({ length: to - from + 1 }, (_, index) => from + index);
 };
 
-const expandActiveRowsByYear = (rows, filters) => {
-  const selectedYears = getRequestedYearRange(filters) || [new Date().getFullYear()];
+const buildYearAxis = (filters, rows = []) => {
+  const requested = getRequestedYearRange(filters);
+  if (requested) return requested;
+  const observed = rows
+    .map((row) => Number(row.anio))
+    .filter(Number.isFinite);
+  if (!observed.length) return [];
+  const from = Math.min(...observed);
+  const to = Math.max(...observed);
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+};
+
+const buildIntervalYearAxis = (filters, rows = []) => {
+  const requested = getRequestedYearRange(filters);
+  if (requested) return requested;
+  const starts = rows.map((row) => Number(row.anioInicio)).filter(Number.isFinite);
+  const ends = rows.map((row) => Number(row.anioTermino)).filter(Number.isFinite);
+  if (!starts.length || !ends.length) return [];
+  const from = Math.min(...starts);
+  const to = Math.min(new Date().getFullYear(), Math.max(...ends));
+  if (from > to) return [];
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+};
+
+const expandActiveRowsByYear = (rows, selectedYears) => {
+  if (!selectedYears.length) return [];
   const firstYear = selectedYears[0];
   const lastYear = selectedYears[selectedYears.length - 1];
   return rows.flatMap((row) => {
@@ -302,7 +334,28 @@ const expandActiveRowsByYear = (rows, filters) => {
   });
 };
 
-const usesInnovationYearRange = (config) => String(config.kind).startsWith('innovation_');
+const buildAnnualPoints = (config, definition, rows, filters, yearAxis = null) => {
+  const byYear = groupRowsBy(rows, 'year');
+  const years = yearAxis || buildYearAxis(filters, rows);
+  return years.map((year) => {
+    const bucket = byYear.get(year);
+    if (!bucket || !bucket.length) return { year: Number(year), value: 0 };
+    const { value, hasData } = computeFromRows(config, definition, bucket);
+    return { year: Number(year), value: hasData ? value : null };
+  });
+};
+
+const getHistoricalInnovationFilters = async (config, filters) => {
+  if (hasTemporalFilter(filters) || ![
+    'innovation_active_project',
+    'innovation_finalized_project'
+  ].includes(config.kind)) return filters;
+  const range = await provider.getInnovationYearRange(filters, {
+    activeDuringYear: config.kind === 'innovation_active_project',
+    finalizedInYear: config.kind === 'innovation_finalized_project'
+  });
+  return range ? { ...filters, fromYear: range.from, toYear: range.to } : filters;
+};
 
 const resolveConfig = async (departmentKey, indicatorKey) => {
   const definition = await requireKpi(departmentKey, indicatorKey);
@@ -362,42 +415,32 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
       const { definition, config } = await resolveConfig(departmentId, key);
       const groupBy = validateGroupBy(config, filters.groupBy);
 
-      const fetchFilters = admissionFetchFilters(config, definition, filters, groupBy);
-      let rows = await getRows(config, fetchFilters);
+      const historicalFilters = await getHistoricalInnovationFilters(config, filters);
+      const fetchFilters = admissionFetchFilters(config, definition, historicalFilters, groupBy);
+      let rows = await getRows(config, fetchFilters, { historical: true });
       if (fetchFilters.primeraMatricula) {
         rows = applyAdmissionFirstPeriod(rows, filters);
       }
-      if (config.kind === 'innovation_active_project') {
-        rows = expandActiveRowsByYear(rows, filters);
+      let yearAxis = null;
+      if (config.kind === 'innovation_active_project' || config.kind === 'vcm_active_project') {
+        yearAxis = config.kind === 'vcm_active_project'
+          ? buildIntervalYearAxis(historicalFilters, rows)
+          : buildYearAxis(historicalFilters, rows.flatMap((row) => [
+            { anio: row.anioInicio }, { anio: Math.min(row.anioTermino, new Date().getFullYear()) }
+          ]));
+        rows = expandActiveRowsByYear(rows, yearAxis);
       }
       const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
       if (!groupBy || groupBy === 'year') {
-        const byYear = groupRowsBy(rows, 'year');
-        const points = [];
-        const requestedYears = getRequestedYearRange(filters);
-        const years = requestedYears && usesInnovationYearRange(config)
-          ? requestedYears
-          : [...byYear.keys()].sort((a, b) => Number(a) - Number(b));
-        years
-          .sort((a, b) => Number(a) - Number(b))
-          .forEach((year) => {
-            if (!byYear.has(year) && requestedYears && usesInnovationYearRange(config)) {
-              points.push({ year: Number(year), value: 0 });
-              return;
-            }
-            const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
-            if (hasData) {
-              points.push({ year: Number(year), value });
-            }
-          });
+        const points = buildAnnualPoints(config, definition, rows, historicalFilters, yearAxis);
         return {
           data: {
             indicatorKey: key,
             department: departmentId,
             groupBy: null,
             points,
-            hasData: points.length > 0,
+            hasData: points.some((point) => point.value !== null),
             filters: buildFilterMeta(filters),
             meta: { source: 'postgresql', formulaKey: definition.formulaKey },
             ...(metaContext ? { targetLine: metaContext.targetLine } : {})
@@ -407,18 +450,10 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
 
     const bySegment = groupRowsBy(rows, groupBy);
     const series = [];
+    const sharedYearAxis = yearAxis || buildYearAxis(historicalFilters, rows);
     [...bySegment.keys()].sort().forEach((label) => {
       const segmentRows = bySegment.get(label);
-      const byYear = groupRowsBy(segmentRows, 'year');
-      const points = [];
-      [...byYear.keys()]
-        .sort((a, b) => Number(a) - Number(b))
-        .forEach((year) => {
-          const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
-          if (hasData) {
-            points.push({ year: Number(year), value });
-          }
-        });
+      const points = buildAnnualPoints(config, definition, segmentRows, historicalFilters, sharedYearAxis);
       if (points.length > 0) {
         series.push({ label: String(label), points });
       }
@@ -455,13 +490,22 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   const groupBy = validateGroupBy(config, filters.groupBy);
   const cacheKey = `kpi:${departmentId}:breakdown:${key}:${JSON.stringify(query)}`;
   return cacheService.wrap(cacheKey, async () => {
-    const fetchFilters = admissionFetchFilters(config, definition, filters, groupBy);
-    let rows = await getRows(config, fetchFilters);
+    const historicalFilters = groupBy === 'year'
+      ? await getHistoricalInnovationFilters(config, filters)
+      : filters;
+    const fetchFilters = admissionFetchFilters(config, definition, historicalFilters, groupBy);
+    let rows = await getRows(config, fetchFilters, { historical: groupBy === 'year' });
     if (fetchFilters.primeraMatricula) {
       rows = applyAdmissionFirstPeriod(rows, filters);
     }
-    if (config.kind === 'innovation_active_project' && groupBy === 'year') {
-      rows = expandActiveRowsByYear(rows, filters);
+    let yearAxis = null;
+    if (groupBy === 'year' && (config.kind === 'innovation_active_project' || config.kind === 'vcm_active_project')) {
+      yearAxis = config.kind === 'vcm_active_project'
+        ? buildIntervalYearAxis(historicalFilters, rows)
+        : buildYearAxis(historicalFilters, rows.flatMap((row) => [
+          { anio: row.anioInicio }, { anio: Math.min(row.anioTermino, new Date().getFullYear()) }
+        ]));
+      rows = expandActiveRowsByYear(rows, yearAxis);
     }
     const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
@@ -490,15 +534,20 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
       };
     }
 
-    const groups = groupRowsBy(rows, groupBy);
-    const items = [];
-    [...groups.keys()].forEach((label) => {
-      const { value, hasData } = computeFromRows(config, definition, groups.get(label));
-      if (hasData) {
-        items.push({ label: String(label), value });
-      }
-    });
-    items.sort((a, b) => b.value - a.value);
+    let items;
+    if (groupBy === 'year') {
+      items = buildAnnualPoints(config, definition, rows, historicalFilters, yearAxis)
+        .map((point) => ({ label: String(point.year), value: point.value }));
+      items.sort((a, b) => (b.value ?? Number.NEGATIVE_INFINITY) - (a.value ?? Number.NEGATIVE_INFINITY));
+    } else {
+      const groups = groupRowsBy(rows, groupBy);
+      items = [];
+      [...groups.keys()].forEach((label) => {
+        const { value, hasData } = computeFromRows(config, definition, groups.get(label));
+        if (hasData) items.push({ label: String(label), value });
+      });
+      items.sort((a, b) => b.value - a.value);
+    }
 
     return {
       data: {
@@ -662,15 +711,25 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
   return cacheService.wrap(cacheKey, async () => {
     const baseQuery = { ...query, department };
     const config = getIndicatorConfig(key, kpi) || { allowedGroupBy: [] };
-
     const groupBy = validateGroupBy(config, query.groupBy || null);
+    const requestedFilters = parseIndicatorFilters(baseQuery);
 
-    const valueResult = await module.exports.getIndicatorValue(key, baseQuery);
-    const total = valueResult.data.value;
-    const hasData = valueResult.data.hasData;
-
-    // Serie anual COMPLETA (sin groupBy ni filtro de año): período y comparación.
-    const { groupBy: _omitGroupBy, year: _omitYear, fromYear: _omitFrom, toYear: _omitTo, ...annualQuery } = baseQuery;
+    // Un año puntual define la referencia, pero no recorta la historia. Un rango
+    // explícito sí limita el eje solicitado. Se eliminan todos los aliases para
+    // impedir que uno de ellos sobreviva y reduzca accidentalmente la serie.
+    const {
+      groupBy: _omitGroupBy,
+      year: _omitYear,
+      anio: _omitAnio,
+      'año': _omitAnioUnicode,
+      ...annualQueryBase
+    } = baseQuery;
+    const annualQuery = requestedFilters.year !== null
+      ? (() => {
+        const { fromYear: _omitFrom, toYear: _omitTo, ...withoutRange } = annualQueryBase;
+        return withoutRange;
+      })()
+      : annualQueryBase;
     const annualSeries = await module.exports.getIndicatorSeries(key, annualQuery);
     const annualPoints = annualSeries.data.points || [];
     const years = annualPoints.map((point) => Number(point.year)).filter((year) => Number.isFinite(year));
@@ -678,16 +737,35 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
       ? { from: Math.min(...years), to: Math.max(...years) }
       : { from: null, to: null };
 
-    // Año de referencia: el pedido por query, o el más reciente.
-    const refYear = query.year !== undefined && query.year !== null && query.year !== ''
-      ? Number(query.year)
+    // Año de referencia: cualquier alias explícito, o el más reciente de la serie.
+    const refYear = requestedFilters.year !== null
+      ? requestedFilters.year
       : (annualPoints.length ? Number(annualPoints[annualPoints.length - 1].year) : null);
-    const refIndex = annualPoints.findIndex((point) => Number(point.year) === refYear);
+
+    let total = null;
+    let hasData = false;
+    if (refYear !== null) {
+      const {
+        year: _totalYear,
+        anio: _totalAnio,
+        'año': _totalAnioUnicode,
+        fromYear: _totalFrom,
+        toYear: _totalTo,
+        groupBy: _totalGroupBy,
+        ...nonTemporalQuery
+      } = baseQuery;
+      const valueResult = await module.exports.getIndicatorValue(key, {
+        ...nonTemporalQuery,
+        year: refYear
+      });
+      total = valueResult.data.value;
+      hasData = valueResult.data.hasData;
+    }
 
     let comparison = null;
-    if (refIndex > 0) {
-      const current = annualPoints[refIndex];
-      const previous = annualPoints[refIndex - 1];
+    const current = annualPoints.find((point) => Number(point.year) === refYear);
+    const previous = annualPoints.find((point) => Number(point.year) === refYear - 1);
+    if (current && previous && current.value !== null && previous.value !== null) {
       comparison = {
         previousYear: previous.year,
         previousValue: previous.value,
@@ -730,7 +808,7 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
         comparison,
         table,
         series,
-        filters: valueResult.data.filters,
+        filters: buildFilterMeta(requestedFilters),
         meta: { source: 'postgresql', formulaKey: kpi.formulaKey }
       }
     };

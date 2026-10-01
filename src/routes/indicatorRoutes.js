@@ -430,6 +430,22 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *         description: Año de referencia para la card y la comparación. Alias anio, año.
  *         schema: { type: integer }
  *       - in: query
+ *         name: anio
+ *         description: Alias ASCII de year.
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: año
+ *         description: Alias de year con eñe.
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: fromYear
+ *         description: Primer año del rango de la serie.
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: toYear
+ *         description: Último año del rango de la serie.
+ *         schema: { type: integer }
+ *       - in: query
  *         name: semestre
  *         description: Filtra por semestre. Alias semester.
  *         schema: { type: string }
