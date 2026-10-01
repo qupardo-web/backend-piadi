@@ -10,6 +10,7 @@ const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIn
 const { getIndicatorConfig } = require('../src/services/indicatorCatalog');
 const { parseIndicatorFilters } = require('../src/services/indicatorFilters');
 const { seedIndicators } = require('../src/services/indicatorSeeder');
+const cacheService = require('../src/services/cacheService');
 
 const originals = [];
 const stub = (object, key, value) => {
@@ -18,6 +19,7 @@ const stub = (object, key, value) => {
 };
 
 test.afterEach(() => {
+  cacheService.flush();
   while (originals.length) {
     const [object, key, value] = originals.pop();
     object[key] = value;
@@ -164,6 +166,69 @@ test('serie de activos aplica solapamiento y expande cada proyecto por año', as
     { year: 2026, value: 2 }
   ]);
   assert.equal(value.data.value, 3);
+});
+
+test('proyectos activos sin rango deriva historia real y completa huecos', async () => {
+  setupData({ projects: [
+    project({ idProyecto: 'A', anioInicio: 2022, anioTermino: 2022 }),
+    project({ idProyecto: 'B', anioInicio: 2024, anioTermino: 2024 })
+  ] });
+
+  const { data } = await indicatorService.getIndicatorSeries('proyectos_activos', {
+    department: 'innovacion'
+  });
+
+  assert.deepEqual(data.points, [
+    { year: 2022, value: 1 },
+    { year: 2023, value: 0 },
+    { year: 2024, value: 1 }
+  ]);
+});
+
+test('proyectos finalizados sin rango usa sus años reales de término', async () => {
+  setupData({ projects: [
+    project({ idProyecto: 'A', anioInicio: 2021, anioTermino: 2022, estado: 'Finalizado' }),
+    project({ idProyecto: 'B', anioInicio: 2023, anioTermino: 2024, estado: 'Finalizado' }),
+    project({ idProyecto: 'C', anioInicio: 2023, anioTermino: 2025, estado: 'En Curso' })
+  ] });
+
+  const { data } = await indicatorService.getIndicatorSeries('proyectos_finalizados', {
+    department: 'innovacion'
+  });
+
+  assert.deepEqual(data.points, [
+    { year: 2021, value: 0 },
+    { year: 2022, value: 1 },
+    { year: 2023, value: 0 },
+    { year: 2024, value: 1 }
+  ]);
+});
+
+test('histórico de activos nunca emite años posteriores al actual', async () => {
+  const currentYear = new Date().getFullYear();
+  setupData({ projects: [
+    project({ idProyecto: 'FUTURO', anioInicio: currentYear - 1, anioTermino: currentYear + 3 })
+  ] });
+
+  const { data } = await indicatorService.getIndicatorSeries('proyectos_activos', {
+    department: 'innovacion'
+  });
+
+  assert.deepEqual(data.points.map((point) => point.year), [currentYear - 1, currentYear]);
+});
+
+test('values de proyectos activos sin año conserva la semántica del año actual', async () => {
+  const currentYear = new Date().getFullYear();
+  setupData({ projects: [
+    project({ idProyecto: 'PASADO', anioInicio: currentYear - 3, anioTermino: currentYear - 1 }),
+    project({ idProyecto: 'ACTUAL', anioInicio: currentYear - 1, anioTermino: currentYear + 1 })
+  ] });
+
+  const { data } = await indicatorService.getIndicatorValue('proyectos_activos', {
+    department: 'innovacion'
+  });
+
+  assert.equal(data.value, 1);
 });
 
 test('área temática acepta nombre canónico, alias y filtro sin redefinir area global', async () => {

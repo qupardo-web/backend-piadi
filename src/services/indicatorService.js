@@ -2,6 +2,7 @@ const provider = require('./indicatorProvider');
 const formulaService = require('./indicatorFormulaService');
 const { parseIndicatorFilters, buildFilterMeta } = require('./indicatorFilters');
 const { getIndicatorConfig, DIMENSION_LABELS } = require('./indicatorCatalog');
+const cacheService = require('./cacheService');
 
 class ServiceError extends Error {
   constructor(statusCode, code, message, details = {}) {
@@ -150,13 +151,62 @@ const aggregateAdmissionCharacterization = (rows) => ({
   ).size
 });
 
+// (A) Primera matrícula dentro del año: cada alumno cuenta una sola vez, en el
+// primer semestre en que aparece ese año (Otoño=1, Primavera=2). Reasigna el
+// periodo de cada fila a esa primera matrícula para que el agrupamiento por
+// 'periodo' no recuente al alumno cuando continúa al semestre siguiente.
+const admissionFirstPeriodByYear = (rows) => {
+  const first = new Map();
+  rows.forEach((row) => {
+    const cod = row.codCli;
+    if (cod === null || cod === undefined || cod === '') return;
+    const key = `${cod}|${row.anio}`;
+    const periodo = Number(row.periodo);
+    if (!first.has(key) || periodo < first.get(key)) first.set(key, periodo);
+  });
+  return rows.map((row) => {
+    const cod = row.codCli;
+    if (cod === null || cod === undefined || cod === '') return row;
+    const periodo = first.get(`${cod}|${row.anio}`);
+    return periodo === undefined ? row : { ...row, periodo };
+  });
+};
+
+const admissionNeedsNuevoAntiguo = (definition, filters, groupBy) =>
+  definition.formulaKey === 'COUNT_ADMISSION_NEW_VS_OLD'
+  || groupBy === 'nuevoAntiguo'
+  || Boolean(filters.nuevoAntiguo && filters.nuevoAntiguo.length);
+
+const admissionUsesFirstPeriod = (definition, filters, groupBy) =>
+  definition.formulaKey === 'COUNT_ADMISSION_ENROLLMENT_TOTAL'
+  && ((filters.periodo && filters.periodo.length > 0) || groupBy === 'periodo');
+
+// Ajusta los filtros que recibe el provider de admisión: el historial de
+// primera matrícula (nuevoAntiguo) sólo se consulta cuando el indicador lo usa,
+// y en modo primera-matrícula el provider trae ambos semestres para que el
+// servicio deduplique en memoria (un alumno por año, en su primer semestre).
+const admissionFetchFilters = (config, definition, filters, groupBy) => {
+  if (config.kind !== 'admission_enrollment') return filters;
+  return {
+    ...filters,
+    needsNuevoAntiguo: admissionNeedsNuevoAntiguo(definition, filters, groupBy),
+    ...(admissionUsesFirstPeriod(definition, filters, groupBy) ? { primeraMatricula: true } : {})
+  };
+};
+
+const applyAdmissionFirstPeriod = (rows, filters) => {
+  const remapped = admissionFirstPeriodByYear(rows);
+  if (!filters.periodo || !filters.periodo.length) return remapped;
+  return remapped.filter((row) => filters.periodo.includes(Number(row.periodo)));
+};
+
 const aggregate = (config, rows) => {
   if (config.kind === 'participant') return aggregateParticipant(rows);
   if (config.kind === 'vcm_convenio') return aggregateVcmConvenio(rows);
   if (config.kind === 'vcm_actividad') return aggregateVcmActividad(rows);
   if (config.kind === 'vcm_participacion') return aggregateVcmParticipacion(rows);
   if (config.kind === 'vcm_articulacion') return aggregateVcmArticulacion(rows);
-  if (config.kind === 'vcm_proyecto') return aggregateVcmProyecto(rows);
+  if (config.kind === 'vcm_proyecto' || config.kind === 'vcm_active_project') return aggregateVcmProyecto(rows);
   if (config.kind === 'innovation_active_project') return aggregateInnovationProject(rows, true);
   if (config.kind === 'innovation_project') return aggregateInnovationProject(rows);
   if (config.kind === 'innovation_finalized_project') return aggregateInnovationProject(rows);
@@ -168,13 +218,20 @@ const aggregate = (config, rows) => {
   return aggregateProgram(rows);
 };
 
-const getRows = (config, filters) => {
+const hasTemporalFilter = (filters) => filters.year !== null && filters.year !== undefined
+  || filters.fromYear !== null && filters.fromYear !== undefined
+  || filters.toYear !== null && filters.toYear !== undefined;
+
+const getRows = (config, filters, { historical = false } = {}) => {
   if (config.kind === 'participant') return provider.getParticipantRows(filters);
   if (config.kind === 'vcm_convenio') return provider.getVcmConvenioRows(filters);
   if (config.kind === 'vcm_actividad') return provider.getVcmActividadRows(filters);
   if (config.kind === 'vcm_participacion') return provider.getVcmParticipacionRows(filters);
   if (config.kind === 'vcm_articulacion') return provider.getVcmArticulacionRows(filters);
   if (config.kind === 'vcm_proyecto') return provider.getVcmProyectoRows(filters);
+  if (config.kind === 'vcm_active_project') {
+    return provider.getVcmProyectoRows(filters, { intervalActivity: historical || hasTemporalFilter(filters) });
+  }
   if (config.kind === 'innovation_active_project') return provider.getInnovationProjectRows(filters, { activeDuringYear: true });
   if (config.kind === 'innovation_project') return provider.getInnovationProjectRows(filters);
   if (config.kind === 'innovation_finalized_project') return provider.getInnovationProjectRows(filters, { finalizedInYear: true });
@@ -199,7 +256,8 @@ const computeFromRows = (config, definition, rows) => {
 const groupRowsBy = (rows, dimension) => {
   const groups = new Map();
   rows.forEach((row) => {
-    const raw = dimension === 'year' ? row.anio : row[dimension];
+    const rawYear = Number(row.anio);
+    const raw = dimension === 'year' && Number.isFinite(rawYear) ? rawYear : row[dimension];
     const label = raw === null || raw === undefined || raw === '' ? 'Sin dato' : raw;
     if (!groups.has(label)) {
       groups.set(label, []);
@@ -240,8 +298,32 @@ const getRequestedYearRange = (filters) => {
   return Array.from({ length: to - from + 1 }, (_, index) => from + index);
 };
 
-const expandActiveRowsByYear = (rows, filters) => {
-  const selectedYears = getRequestedYearRange(filters) || [new Date().getFullYear()];
+const buildYearAxis = (filters, rows = []) => {
+  const requested = getRequestedYearRange(filters);
+  if (requested) return requested;
+  const observed = rows
+    .map((row) => Number(row.anio))
+    .filter(Number.isFinite);
+  if (!observed.length) return [];
+  const from = Math.min(...observed);
+  const to = Math.max(...observed);
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+};
+
+const buildIntervalYearAxis = (filters, rows = []) => {
+  const requested = getRequestedYearRange(filters);
+  if (requested) return requested;
+  const starts = rows.map((row) => Number(row.anioInicio)).filter(Number.isFinite);
+  const ends = rows.map((row) => Number(row.anioTermino)).filter(Number.isFinite);
+  if (!starts.length || !ends.length) return [];
+  const from = Math.min(...starts);
+  const to = Math.min(new Date().getFullYear(), Math.max(...ends));
+  if (from > to) return [];
+  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
+};
+
+const expandActiveRowsByYear = (rows, selectedYears) => {
+  if (!selectedYears.length) return [];
   const firstYear = selectedYears[0];
   const lastYear = selectedYears[selectedYears.length - 1];
   return rows.flatMap((row) => {
@@ -252,7 +334,28 @@ const expandActiveRowsByYear = (rows, filters) => {
   });
 };
 
-const usesInnovationYearRange = (config) => String(config.kind).startsWith('innovation_');
+const buildAnnualPoints = (config, definition, rows, filters, yearAxis = null) => {
+  const byYear = groupRowsBy(rows, 'year');
+  const years = yearAxis || buildYearAxis(filters, rows);
+  return years.map((year) => {
+    const bucket = byYear.get(year);
+    if (!bucket || !bucket.length) return { year: Number(year), value: 0 };
+    const { value, hasData } = computeFromRows(config, definition, bucket);
+    return { year: Number(year), value: hasData ? value : null };
+  });
+};
+
+const getHistoricalInnovationFilters = async (config, filters) => {
+  if (hasTemporalFilter(filters) || ![
+    'innovation_active_project',
+    'innovation_finalized_project'
+  ].includes(config.kind)) return filters;
+  const range = await provider.getInnovationYearRange(filters, {
+    activeDuringYear: config.kind === 'innovation_active_project',
+    finalizedInYear: config.kind === 'innovation_finalized_project'
+  });
+  return range ? { ...filters, fromYear: range.from, toYear: range.to } : filters;
+};
 
 const resolveConfig = async (departmentKey, indicatorKey) => {
   const definition = await requireKpi(departmentKey, indicatorKey);
@@ -271,26 +374,34 @@ const getIndicatorValue = async (indicatorKey, query = {}) => {
   const filters = parseIndicatorFilters(query);
   const departmentId = ensureDepartment(filters.department);
   await requireDepartment(departmentId);
-  const { definition, config } = await resolveConfig(departmentId, key);
 
-  const rows = await getRows(config, filters);
-  const { value, hasData } = computeFromRows(config, definition, rows);
+  const cacheKey = `kpi:${departmentId}:val:${key}:${JSON.stringify(query)}`;
+    return cacheService.wrap(cacheKey, async () => {
+      const { definition, config } = await resolveConfig(departmentId, key);
+      
+      const fetchFilters = admissionFetchFilters(config, definition, filters, null);
+      let rows = await getRows(config, fetchFilters);
+      if (fetchFilters.primeraMatricula) {
+        rows = applyAdmissionFirstPeriod(rows, filters);
+      }
+      const { value, hasData } = computeFromRows(config, definition, rows);
 
-  const data = {
-    indicatorKey: key,
-    department: departmentId,
-    value,
-    formattedValue: hasData ? formatValue(value, definition.format) : null,
-    unit: definition.unit,
-    format: definition.format,
-    hasData,
-    filters: buildFilterMeta(filters),
-    meta: { source: 'postgresql', formulaKey: definition.formulaKey }
-  };
-  if (!hasData) {
-    data.message = 'No existen datos suficientes para calcular este indicador.';
-  }
-  return { data };
+      const data = {
+        indicatorKey: key,
+        department: departmentId,
+        value,
+        formattedValue: hasData ? formatValue(value, definition.format) : null,
+        unit: definition.unit,
+        format: definition.format,
+        hasData,
+        filters: buildFilterMeta(filters),
+        meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+      };
+      if (!hasData) {
+        data.message = 'No existen datos suficientes para calcular este indicador.';
+      }
+      return { data };
+    });
 };
 
 const getIndicatorSeries = async (indicatorKey, query = {}) => {
@@ -298,79 +409,69 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
   const filters = parseIndicatorFilters(query);
   const departmentId = ensureDepartment(filters.department);
   await requireDepartment(departmentId);
-  const { definition, config } = await resolveConfig(departmentId, key);
-  const groupBy = validateGroupBy(config, filters.groupBy);
 
-  let rows = await getRows(config, filters);
-  if (config.kind === 'innovation_active_project') {
-    rows = expandActiveRowsByYear(rows, filters);
-  }
-  const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
+  const cacheKey = `kpi:${departmentId}:series:${key}:${JSON.stringify(query)}`;
+    return cacheService.wrap(cacheKey, async () => {
+      const { definition, config } = await resolveConfig(departmentId, key);
+      const groupBy = validateGroupBy(config, filters.groupBy);
 
-  if (!groupBy || groupBy === 'year') {
-    const byYear = groupRowsBy(rows, 'year');
-    const points = [];
-    const requestedYears = getRequestedYearRange(filters);
-    const years = requestedYears && usesInnovationYearRange(config)
-      ? requestedYears
-      : [...byYear.keys()].sort((a, b) => Number(a) - Number(b));
-    years
-      .sort((a, b) => Number(a) - Number(b))
-      .forEach((year) => {
-        if (!byYear.has(year) && requestedYears && usesInnovationYearRange(config)) {
-          points.push({ year: Number(year), value: 0 });
-          return;
-        }
-        const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
-        if (hasData) {
-          points.push({ year: Number(year), value });
-        }
-      });
+      const historicalFilters = await getHistoricalInnovationFilters(config, filters);
+      const fetchFilters = admissionFetchFilters(config, definition, historicalFilters, groupBy);
+      let rows = await getRows(config, fetchFilters, { historical: true });
+      if (fetchFilters.primeraMatricula) {
+        rows = applyAdmissionFirstPeriod(rows, filters);
+      }
+      let yearAxis = null;
+      if (config.kind === 'innovation_active_project' || config.kind === 'vcm_active_project') {
+        yearAxis = config.kind === 'vcm_active_project'
+          ? buildIntervalYearAxis(historicalFilters, rows)
+          : buildYearAxis(historicalFilters, rows.flatMap((row) => [
+            { anio: row.anioInicio }, { anio: Math.min(row.anioTermino, new Date().getFullYear()) }
+          ]));
+        rows = expandActiveRowsByYear(rows, yearAxis);
+      }
+      const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
+
+      if (!groupBy || groupBy === 'year') {
+        const points = buildAnnualPoints(config, definition, rows, historicalFilters, yearAxis);
+        return {
+          data: {
+            indicatorKey: key,
+            department: departmentId,
+            groupBy: null,
+            points,
+            hasData: points.some((point) => point.value !== null),
+            filters: buildFilterMeta(filters),
+            meta: { source: 'postgresql', formulaKey: definition.formulaKey },
+            ...(metaContext ? { targetLine: metaContext.targetLine } : {})
+          }
+        };
+      }
+
+    const bySegment = groupRowsBy(rows, groupBy);
+    const series = [];
+    const sharedYearAxis = yearAxis || buildYearAxis(historicalFilters, rows);
+    [...bySegment.keys()].sort().forEach((label) => {
+      const segmentRows = bySegment.get(label);
+      const points = buildAnnualPoints(config, definition, segmentRows, historicalFilters, sharedYearAxis);
+      if (points.length > 0) {
+        series.push({ label: String(label), points });
+      }
+    });
+
     return {
       data: {
         indicatorKey: key,
         department: departmentId,
-        groupBy: null,
-        points,
-        hasData: points.length > 0,
+        groupBy,
+        series,
+        hasData: series.length > 0,
         filters: buildFilterMeta(filters),
         meta: { source: 'postgresql', formulaKey: definition.formulaKey },
         ...(metaContext ? { targetLine: metaContext.targetLine } : {})
       }
     };
-  }
-
-  const bySegment = groupRowsBy(rows, groupBy);
-  const series = [];
-  [...bySegment.keys()].sort().forEach((label) => {
-    const segmentRows = bySegment.get(label);
-    const byYear = groupRowsBy(segmentRows, 'year');
-    const points = [];
-    [...byYear.keys()]
-      .sort((a, b) => Number(a) - Number(b))
-      .forEach((year) => {
-        const { value, hasData } = computeFromRows(config, definition, byYear.get(year));
-        if (hasData) {
-          points.push({ year: Number(year), value });
-        }
-      });
-    if (points.length > 0) {
-      series.push({ label: String(label), points });
-    }
   });
-
-  return {
-    data: {
-      indicatorKey: key,
-      department: departmentId,
-      groupBy,
-      series,
-      hasData: series.length > 0,
-      filters: buildFilterMeta(filters),
-      meta: { source: 'postgresql', formulaKey: definition.formulaKey },
-      ...(metaContext ? { targetLine: metaContext.targetLine } : {})
-    }
-  };
 };
 
 const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
@@ -387,24 +488,66 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
   }
   const requestedGroupBy = filters.groupBy;
   const groupBy = validateGroupBy(config, filters.groupBy);
+  const cacheKey = `kpi:${departmentId}:breakdown:${key}:${JSON.stringify(query)}`;
+  return cacheService.wrap(cacheKey, async () => {
+    const historicalFilters = groupBy === 'year'
+      ? await getHistoricalInnovationFilters(config, filters)
+      : filters;
+    const fetchFilters = admissionFetchFilters(config, definition, historicalFilters, groupBy);
+    let rows = await getRows(config, fetchFilters, { historical: groupBy === 'year' });
+    if (fetchFilters.primeraMatricula) {
+      rows = applyAdmissionFirstPeriod(rows, filters);
+    }
+    let yearAxis = null;
+    if (groupBy === 'year' && (config.kind === 'innovation_active_project' || config.kind === 'vcm_active_project')) {
+      yearAxis = config.kind === 'vcm_active_project'
+        ? buildIntervalYearAxis(historicalFilters, rows)
+        : buildYearAxis(historicalFilters, rows.flatMap((row) => [
+          { anio: row.anioInicio }, { anio: Math.min(row.anioTermino, new Date().getFullYear()) }
+        ]));
+      rows = expandActiveRowsByYear(rows, yearAxis);
+    }
+    const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
-  let rows = await getRows(config, filters);
-  if (config.kind === 'innovation_active_project' && groupBy === 'year') {
-    rows = expandActiveRowsByYear(rows, filters);
-  }
-  const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
+    // Custom handler for VCM participaciones grouped by sex
+    if (config.kind === 'vcm_participacion' && groupBy === 'sexo') {
+      const totalMujeres = rows.reduce((sum, r) => sum + (r.mujeres || 0), 0);
+      const totalHombres = rows.reduce((sum, r) => sum + (r.hombres || 0), 0);
+      const totalNoInforma = rows.reduce((sum, r) => sum + (r.noInforma || 0), 0);
 
-  // Custom handler for VCM participaciones grouped by sex
-  if (config.kind === 'vcm_participacion' && groupBy === 'sexo') {
-    const totalMujeres = rows.reduce((sum, r) => sum + (r.mujeres || 0), 0);
-    const totalHombres = rows.reduce((sum, r) => sum + (r.hombres || 0), 0);
-    const totalNoInforma = rows.reduce((sum, r) => sum + (r.noInforma || 0), 0);
-    
-    const items = [];
-    if (totalMujeres > 0) items.push({ label: 'mujeres', value: totalMujeres });
-    if (totalHombres > 0) items.push({ label: 'hombres', value: totalHombres });
-    if (totalNoInforma > 0) items.push({ label: 'noInforma', value: totalNoInforma });
-    items.sort((a, b) => b.value - a.value);
+      const items = [];
+      if (totalMujeres > 0) items.push({ label: 'mujeres', value: totalMujeres });
+      if (totalHombres > 0) items.push({ label: 'hombres', value: totalHombres });
+      if (totalNoInforma > 0) items.push({ label: 'noInforma', value: totalNoInforma });
+      items.sort((a, b) => b.value - a.value);
+
+      return {
+        data: {
+          indicatorKey: key,
+          department: departmentId,
+          groupBy: requestedGroupBy,
+          items,
+          hasData: items.length > 0,
+          filters: buildFilterMeta(filters),
+          meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+        }
+      };
+    }
+
+    let items;
+    if (groupBy === 'year') {
+      items = buildAnnualPoints(config, definition, rows, historicalFilters, yearAxis)
+        .map((point) => ({ label: String(point.year), value: point.value }));
+      items.sort((a, b) => (b.value ?? Number.NEGATIVE_INFINITY) - (a.value ?? Number.NEGATIVE_INFINITY));
+    } else {
+      const groups = groupRowsBy(rows, groupBy);
+      items = [];
+      [...groups.keys()].forEach((label) => {
+        const { value, hasData } = computeFromRows(config, definition, groups.get(label));
+        if (hasData) items.push({ label: String(label), value });
+      });
+      items.sort((a, b) => b.value - a.value);
+    }
 
     return {
       data: {
@@ -421,41 +564,18 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
         } : {})
       }
     };
-  }
-
-  const groups = groupRowsBy(rows, groupBy);
-  const items = [];
-  [...groups.keys()].forEach((label) => {
-    const { value, hasData } = computeFromRows(config, definition, groups.get(label));
-    if (hasData) {
-      items.push({ label: String(label), value });
-    }
   });
-  items.sort((a, b) => b.value - a.value);
-
-  return {
-    data: {
-      indicatorKey: key,
-      department: departmentId,
-      groupBy: requestedGroupBy,
-      items,
-      hasData: items.length > 0,
-      filters: buildFilterMeta(filters),
-      meta: { source: 'postgresql', formulaKey: definition.formulaKey },
-      ...(metaContext ? {
-        metaTarget: metaContext.metaTarget,
-        metaStatus: metaContext.metaStatus
-      } : {})
-    }
-  };
 };
 
 const getDepartmentFilters = async (departmentKey, query = {}) => {
   const key = ensureDepartment(departmentKey);
   await requireDepartment(key);
-  const filters = parseIndicatorFilters({ ...query, department: key });
-  const options = await provider.getFilterOptions(key, filters);
-  return { data: { department: key, filters: options } };
+  const cacheKey = `filters:${key}:${JSON.stringify(query)}`;
+  return cacheService.wrap(cacheKey, async () => {
+    const filters = parseIndicatorFilters({ ...query, department: key });
+    const options = await provider.getFilterOptions(key, filters);
+    return { data: { department: key, filters: options } };
+  });
 };
 
 const listDepartments = async () => ({ data: await provider.getDepartments() });
@@ -475,6 +595,7 @@ const createDepartment = async (body = {}) => {
     hasData: body.hasData !== undefined ? Boolean(body.hasData) : false,
     order: body.order !== undefined ? Number(body.order) : 0
   });
+  cacheService.invalidateDepartment(key);
   return { data };
 };
 
@@ -488,6 +609,7 @@ const updateDepartment = async (departmentKey, body = {}) => {
   if (body.hasData !== undefined) updatable.hasData = Boolean(body.hasData);
   if (body.order !== undefined) updatable.order = Number(body.order);
   const data = await provider.updateDepartment(key, updatable);
+  cacheService.invalidateDepartment(key);
   return { data };
 };
 
@@ -497,6 +619,7 @@ const deleteDepartment = async (departmentKey) => {
   if (!ok) {
     throw new ServiceError(404, 'DEPARTMENT_NOT_FOUND', 'El departamento solicitado no existe', { departmentKey: key });
   }
+  cacheService.invalidateDepartment(key);
   return { data: { departmentKey: key, deleted: true } };
 };
 
@@ -528,6 +651,7 @@ const createKpi = async (departmentKey, body = {}) => {
     formulaKey: body.formulaKey ?? null,
     enabled: body.enabled !== undefined ? Boolean(body.enabled) : true
   });
+  cacheService.invalidateDepartment(key);
   return { data };
 };
 
@@ -544,6 +668,7 @@ const updateKpi = async (departmentKey, indicatorKey, body = {}) => {
   if (body.formulaKey !== undefined) updatable.formulaKey = body.formulaKey;
   if (body.enabled !== undefined) updatable.enabled = Boolean(body.enabled);
   const data = await provider.updateKpi(key, ind, updatable);
+  cacheService.invalidateDepartment(key);
   return { data };
 };
 
@@ -558,6 +683,7 @@ const deleteKpi = async (departmentKey, indicatorKey) => {
       indicatorKey: ind
     });
   }
+  cacheService.invalidateDepartment(key);
   return { data: { departmentKey: key, indicatorKey: ind, deleted: true } };
 };
 
@@ -581,80 +707,112 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
   }
 
   const department = kpi.departmentId;
-  const baseQuery = { ...query, department };
-  const config = getIndicatorConfig(key, kpi) || { allowedGroupBy: [] };
+  const cacheKey = `kpi:${department}:detail:${key}:${JSON.stringify(query)}`;
+  return cacheService.wrap(cacheKey, async () => {
+    const baseQuery = { ...query, department };
+    const config = getIndicatorConfig(key, kpi) || { allowedGroupBy: [] };
+    const groupBy = validateGroupBy(config, query.groupBy || null);
+    const requestedFilters = parseIndicatorFilters(baseQuery);
 
-  const groupBy = validateGroupBy(config, query.groupBy || null);
+    // Un año puntual define la referencia, pero no recorta la historia. Un rango
+    // explícito sí limita el eje solicitado. Se eliminan todos los aliases para
+    // impedir que uno de ellos sobreviva y reduzca accidentalmente la serie.
+    const {
+      groupBy: _omitGroupBy,
+      year: _omitYear,
+      anio: _omitAnio,
+      'año': _omitAnioUnicode,
+      ...annualQueryBase
+    } = baseQuery;
+    const annualQuery = requestedFilters.year !== null
+      ? (() => {
+        const { fromYear: _omitFrom, toYear: _omitTo, ...withoutRange } = annualQueryBase;
+        return withoutRange;
+      })()
+      : annualQueryBase;
+    const annualSeries = await module.exports.getIndicatorSeries(key, annualQuery);
+    const annualPoints = annualSeries.data.points || [];
+    const years = annualPoints.map((point) => Number(point.year)).filter((year) => Number.isFinite(year));
+    const period = years.length
+      ? { from: Math.min(...years), to: Math.max(...years) }
+      : { from: null, to: null };
 
-  const valueResult = await module.exports.getIndicatorValue(key, baseQuery);
-  const total = valueResult.data.value;
-  const hasData = valueResult.data.hasData;
+    // Año de referencia: cualquier alias explícito, o el más reciente de la serie.
+    const refYear = requestedFilters.year !== null
+      ? requestedFilters.year
+      : (annualPoints.length ? Number(annualPoints[annualPoints.length - 1].year) : null);
 
-  // Serie anual COMPLETA (sin groupBy ni filtro de año): período y comparación.
-  const { groupBy: _omitGroupBy, year: _omitYear, fromYear: _omitFrom, toYear: _omitTo, ...annualQuery } = baseQuery;
-  const annualSeries = await module.exports.getIndicatorSeries(key, annualQuery);
-  const annualPoints = annualSeries.data.points || [];
-  const years = annualPoints.map((point) => Number(point.year)).filter((year) => Number.isFinite(year));
-  const period = years.length
-    ? { from: Math.min(...years), to: Math.max(...years) }
-    : { from: null, to: null };
-
-  // Año de referencia: el pedido por query, o el más reciente.
-  const refYear = query.year !== undefined && query.year !== null && query.year !== ''
-    ? Number(query.year)
-    : (annualPoints.length ? Number(annualPoints[annualPoints.length - 1].year) : null);
-  const refIndex = annualPoints.findIndex((point) => Number(point.year) === refYear);
-
-  let comparison = null;
-  if (refIndex > 0) {
-    const current = annualPoints[refIndex];
-    const previous = annualPoints[refIndex - 1];
-    comparison = {
-      previousYear: previous.year,
-      previousValue: previous.value,
-      diff: current.value - previous.value
-    };
-  }
-
-  let table;
-  let series;
-  if (groupBy) {
-    const breakdownResult = await module.exports.getIndicatorBreakdown(key, { ...baseQuery, groupBy });
-    table = (breakdownResult.data.items || []).map((item) => ({ label: item.label, value: item.value }));
-    const seriesResult = await module.exports.getIndicatorSeries(key, { ...baseQuery, groupBy });
-    series = seriesResult.data.series || [];
-  } else {
-    table = annualPoints.map((point) => ({ year: point.year, value: point.value }));
-    series = annualPoints;
-  }
-
-  return {
-    data: {
-      indicatorKey: key,
-      department,
-      title: kpi.name,
-      description: kpi.description,
-      unit: kpi.unit,
-      format: kpi.format,
-      total,
-      formattedTotal: hasData ? formatValue(total, kpi.format) : null,
-      hasData,
-      disaggregated: Boolean(groupBy),
-      groupBy,
-      allowedGroupBy: Array.isArray(config.allowedGroupBy) ? config.allowedGroupBy : [],
-      dimensionLabels: Object.fromEntries(
-        (Array.isArray(config.allowedGroupBy) ? config.allowedGroupBy : [])
-          .filter((dim) => DIMENSION_LABELS[dim])
-          .map((dim) => [dim, DIMENSION_LABELS[dim]])
-      ),
-      period,
-      comparison,
-      table,
-      series,
-      filters: valueResult.data.filters,
-      meta: { source: 'postgresql', formulaKey: kpi.formulaKey }
+    let total = null;
+    let hasData = false;
+    if (refYear !== null) {
+      const {
+        year: _totalYear,
+        anio: _totalAnio,
+        'año': _totalAnioUnicode,
+        fromYear: _totalFrom,
+        toYear: _totalTo,
+        groupBy: _totalGroupBy,
+        ...nonTemporalQuery
+      } = baseQuery;
+      const valueResult = await module.exports.getIndicatorValue(key, {
+        ...nonTemporalQuery,
+        year: refYear
+      });
+      total = valueResult.data.value;
+      hasData = valueResult.data.hasData;
     }
-  };
+
+    let comparison = null;
+    const current = annualPoints.find((point) => Number(point.year) === refYear);
+    const previous = annualPoints.find((point) => Number(point.year) === refYear - 1);
+    if (current && previous && current.value !== null && previous.value !== null) {
+      comparison = {
+        previousYear: previous.year,
+        previousValue: previous.value,
+        diff: current.value - previous.value
+      };
+    }
+
+    let table;
+    let series;
+    if (groupBy) {
+      const breakdownResult = await module.exports.getIndicatorBreakdown(key, { ...baseQuery, groupBy });
+      table = (breakdownResult.data.items || []).map((item) => ({ label: item.label, value: item.value }));
+      const seriesResult = await module.exports.getIndicatorSeries(key, { ...baseQuery, groupBy });
+      series = seriesResult.data.series || [];
+    } else {
+      table = annualPoints.map((point) => ({ year: point.year, value: point.value }));
+      series = annualPoints;
+    }
+
+    return {
+      data: {
+        indicatorKey: key,
+        department,
+        title: kpi.name,
+        description: kpi.description,
+        unit: kpi.unit,
+        format: kpi.format,
+        total,
+        formattedTotal: hasData ? formatValue(total, kpi.format) : null,
+        hasData,
+        disaggregated: Boolean(groupBy),
+        groupBy,
+        allowedGroupBy: Array.isArray(config.allowedGroupBy) ? config.allowedGroupBy : [],
+        dimensionLabels: Object.fromEntries(
+          (Array.isArray(config.allowedGroupBy) ? config.allowedGroupBy : [])
+            .filter((dim) => DIMENSION_LABELS[dim])
+            .map((dim) => [dim, DIMENSION_LABELS[dim]])
+        ),
+        period,
+        comparison,
+        table,
+        series,
+        filters: buildFilterMeta(requestedFilters),
+        meta: { source: 'postgresql', formulaKey: kpi.formulaKey }
+      }
+    };
+  });
 };
 
 const getIndicatorDetail = async (indicatorKey, query = {}) => {

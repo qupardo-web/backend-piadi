@@ -120,16 +120,7 @@ async function initDbConstraints() {
       FOR EACH ROW EXECUTE FUNCTION check_participacion_total();
     `);
 
-    // 3. Documentar restricciones en comentarios SQL
-    await sequelize.query(`
-      COMMENT ON TABLE convenios IS 'Tabla que almacena los convenios institucionales de VCM.';
-      COMMENT ON COLUMN convenios."fechaDeTermino" IS 'Restricción: Debe ser posterior a la fecha de firma (fechaDeFirma).';
-      COMMENT ON TABLE actividades IS 'Tabla de actividades asociadas a convenios o independientes.';
-      COMMENT ON COLUMN actividades."totalParticipantes" IS 'Restricción: Debe ser igual a la suma de participantesExternos y participantesInternos, y mayor que cero (validado por trigger).';
-      COMMENT ON TABLE participaciones IS 'Detalle de la participación y género de los asistentes a las actividades.';
-      COMMENT ON COLUMN participaciones."totalPersonas" IS 'Restricción: Debe ser igual a la suma de mujeres, hombres y noInforma (validado por trigger).';
-      COMMENT ON TABLE articulaciones_tp IS 'Registro de articulaciones técnico-profesionales con colegios o liceos.';
-    `);
+
 
     // --- PIADI-203: OPTIMIZACIÓN Y VISTA MATERIALIZADA ---
     console.log('Creating database indexes for metas and indicators optimization...');
@@ -709,10 +700,7 @@ async function initDbConstraints() {
       $$ LANGUAGE plpgsql;
     `);
 
-     await sequelize.query(`
-      COMMENT ON MATERIALIZED VIEW v_meta_indicator_values IS 'Vista materializada que pre-agrupa valores de indicadores para optimización del sistema de metas.';
-      COMMENT ON FUNCTION get_indicator_value_for_period IS 'Obtiene el valor pre-calculado del indicador para un periodo específico.';
-    `);
+
 
     console.log('Creating consolidated view v_dashboard_metas...');
     await sequelize.query(`
@@ -795,11 +783,6 @@ async function initDbConstraints() {
       $$ LANGUAGE plpgsql;
     `);
 
-    await sequelize.query(`
-      COMMENT ON VIEW v_dashboard_metas IS 'Vista consolidada que une metas con sus indicadores y avances pre-calculados.';
-      COMMENT ON FUNCTION refresh_dashboard_metas IS 'Refresca la vista materializada de indicadores subyacente para actualizar el dashboard.';
-    `);
-
     console.log('Creating consolidated view v_landing_metas...');
     await sequelize.query(`
       CREATE OR REPLACE VIEW v_landing_metas AS
@@ -834,10 +817,6 @@ async function initDbConstraints() {
         "departmentId"
       FROM ranked_metas
       WHERE rn <= 10;
-    `);
-
-    await sequelize.query(`
-      COMMENT ON VIEW v_landing_metas IS 'Vista consolidada optimizada para la Landing Page, limitada a las 10 metas más recientes por departamento.';
     `);
 
     // ══════════════════════════════════════════════════════════════
@@ -935,40 +914,7 @@ async function initDbConstraints() {
       FOR EACH ROW EXECUTE FUNCTION check_financiamiento_integrity();
     `);
 
-    // 5. Documentación SQL: Comentarios en tablas y columnas
-    await sequelize.query(`
-      COMMENT ON TABLE proyectos IS 'Tabla de proyectos de innovación institucional y estudiantil.';
-      COMMENT ON COLUMN proyectos."idProyecto" IS 'Identificador único del proyecto de innovación.';
-      COMMENT ON COLUMN proyectos."nombreProyecto" IS 'Nombre del proyecto de innovación.';
-      COMMENT ON COLUMN proyectos."areaTematica" IS 'Área temática del proyecto.';
-      COMMENT ON COLUMN proyectos."cursoLinea" IS 'Curso o línea formativa asociada.';
-      COMMENT ON COLUMN proyectos.estado IS 'Estado del proyecto (ej. En Curso, Finalizado).';
-      COMMENT ON COLUMN proyectos."unidadResponsable" IS 'Unidad académica o administrativa responsable.';
-      COMMENT ON COLUMN proyectos."responsableDocente" IS 'Docente o responsable a cargo del proyecto.';
-      COMMENT ON COLUMN proyectos."socioContraparte" IS 'Socio o contraparte externa vinculada.';
-      COMMENT ON COLUMN proyectos."anioInicio" IS 'Año de inicio del proyecto.';
-      COMMENT ON COLUMN proyectos."anioTermino" IS 'Año de término del proyecto.';
-      COMMENT ON COLUMN proyectos."semestreInicio" IS 'Semestre de inicio (1 o 2).';
-      COMMENT ON COLUMN proyectos."fechaInicio" IS 'Fecha exacta de inicio.';
-      COMMENT ON COLUMN proyectos."fechaCierreEstimada" IS 'Fecha estimada de cierre.';
-      COMMENT ON COLUMN proyectos."tipoProyecto" IS 'Tipo de proyecto (Institucional o Estudiantil).';
-      COMMENT ON COLUMN proyectos."resultadoPrincipal" IS 'Resultado o producto principal obtenido.';
-      COMMENT ON COLUMN proyectos."nEstudiantes" IS 'Cantidad de estudiantes participantes.';
-      COMMENT ON COLUMN proyectos."nFuncionarios" IS 'Cantidad de funcionarios participantes.';
-      COMMENT ON COLUMN proyectos."nDocentes" IS 'Cantidad de docentes participantes.';
-      COMMENT ON COLUMN proyectos."evidenciaPrincipal" IS 'Evidencia o entregable principal.';
-      COMMENT ON COLUMN proyectos.observacion IS 'Observaciones adicionales del proyecto.';
 
-      COMMENT ON TABLE financiamientos IS 'Tabla de financiamiento y presupuestos de proyectos de innovación.';
-      COMMENT ON COLUMN financiamientos."idProyecto" IS 'Identificador foráneo del proyecto de innovación asociado.';
-      COMMENT ON COLUMN financiamientos."nombreProyecto" IS 'Nombre del proyecto financiado.';
-      COMMENT ON COLUMN financiamientos."montoAdjudicado" IS 'Monto adjudicado en pesos chilenos (CLP).';
-      COMMENT ON COLUMN financiamientos."montoEjecutadoEstimado" IS 'Monto ejecutado estimado en pesos chilenos (CLP).';
-      COMMENT ON COLUMN financiamientos."estadoFinanciero" IS 'Estado del financiamiento.';
-      COMMENT ON COLUMN financiamientos."financiamientoExterno" IS 'Indica si cuenta con financiamiento externo.';
-      COMMENT ON COLUMN financiamientos."fuenteFinanciamiento" IS 'Fuente o fondo otorgante del financiamiento.';
-      COMMENT ON COLUMN financiamientos.observacion IS 'Observaciones del financiamiento.';
-    `);
 
     // =========================================================================
     // PIADI-335: RESTRICCIONES, TRIGGERS Y DOCUMENTACIÓN SQL PARA ADMISIÓN
@@ -1135,43 +1081,7 @@ async function initDbConstraints() {
       FOR EACH ROW EXECUTE FUNCTION check_caracterizacion_integrity();
     `);
 
-    // 4. Documentación SQL: Comentarios en tablas y columnas de Admisión
-    await sequelize.query(`
-      COMMENT ON TABLE alumnos IS 'Tabla de estudiantes de pregrado matriculados en la institución.';
-      COMMENT ON COLUMN alumnos."codCli" IS 'Código único de cliente/estudiante asignado en el sistema académico institucional.';
-      COMMENT ON COLUMN alumnos.rut IS 'Número de Rol Único Tributario (RUT) del estudiante (sin dígito verificador).';
-      COMMENT ON COLUMN alumnos."digitoVerificador" IS 'Dígito verificador del RUT (0-9 o K).';
-      COMMENT ON COLUMN alumnos.nombre IS 'Nombre de pila del estudiante.';
-      COMMENT ON COLUMN alumnos."apellidoPat" IS 'Apellido paterno del estudiante.';
-      COMMENT ON COLUMN alumnos."apellidoMat" IS 'Apellido materno del estudiante.';
-      COMMENT ON COLUMN alumnos.mail IS 'Correo electrónico institucional o de contacto.';
-      COMMENT ON COLUMN alumnos."fonoAct" IS 'Teléfono de contacto actualizado.';
 
-      COMMENT ON TABLE asignaturas IS 'Catálogo de asignaturas y ramos equivalentes de la carrera Contador Auditor.';
-      COMMENT ON COLUMN asignaturas."ramoEquiv" IS 'Código identificador de ramo equivalente de la asignatura.';
-      COMMENT ON COLUMN asignaturas.nombre IS 'Nombre descriptivo de la asignatura curricular.';
-
-      COMMENT ON TABLE matriculas_por_asignatura IS 'Registro de inscripciones y matrículas de estudiantes por asignatura, sección y período académico.';
-      COMMENT ON COLUMN matriculas_por_asignatura."codCli" IS 'Identificador foráneo del alumno matriculado.';
-      COMMENT ON COLUMN matriculas_por_asignatura."ramoEquiv" IS 'Identificador foráneo de la asignatura inscrita.';
-      COMMENT ON COLUMN matriculas_por_asignatura.seccion IS 'Número de sección en que cursa la asignatura.';
-      COMMENT ON COLUMN matriculas_por_asignatura.anio IS 'Año académico de la matrícula.';
-      COMMENT ON COLUMN matriculas_por_asignatura.periodo IS 'Período académico semestral (1 o 2).';
-      COMMENT ON COLUMN matriculas_por_asignatura."estadoCad" IS 'Estado académico del estudiante en la asignatura (Regular, Aprobado, Reprobado, etc.).';
-
-      COMMENT ON TABLE caracterizacion_estudiante IS 'Datos sociodemográficos, procedencia escolar y caracterización socioeconómica de los estudiantes de pregrado.';
-      COMMENT ON COLUMN caracterizacion_estudiante.rut IS 'Número de RUT del estudiante (clave primaria y foránea hacia alumnos.rut).';
-      COMMENT ON COLUMN caracterizacion_estudiante.dig IS 'Dígito verificador del RUT.';
-      COMMENT ON COLUMN caracterizacion_estudiante.sexo IS 'Sexo registral declarado por el estudiante.';
-      COMMENT ON COLUMN caracterizacion_estudiante."fechaNacimiento" IS 'Fecha de nacimiento del estudiante.';
-      COMMENT ON COLUMN caracterizacion_estudiante.region IS 'Región de residencia del estudiante.';
-      COMMENT ON COLUMN caracterizacion_estudiante.comuna IS 'Comuna de residencia del estudiante.';
-      COMMENT ON COLUMN caracterizacion_estudiante."tipoColegio" IS 'Tipo de establecimiento de egreso de enseñanza media (Municipal, Particular Subvencionado, Técnico Profesional, etc.).';
-      COMMENT ON COLUMN caracterizacion_estudiante."viaAcceso" IS 'Vía de ingreso a la institución (Admisión Directa, PSU / PAES, etc.).';
-      COMMENT ON COLUMN caracterizacion_estudiante."nivelSocioeconomico" IS 'Clasificación o tramo socioeconómico del estudiante (NSE).';
-      COMMENT ON COLUMN caracterizacion_estudiante."situacionFamiliar" IS 'Situación y entorno familiar declarado por el estudiante.';
-      COMMENT ON COLUMN caracterizacion_estudiante.beneficios IS 'Beneficios estudiantiles, gratuidad o becas asignadas al estudiante.';
-    `);
 
     console.log('Database-level constraints, triggers, and SQL documentation applied successfully.');
   } catch (error) {

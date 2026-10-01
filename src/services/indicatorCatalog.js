@@ -95,7 +95,7 @@ const INDICATORS = {
   actividades_realizadas: { kind: 'vcm_actividad', formulaKey: 'COUNT_ACTIVITIES', allowedGroupBy: VCM_ACTIVIDAD_GROUP_BY },
   participaciones: { kind: 'vcm_participacion', formulaKey: 'PARTICIPACIONES_SUM', allowedGroupBy: VCM_PARTICIPACION_GROUP_BY },
   articulaciones_tp: { kind: 'vcm_articulacion', formulaKey: 'COUNT_ARTICULACIONES', allowedGroupBy: VCM_ARTICULACION_GROUP_BY },
-  proyectos_vcm: { kind: 'vcm_proyecto', formulaKey: 'COUNT_PROJECTS', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
+  proyectos_vcm: { kind: 'vcm_active_project', formulaKey: 'COUNT_PROJECTS', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
   financiamiento_vcm: { kind: 'vcm_proyecto', formulaKey: 'FINANCING_SUM', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
 
   // Innovación 

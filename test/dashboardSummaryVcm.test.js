@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const models = require('../src/models');
 const dashboardService = require('../src/services/dashboardService');
 const indicatorService = require('../src/services/indicatorService');
+const cacheService = require('../src/services/cacheService');
 const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 const provider = require('../src/services/indicatorProvider');
 
@@ -14,6 +15,7 @@ const stub = (object, key, value) => {
 };
 
 test.afterEach(() => {
+  cacheService.flush();
   while (originals.length) {
     const [object, key, value] = originals.pop();
     object[key] = value;
@@ -99,11 +101,11 @@ test('summary VCM incluye convenios activos, actividades del año y proyectos vi
   assert.ok(calls.every((call) => call.query.year === '2026'));
 });
 
-test('proyectos_vcm cuenta En Curso y excluye Finalizado usando la lógica real', async () => {
+test('proyectos_vcm sin filtro temporal conserva la card basada en estado actual', async () => {
   stub(models.Proyecto, 'findAll', async () => [
-    { idProyecto: 'P-1', anioInicio: 2026, estado: 'En Curso', Financiamiento: null },
-    { idProyecto: 'P-2', anioInicio: 2026, estado: 'Finalizado', Financiamiento: null },
-    { idProyecto: 'P-3', anioInicio: 2026, estado: 'en curso', Financiamiento: null }
+    { idProyecto: 'P-1', anioInicio: 2026, anioTermino: 2027, estado: 'En Curso', Financiamiento: null },
+    { idProyecto: 'P-2', anioInicio: 2025, anioTermino: 2026, estado: 'Finalizado', Financiamiento: null },
+    { idProyecto: 'P-3', anioInicio: 2026, anioTermino: 2028, estado: 'en curso', Financiamiento: null }
   ]);
   stub(provider, 'getDepartmentByKey', async () => ({ key: 'vinculacion_medio' }));
   stub(provider, 'getKpi', async () => ({
@@ -111,7 +113,7 @@ test('proyectos_vcm cuenta En Curso y excluye Finalizado usando la lógica real'
   }));
 
   const result = await indicatorService.getIndicatorValue('proyectos_vcm', {
-    department: 'vinculacion_medio', year: '2026'
+    department: 'vinculacion_medio'
   });
   assert.equal(result.data.value, 2);
   assert.equal(result.data.hasData, true);
