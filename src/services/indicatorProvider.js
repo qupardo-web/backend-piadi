@@ -406,11 +406,20 @@ const getVcmArticulacionRows = async (filters = {}) => {
   }));
 };
 
-const getVcmProyectoRows = async (filters = {}) => {
+const getVcmProyectoRows = async (filters = {}, { intervalActivity = false } = {}) => {
   if (String(filters.department || '').toLowerCase() !== 'vinculacion_medio') {
     return [];
   }
-  const where = buildVcmCommonWhere(filters, 'anioInicio');
+  let where = buildVcmCommonWhere(filters, 'anioInicio');
+  if (intervalActivity) {
+    const range = getFilterYearRange(filters);
+    where = range ? {
+      [Op.and]: [
+        { anioInicio: { [Op.lte]: range.to } },
+        { anioTermino: { [Op.gte]: range.from } }
+      ]
+    } : {};
+  }
 
   const proyectos = await Proyecto.findAll({
     where,
@@ -422,8 +431,10 @@ const getVcmProyectoRows = async (filters = {}) => {
     return {
       idProyecto: p.idProyecto,
       anio: p.anioInicio,
+      anioInicio: Number(p.anioInicio),
+      anioTermino: Number(p.anioTermino),
       estado: p.estado,
-      vigente: String(p.estado || '').trim().toLowerCase() === 'en curso',
+      vigente: intervalActivity || String(p.estado || '').trim().toLowerCase() === 'en curso',
       montoFinanciado: f ? Number(f.montoAdjudicado || 0) : 0
     };
   });
@@ -570,7 +581,10 @@ const getFilterYearRange = (filters = {}) => {
   return { from, to, singleYear: from === to };
 };
 
-const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false, finalizedInYear = false } = {}) => {
+const buildInnovationProjectWhere = (
+  filters = {},
+  { activeDuringYear = false, finalizedInYear = false, historicalRange = false } = {}
+) => {
   const conditions = [{ tipoProyecto: buildCaseInsensitiveIn(INNOVATION_PROJECT_TYPES) }];
   if (filters.tipo && filters.tipo.length) {
     conditions.push({ tipoProyecto: buildCaseInsensitiveIn(filters.tipo) });
@@ -588,21 +602,38 @@ const buildInnovationProjectWhere = (filters = {}, { activeDuringYear = false, f
     conditions.push({ estado: buildCaseInsensitiveEquals('Finalizado') });
     if (range) {
       conditions.push({ anioTermino: range.singleYear ? range.from : { [Op.between]: [range.from, range.to] } });
-    } else {
+    } else if (!historicalRange) {
       conditions.push({ anioTermino: new Date().getFullYear() });
     }
   } else if (activeDuringYear) {
-    const activeRange = range || {
+    const activeRange = range || (!historicalRange ? {
       from: new Date().getFullYear(),
       to: new Date().getFullYear()
-    };
-    conditions.push({ anioInicio: { [Op.lte]: activeRange.to } });
-    conditions.push({ anioTermino: { [Op.gte]: activeRange.from } });
+    } : null);
+    if (activeRange) {
+      conditions.push({ anioInicio: { [Op.lte]: activeRange.to } });
+      conditions.push({ anioTermino: { [Op.gte]: activeRange.from } });
+    }
   } else if (range) {
     conditions.push({ anioInicio: range.singleYear ? range.from : { [Op.between]: [range.from, range.to] } });
   }
 
   return { [Op.and]: conditions };
+};
+
+const getInnovationYearRange = async (filters = {}, options = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'innovacion') return null;
+  const rangeFilters = { ...filters, year: null, fromYear: null, toYear: null };
+  const projects = await Proyecto.findAll({
+    where: buildInnovationProjectWhere(rangeFilters, { ...options, historicalRange: true }),
+    attributes: ['anioInicio', 'anioTermino']
+  });
+  const starts = projects.map((project) => Number(project.anioInicio)).filter(Number.isFinite);
+  const ends = projects.map((project) => Number(project.anioTermino)).filter(Number.isFinite);
+  if (!starts.length || !ends.length) return null;
+  const from = Math.min(...starts);
+  const to = Math.min(new Date().getFullYear(), Math.max(...ends));
+  return from <= to ? { from, to } : null;
 };
 
 const getInnovationProjectRows = async (filters = {}, options = {}) => {
@@ -881,6 +912,7 @@ module.exports = {
   getVcmArticulacionRows,
   getVcmProyectoRows,
   getInnovationProjectRows,
+  getInnovationYearRange,
   getInnovationFinancingRows,
   getInnovationSectionRows,
   getAdmissionEnrollmentRows,
