@@ -154,6 +154,7 @@ const descargarExcel = async (req, res, next) => {
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.setHeader('Content-Disposition', `attachment; filename=${plantilla.archivoNombre}`);
     return res.send(plantilla.archivoData);
   } catch (err) {

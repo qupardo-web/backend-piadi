@@ -1,4 +1,11 @@
+const { Op } = require('sequelize');
 const { User, Role, Department, Plantilla, CampoPlantilla } = require('../models');
+const {
+  createEducacionContinuaPlantilla
+} = require('../config/plantillaEducacionContinua');
+const {
+  createVcmPlantilla
+} = require('../config/plantillaVcm');
 const {
   INNOVACION_TEMPLATE_NAME,
   createInnovationPlantilla,
@@ -139,48 +146,60 @@ async function seedDatabase() {
 
     let plantillaMap = {};
     const plantillasToSeed = [
-      { 
-        name: 'Educación Continua', 
-        description: 'Plantilla para carga de programas de educación continua', 
-        roleId: roleMap['Educación Continua'],
-        departmentId: 'educacion_continua',
-        variante: null,
-        archivoData: null,
-        archivoNombre: null
-      },
-      { 
-        name: 'Vinculación Con El Medio', 
-        description: 'Plantilla para carga de convenios, actividades y articulaciones de VCM', 
-        roleId: roleMap['Vinculación Con El Medio'],
-        departmentId: 'vinculacion_medio',
-        variante: null,
-        archivoData: null,
-        archivoNombre: null
-      },
+      createEducacionContinuaPlantilla(roleMap['Educación Continua']),
+      createVcmPlantilla(roleMap['Vinculación Con El Medio']),
       createInnovationPlantilla(roleMap[INNOVACION_TEMPLATE_NAME]),
       ...createAllAdmisionPlantillas(roleMap['Admisión'])
     ];
 
     for (const data of plantillasToSeed) {
+      const whereClause = (data.roleId && data.variante)
+        ? { roleId: data.roleId, variante: data.variante }
+        : { name: data.name };
+
       const [created] = await Plantilla.findOrCreate({
-        where: { name: data.name },
+        where: whereClause,
         defaults: data
       });
       plantillaMap[data.name] = created.id;
 
       const updateData = {};
+      if (created.name !== data.name) updateData.name = data.name;
       if (created.roleId !== data.roleId) updateData.roleId = data.roleId;
       if (created.departmentId !== data.departmentId) updateData.departmentId = data.departmentId;
       if (data.variante !== undefined && created.variante !== data.variante) updateData.variante = data.variante;
       if (data.description && created.description !== data.description) updateData.description = data.description;
+      if (data.archivoNombre && created.archivoNombre !== data.archivoNombre) updateData.archivoNombre = data.archivoNombre;
       if (data.archivoData) {
         updateData.archivoData = data.archivoData;
-        updateData.archivoNombre = data.archivoNombre;
       }
       if (Object.keys(updateData).length > 0) {
         await created.update(updateData);
       }
     }
+
+    // Clean up any obsolete plantillas for Admisión role that don't match the current 3 IDs
+    const admisionRoleId = roleMap['Admisión'];
+    if (admisionRoleId) {
+      const validAdmisionIds = [
+        plantillaMap[ADMISION_COMBINADA_NAME],
+        plantillaMap[ADMISION_MATRICULA_NAME],
+        plantillaMap[ADMISION_CARACTERIZACION_NAME]
+      ].filter(Boolean);
+
+      const obsoletePlantillas = await Plantilla.findAll({
+        where: {
+          roleId: admisionRoleId,
+          id: { [Op.notIn]: validAdmisionIds }
+        }
+      });
+
+      for (const obsolete of obsoletePlantillas) {
+        await CampoPlantilla.destroy({ where: { plantillaId: obsolete.id } });
+        await obsolete.destroy();
+      }
+    }
+
     plantillaMap['Admisión'] = plantillaMap[ADMISION_COMBINADA_NAME];
     console.log('Plantillas ensured in database.');
 

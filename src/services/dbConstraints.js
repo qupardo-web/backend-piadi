@@ -58,10 +58,13 @@ async function initDbConstraints() {
     // 1. CHECK Constraints
     // Restricción: fechaDeTermino debe ser posterior a fechaDeFirma
     await sequelize.query(`
-      ALTER TABLE convenios DROP CONSTRAINT IF EXISTS chk_convenio_fechas;
-    `);
-    await sequelize.query(`
-      ALTER TABLE convenios ADD CONSTRAINT chk_convenio_fechas CHECK ("fechaDeTermino" > "fechaDeFirma");
+      DO $$
+      BEGIN
+        ALTER TABLE convenios DROP CONSTRAINT IF EXISTS chk_convenio_fechas;
+        ALTER TABLE convenios ADD CONSTRAINT chk_convenio_fechas CHECK ("fechaDeTermino" > "fechaDeFirma");
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END $$;
     `);
 
     // 2. Triggers de validación antes de insertar/actualizar
@@ -843,26 +846,44 @@ async function initDbConstraints() {
 
     // 2. CHECK Constraints en Proyectos
     await sequelize.query(`
-      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_fechas;
-      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_fechas CHECK ("fechaCierreEstimada" >= "fechaInicio");
+      DO $$
+      BEGIN
+        ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_fechas;
+        ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_fechas CHECK ("fechaCierreEstimada" >= "fechaInicio");
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_anios;
-      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_anios CHECK ("anioTermino" >= "anioInicio" AND "anioInicio" >= 1900 AND "anioTermino" >= 1900);
+      DO $$
+      BEGIN
+        ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_anios;
+        ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_anios CHECK ("anioTermino" >= "anioInicio" AND "anioInicio" >= 1900 AND "anioTermino" >= 1900);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_participantes;
-      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_participantes CHECK ("nEstudiantes" >= 0 AND "nDocentes" >= 0 AND "nFuncionarios" >= 0);
+      DO $$
+      BEGIN
+        ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_participantes;
+        ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_participantes CHECK ("nEstudiantes" >= 0 AND "nDocentes" >= 0 AND "nFuncionarios" >= 0);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_tipo;
-      ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_tipo CHECK ("tipoProyecto" IN ('Estudiantil', 'Institucional'));
+      DO $$
+      BEGIN
+        ALTER TABLE proyectos DROP CONSTRAINT IF EXISTS chk_proyectos_tipo;
+        ALTER TABLE proyectos ADD CONSTRAINT chk_proyectos_tipo CHECK ("tipoProyecto" IN ('Estudiantil', 'Institucional'));
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
     `);
 
     // 3. CHECK Constraints en Financiamientos y Secciones
     await sequelize.query(`
-      ALTER TABLE financiamientos DROP CONSTRAINT IF EXISTS chk_financiamientos_montos;
-      ALTER TABLE financiamientos ADD CONSTRAINT chk_financiamientos_montos CHECK ("montoAdjudicado" >= 0 AND "montoEjecutadoEstimado" >= 0);
+      DO $$
+      BEGIN
+        ALTER TABLE financiamientos DROP CONSTRAINT IF EXISTS chk_financiamientos_montos;
+        ALTER TABLE financiamientos ADD CONSTRAINT chk_financiamientos_montos CHECK ("montoAdjudicado" >= 0 AND "montoEjecutadoEstimado" >= 0);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE secciones DROP CONSTRAINT IF EXISTS chk_secciones_valores;
-      ALTER TABLE secciones ADD CONSTRAINT chk_secciones_valores CHECK ("anio" >= 1900 AND "nProyectos" >= 0 AND "nEstudiantes" >= 0);
+      DO $$
+      BEGIN
+        ALTER TABLE secciones DROP CONSTRAINT IF EXISTS chk_secciones_valores;
+        ALTER TABLE secciones ADD CONSTRAINT chk_secciones_valores CHECK ("anio" >= 1900 AND "nProyectos" >= 0 AND "nEstudiantes" >= 0);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
     `);
 
     // 4. Triggers de validación de integridad referencial y coherencia
@@ -967,48 +988,101 @@ async function initDbConstraints() {
     `);
 
     // 2. CHECK Constraints en Alumnos, Asignaturas, Matriculas y Caracterización
+    // Relax NOT NULL constraints on alumnos table to match Sequelize model (PIADI-335)
     await sequelize.query(`
-      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_codCli_ramoEquiv_key";
-      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_ramoEquiv_codCli_unique";
+      ALTER TABLE alumnos ALTER COLUMN mail DROP NOT NULL;
+      ALTER TABLE alumnos ALTER COLUMN "fonoAct" DROP NOT NULL;
+      ALTER TABLE alumnos ALTER COLUMN "celularAct" DROP NOT NULL;
+      ALTER TABLE alumnos ALTER COLUMN "fonoEmergencia" DROP NOT NULL;
+      ALTER TABLE alumnos ALTER COLUMN "fonoProc" DROP NOT NULL;
+      ALTER TABLE alumnos ALTER COLUMN "alFono" DROP NOT NULL;
+      ALTER TABLE alumnos ALTER COLUMN celular DROP NOT NULL;
+    `);
 
-      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_rut;
-      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_rut CHECK (rut > 0 AND rut <= 99999999);
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_codCli_ramoEquiv_key";
+        ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS "matriculas_por_asignatura_ramoEquiv_codCli_unique";
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_dig;
-      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_dig CHECK ("digitoVerificador" ~* '^[0-9Kk]$');
+      DO $$
+      BEGIN
+        ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_rut;
+        ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_rut CHECK (rut > 0 AND rut <= 99999999);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_codcli;
-      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_codcli CHECK (TRIM("codCli") <> '');
+      DO $$
+      BEGIN
+        ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_dig;
+        ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_dig CHECK ("digitoVerificador" ~* '^[0-9Kk]$');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_nombres;
-      ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_nombres CHECK (TRIM(nombre) <> '' AND TRIM("apellidoPat") <> '' AND TRIM("apellidoMat") <> '');
+      DO $$
+      BEGIN
+        ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_codcli;
+        ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_codcli CHECK (TRIM("codCli") <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_ramo;
-      ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_ramo CHECK (TRIM("ramoEquiv") <> '');
+      DO $$
+      BEGIN
+        ALTER TABLE alumnos DROP CONSTRAINT IF EXISTS chk_alumnos_nombres;
+        ALTER TABLE alumnos ADD CONSTRAINT chk_alumnos_nombres CHECK (TRIM(nombre) <> '' AND TRIM("apellidoPat") <> '' AND TRIM("apellidoMat") <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_nombre;
-      ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_nombre CHECK (TRIM(nombre) <> '');
+      DO $$
+      BEGIN
+        ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_ramo;
+        ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_ramo CHECK (TRIM("ramoEquiv") <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_anio;
-      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_anio CHECK (anio >= 1990 AND anio <= 2100);
+      DO $$
+      BEGIN
+        ALTER TABLE asignaturas DROP CONSTRAINT IF EXISTS chk_asignaturas_nombre;
+        ALTER TABLE asignaturas ADD CONSTRAINT chk_asignaturas_nombre CHECK (TRIM(nombre) <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_periodo;
-      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_periodo CHECK (periodo >= 1 AND periodo <= 2);
+      DO $$
+      BEGIN
+        ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_anio;
+        ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_anio CHECK (anio >= 1990 AND anio <= 2100);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_seccion;
-      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_seccion CHECK (seccion >= 1);
+      DO $$
+      BEGIN
+        ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_periodo;
+        ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_periodo CHECK (periodo >= 1 AND periodo <= 2);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_estadocad;
-      ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_estadocad CHECK (TRIM("estadoCad") <> '');
+      DO $$
+      BEGIN
+        ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_seccion;
+        ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_seccion CHECK (seccion >= 1);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_rut;
-      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_rut CHECK (rut > 0 AND rut <= 99999999);
+      DO $$
+      BEGIN
+        ALTER TABLE matriculas_por_asignatura DROP CONSTRAINT IF EXISTS chk_matricula_estadocad;
+        ALTER TABLE matriculas_por_asignatura ADD CONSTRAINT chk_matricula_estadocad CHECK (TRIM("estadoCad") <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_dig;
-      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_dig CHECK (dig IS NULL OR dig ~* '^[0-9Kk]$');
+      DO $$
+      BEGIN
+        ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_rut;
+        ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_rut CHECK (rut > 0 AND rut <= 99999999);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-      ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_fecha_nac;
-      ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_fecha_nac CHECK ("fechaNacimiento" IS NULL OR ("fechaNacimiento" >= '1920-01-01' AND "fechaNacimiento" <= CURRENT_DATE));
+      DO $$
+      BEGIN
+        ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_dig;
+        ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_dig CHECK (dig IS NULL OR dig ~* '^[0-9Kk]$');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE caracterizacion_estudiante DROP CONSTRAINT IF EXISTS chk_caracterizacion_fecha_nac;
+        ALTER TABLE caracterizacion_estudiante ADD CONSTRAINT chk_caracterizacion_fecha_nac CHECK ("fechaNacimiento" IS NULL OR ("fechaNacimiento" >= '1920-01-01' AND "fechaNacimiento" <= CURRENT_DATE));
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
     `);
 
     // 3. Triggers de validación de integridad referencial y coherencia

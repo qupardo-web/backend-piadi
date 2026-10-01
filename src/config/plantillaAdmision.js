@@ -5,14 +5,14 @@ const ESTUDIANTES_PREGRADO_SHEET = 'Estudiantes Pregrados';
 const CARACTERIZACION_SHEET = 'Caracterización Estudiante';
 
 // Nombres y archivos de las 3 plantillas
-const ADMISION_COMBINADA_NAME = 'Plantilla Admisión - Completa';
-const ADMISION_COMBINADA_FILENAME = 'plantilla-admision-combinada.xlsx';
+const ADMISION_COMBINADA_NAME = 'Plantilla Admisión (Completa)';
+const ADMISION_COMBINADA_FILENAME = 'plantilla-admision-(completa).xlsx';
 
-const ADMISION_MATRICULA_NAME = 'Plantilla Admisión - Solo Matrícula';
-const ADMISION_MATRICULA_FILENAME = 'plantilla-admision-matricula.xlsx';
+const ADMISION_MATRICULA_NAME = 'Plantilla Admisión (Estudiantes Pregrados)';
+const ADMISION_MATRICULA_FILENAME = 'plantilla-admision-(estudiantes-pregrados).xlsx';
 
-const ADMISION_CARACTERIZACION_NAME = 'Plantilla Admisión - Solo Caracterización';
-const ADMISION_CARACTERIZACION_FILENAME = 'plantilla-admision-caracterizacion.xlsx';
+const ADMISION_CARACTERIZACION_NAME = 'Plantilla Admisión (Caracterización Estudiante)';
+const ADMISION_CARACTERIZACION_FILENAME = 'plantilla-admision-(caracterizacion-estudiante).xlsx';
 
 // Variantes
 const VARIANTE_COMBINADA = 'combinada';
