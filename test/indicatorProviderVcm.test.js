@@ -7,6 +7,7 @@ const provider = require('../src/services/indicatorProvider');
 const indicatorService = require('../src/services/indicatorService');
 const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 const { parseIndicatorFilters } = require('../src/services/indicatorFilters');
+const cacheService = require('../src/services/cacheService');
 
 const originals = [];
 const stub = (object, key, value) => {
@@ -14,7 +15,21 @@ const stub = (object, key, value) => {
   object[key] = value;
 };
 
+const valueMatches = (value, expected) => {
+  if (expected === null || typeof expected !== 'object') return value === expected;
+  if (expected[Op.between]) return value >= expected[Op.between][0] && value <= expected[Op.between][1];
+  if (expected[Op.lte] !== undefined && value > expected[Op.lte]) return false;
+  if (expected[Op.gte] !== undefined && value < expected[Op.gte]) return false;
+  return true;
+};
+
+const rowMatches = (row, where) => Reflect.ownKeys(where).every((key) => {
+  if (key === Op.and) return where[key].every((condition) => rowMatches(row, condition));
+  return valueMatches(row[key], where[key]);
+});
+
 test.afterEach(() => {
+  cacheService.flush();
   while (originals.length) {
     const [object, key, value] = originals.pop();
     object[key] = value;
@@ -188,4 +203,62 @@ test('getFilterOptions expone áreas reales, ordenadas y sin vacíos ni duplicad
   stub(models.ArticulacionTP, 'findAll', async () => []);
   const options = await provider.getFilterOptions('vinculacion_medio', filters());
   assert.deepEqual(options.areas, ['docencia', 'Vinculación']);
+});
+
+test('proyectos_vcm expande un proyecto durante cada año de vigencia', async () => {
+  stubKpi('proyectos_vcm', 'COUNT_PROJECTS', 'number', 'proyectos');
+  stub(models.Proyecto, 'findAll', async () => [{
+    idProyecto: 'VCM-1', anioInicio: 2023, anioTermino: 2025,
+    estado: 'Finalizado', Financiamiento: null
+  }]);
+
+  const { data } = await indicatorService.getIndicatorSeries('proyectos_vcm', {
+    department: 'vinculacion_medio', fromYear: '2023', toYear: '2025'
+  });
+
+  assert.deepEqual(data.points, [
+    { year: 2023, value: 1 },
+    { year: 2024, value: 1 },
+    { year: 2025, value: 1 }
+  ]);
+});
+
+test('proyectos_vcm aplica solapamiento en consultas puntuales aunque hoy esté finalizado', async () => {
+  stubKpi('proyectos_vcm', 'COUNT_PROJECTS', 'number', 'proyectos');
+  const projectRows = [{
+    idProyecto: 'VCM-1', anioInicio: 2023, anioTermino: 2025,
+    estado: 'Finalizado', Financiamiento: null
+  }];
+  stub(models.Proyecto, 'findAll', async ({ where }) => projectRows.filter((row) => rowMatches(row, where)));
+
+  const inRange = await indicatorService.getIndicatorValue('proyectos_vcm', {
+    department: 'vinculacion_medio', year: '2024'
+  });
+  const beforeRange = await indicatorService.getIndicatorValue('proyectos_vcm', {
+    department: 'vinculacion_medio', year: '2022'
+  });
+
+  assert.equal(inRange.data.value, 1);
+  assert.equal(beforeRange.data.value, null);
+  assert.equal(beforeRange.data.hasData, false);
+});
+
+test('financiamiento_vcm conserva el año de inicio y no multiplica montos por vigencia', async () => {
+  stubKpi('financiamiento_vcm', 'FINANCING_SUM', 'currency', 'CLP');
+  const projectRows = [{
+    idProyecto: 'VCM-1', anioInicio: 2023, anioTermino: 2025,
+    estado: 'Finalizado',
+    Financiamiento: { montoAdjudicado: 10000000 }
+  }];
+  stub(models.Proyecto, 'findAll', async ({ where }) => projectRows.filter((row) => rowMatches(row, where)));
+
+  const { data } = await indicatorService.getIndicatorSeries('financiamiento_vcm', {
+    department: 'vinculacion_medio', fromYear: '2023', toYear: '2025'
+  });
+
+  assert.deepEqual(data.points, [
+    { year: 2023, value: 10000000 },
+    { year: 2024, value: 0 },
+    { year: 2025, value: 0 }
+  ]);
 });

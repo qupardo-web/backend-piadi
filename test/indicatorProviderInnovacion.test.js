@@ -6,6 +6,8 @@ const { Op } = require('sequelize');
 const models = require('../src/models');
 const indicatorService = require('../src/services/indicatorService');
 const formulaService = require('../src/services/indicatorFormulaService');
+const cacheService = require('../src/services/cacheService');
+const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 
 const originals = [];
 const stub = (object, key, value) => {
@@ -14,6 +16,7 @@ const stub = (object, key, value) => {
 };
 
 test.afterEach(() => {
+  cacheService.flush();
   while (originals.length) {
     const [object, key, value] = originals.pop();
     object[key] = value;
@@ -78,6 +81,7 @@ const project = (overrides = {}) => ({
 });
 
 const setupData = (projects) => {
+  stub(metaIndicatorIntegrationService, 'getIndicatorMetaContext', async () => null);
   stub(models.Department, 'findOne', async ({ where }) => (
     where.key === 'innovacion' ? { toJSON: () => ({ key: 'innovacion' }) } : null
   ));

@@ -8,6 +8,7 @@ const indicatorService = require('../src/services/indicatorService');
 const formulaService = require('../src/services/indicatorFormulaService');
 const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 const { parseIndicatorFilters } = require('../src/services/indicatorFilters');
+const cacheService = require('../src/services/cacheService');
 const { MatriculaPorAsignatura } = require('../src/models');
 const { swaggerDocs } = require('../src/config/swagger');
 
@@ -18,6 +19,7 @@ const stub = (object, key, value) => {
 };
 
 test.afterEach(() => {
+  cacheService.flush();
   while (originals.length) {
     const [object, key, value] = originals.pop();
     object[key] = value;

@@ -5,6 +5,7 @@ const dashboardService = require('../src/services/dashboardService');
 const indicatorService = require('../src/services/indicatorService');
 const provider = require('../src/services/indicatorProvider');
 const metaProgressService = require('../src/services/metaProgressService');
+const cacheService = require('../src/services/cacheService');
 
 const originals = [];
 const stub = (object, key, value) => {
@@ -13,6 +14,7 @@ const stub = (object, key, value) => {
 };
 
 test.afterEach(() => {
+  cacheService.flush();
   while (originals.length) {
     const [object, key, value] = originals.pop();
     object[key] = value;
