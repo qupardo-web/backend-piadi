@@ -8,12 +8,14 @@ class CacheService {
   constructor(options = {}) {
     this.defaultTTL = options.defaultTTL || 5 * 60 * 1000; // 5 minutos por defecto
     this.maxItems = options.maxItems || 2000;
+    this.enabled = options.enabled !== undefined ? options.enabled : true;
     this.store = new Map();
     this.hits = 0;
     this.misses = 0;
   }
 
   get(key) {
+    if (!this.enabled) return null;
     if (!this.store.has(key)) {
       this.misses++;
       return null;
@@ -33,6 +35,7 @@ class CacheService {
   }
 
   set(key, value, ttlMs = this.defaultTTL) {
+    if (!this.enabled) return value;
     if (this.store.size >= this.maxItems) {
       // Eliminar el primer elemento (FIFO/LRU básico)
       const oldestKey = this.store.keys().next().value;
@@ -68,6 +71,9 @@ class CacheService {
   }
 
   async wrap(key, fetchFn, ttlMs = this.defaultTTL) {
+    if (!this.enabled) {
+      return await fetchFn();
+    }
     const cached = this.get(key);
     if (cached !== null && cached !== undefined) {
       return cached;
@@ -102,7 +108,9 @@ class CacheService {
   }
 }
 
-const cacheService = new CacheService();
+const cacheService = new CacheService({
+  enabled: process.env.NODE_ENV !== 'test' || process.env.ENABLE_CACHE_IN_TEST === 'true'
+});
 
 module.exports = cacheService;
 module.exports.CacheService = CacheService;

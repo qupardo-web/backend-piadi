@@ -373,17 +373,11 @@ const validarArchivo = async (filePath, plantillaId, sourceName = filePath) => {
             const typeKey = attrType.type && (attrType.type.key || (attrType.type.constructor && attrType.type.constructor.name));
             valor = validador.normalizarValorModelo({ valor, campo, tipoModelo: typeKey });
             if (typeKey === 'DATEONLY' || typeKey === 'DATE') {
-              // DD-MM-YYYY o DD/MM/YYYY → YYYY-MM-DD
-              if (typeof valor === 'string') {
-                const matchDMY = valor.match(/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/);
-                if (matchDMY) {
-                  valor = `${matchDMY[3]}-${matchDMY[2]}-${matchDMY[1]}`;
+              if (valor !== null && valor !== undefined && valor !== '') {
+                const norm = normalizarFecha(valor);
+                if (norm.valido) {
+                  valor = norm.valor;
                 }
-              }
-              // Número serial de Excel → YYYY-MM-DD
-              if (typeof valor === 'number' && valor > 40000 && valor < 60000) {
-                const fecha = new Date((valor - 25569) * 86400 * 1000);
-                valor = fecha.toISOString().split('T')[0];
               }
             }
           }
@@ -490,5 +484,6 @@ module.exports = {
   validarArchivo,
   resolverTipoEsperado,
   validarTipo,
+  normalizarFecha,
   serializarValorSeguro
 };

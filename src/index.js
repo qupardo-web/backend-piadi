@@ -18,7 +18,11 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(o => o.trim()).filter(Boolean);
-app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : false, credentials: true }));
+app.use(cors({
+  origin: allowedOrigins.length ? allowedOrigins : false,
+  credentials: true,
+  exposedHeaders: ['Content-Disposition']
+}));
 app.use(express.json());
 
 // Servir plantillas Excel estáticamente para descarga
