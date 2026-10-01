@@ -1,11 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const upload = multer({ dest: 'uploads/' });
-
-// Configuración de multer en memoria para recibir binarios directos
-const storageMemoria = multer.memoryStorage();
-const uploadMemoria = multer({ storage: storageMemoria });
+const { uploadToDisk, uploadToMemory } = require('../middleware/fileUpload');
 
 const plantillaController = require('../controllers/plantillaController');
 const auditLogger = require('../middleware/auditLogger');
@@ -50,7 +45,7 @@ const { authorizePlantillaUpload } = require('../middleware/plantillaUploadAutho
  *       422:
  *         description: Error de validación del archivo.
  */
-router.post('/:id/cargar', authenticateToken, authorizePlantillaUpload, upload.single('archivo'), auditLogger({ type: 'carga', action: 'UPLOAD_TEMPLATE', module: 'Carga de Datos', entity: 'Plantilla' }), plantillaController.cargarArchivo);
+router.post('/:id/cargar', authenticateToken, authorizePlantillaUpload, uploadToDisk.single('archivo'), auditLogger({ type: 'carga', action: 'UPLOAD_TEMPLATE', module: 'Carga de Datos', entity: 'Plantilla' }), plantillaController.cargarArchivo);
 
 /**
  * @openapi
@@ -82,6 +77,8 @@ router.post('/:id/cargar', authenticateToken, authorizePlantillaUpload, upload.s
  *         description: Archivo guardado con éxito.
  *       400:
  *         description: Petición inválida.
+ *       422:
+ *         description: El archivo no cumple las validaciones de carga, incluido el tamaño máximo permitido.
  *       401:
  *         description: Token ausente, inválido o usuario no vigente.
  *       403:
@@ -89,6 +86,6 @@ router.post('/:id/cargar', authenticateToken, authorizePlantillaUpload, upload.s
  *       404:
  *         description: Plantilla no encontrada.
  */
-router.post('/:id/template', authenticateToken, authorizePlantillaUpload, uploadMemoria.single('archivo'), auditLogger({ type: 'carga', action: 'REPLACE_TEMPLATE_FILE', module: 'Carga de Datos', entity: 'Plantilla' }), plantillaController.subirTemplate);
+router.post('/:id/template', authenticateToken, authorizePlantillaUpload, uploadToMemory.single('archivo'), auditLogger({ type: 'carga', action: 'REPLACE_TEMPLATE_FILE', module: 'Carga de Datos', entity: 'Plantilla' }), plantillaController.subirTemplate);
 
 module.exports = router;
