@@ -3,6 +3,7 @@ const swaggerUi = require('swagger-ui-express');
 require('dotenv').config();
 
 const port = process.env.PORT || 5000;
+const swaggerUrl = (process.env.SWAGGER_URL || `http://localhost:${port}`).replace(/\/+$/, '');
 
 const swaggerOptions = {
   definition: {
@@ -14,7 +15,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: `http://localhost:${port}`,
+        url: swaggerUrl,
         description: 'Servidor Local'
       }
     ],
