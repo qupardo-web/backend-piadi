@@ -5,7 +5,7 @@ const EstadoFinancieroPrograma = sequelize.define('EstadoFinancieroPrograma', {
     idPrograma: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
+        primaryKey: true,
         references: {
             model: 'programas',
             key: 'idPrograma'
