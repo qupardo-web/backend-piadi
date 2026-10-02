@@ -68,7 +68,7 @@ test('usuario de otro departamento recibe 403 sin filtrar el propietario', async
   setup({ currentUser: user({ departmentId: 'innovacion' }) });
   const error = await runMiddleware(authorizePlantillaUpload, { user: { id: 1 }, params: { id: '20' } });
   assert.equal(error.statusCode, 403);
-  assert.equal(error.message, 'No tienes permisos para cargar esta plantilla');
+  assert.equal(error.message, 'No tienes permiso para cargar datos en este departamento');
   assert.doesNotMatch(error.message, /admision|innovacion/i);
 });
 
@@ -113,6 +113,18 @@ test('sin JWT recibe 401 y un JWT inválido también', async () => {
   assert.equal(error.statusCode, 401);
 });
 
+test('un JWT expirado recibe 401 antes de autorizar la carga', async () => {
+  const expiredToken = jwt.sign(
+    { id: 1, role: 'Admisión', roleGroup: 'Direccion', departmentId: 'admision' },
+    JWT_SECRET,
+    { expiresIn: -1 }
+  );
+  const error = await runMiddleware(authenticateToken, {
+    headers: { authorization: `Bearer ${expiredToken}` }
+  });
+  assert.equal(error.statusCode, 401);
+});
+
 test('VCM mantiene permiso propio y rechaza otra área', async () => {
   setup({
     currentUser: user({ roleId: 30, departmentId: 'vinculacion_medio', role: 'Vinculación Con El Medio' }),
@@ -123,6 +135,7 @@ test('VCM mantiene permiso propio y rechaza otra área', async () => {
   models.User.findByPk = async () => user({ roleId: 40, departmentId: 'educacion_continua', role: 'Educación Continua' });
   const error = await runMiddleware(authorizePlantillaUpload, { user: { id: 1 }, params: { id: '20' } });
   assert.equal(error.statusCode, 403);
+  assert.equal(error.message, 'No tienes permisos para cargar esta plantilla');
 });
 
 for (const area of [
