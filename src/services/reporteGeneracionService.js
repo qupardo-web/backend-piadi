@@ -1,4 +1,4 @@
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { ReporteEjecucion } = require('../models');
 const reporteService = require('./reporteService');
 const indicatorService = require('./indicatorService');
@@ -6,6 +6,27 @@ const { auditarReporte } = require('./reporteAuditoria');
 const { ValidationError } = require('../utils/errors');
 
 const MAX_SHEET_NAME = 31;
+
+const COLOR_PRIMARIO = 'FF161796';
+const BORDE_FINO = {
+  top: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+  left: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+  bottom: { style: 'thin', color: { argb: 'FFD9D9D9' } },
+  right: { style: 'thin', color: { argb: 'FFD9D9D9' } }
+};
+const estiloTituloHoja = (cell) => {
+  cell.font = { bold: true, size: 14, color: { argb: COLOR_PRIMARIO } };
+};
+const estiloEncabezado = (row) => {
+  row.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_PRIMARIO } };
+    cell.border = BORDE_FINO;
+  });
+};
+const estiloDato = (row) => {
+  row.eachCell((cell) => { cell.border = BORDE_FINO; });
+};
 
 const slug = (texto) => String(texto || 'reporte')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -40,48 +61,53 @@ const reunirDetalles = async (reporte) => {
 
 const armarExcel = async (reporte) => {
   const detalles = await reunirDetalles(reporte);
-  const workbook = XLSX.utils.book_new();
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'PIADI ECAS';
+  wb.created = new Date();
 
-  const resumen = [
-    ['Reporte', reporte.nombre],
-    ['Área', reporte.area ? reporte.area.name : 'Global'],
-    ['Tipo', reporte.tipo],
-    ['Generado', new Date().toISOString()],
-    [],
-    ['Indicador', 'Valor']
-  ];
+  // --- Hoja Resumen ---
+  const resumen = wb.addWorksheet('Resumen');
+  resumen.columns = [{ width: 44 }, { width: 30 }];
+  estiloTituloHoja(resumen.addRow([reporte.nombre]).getCell(1));
+  resumen.addRow(['Área', reporte.area ? reporte.area.name : 'Global']);
+  resumen.addRow(['Tipo', reporte.tipo]);
+  resumen.addRow(['Generado', new Date().toISOString()]);
+  resumen.addRow([]);
+  estiloEncabezado(resumen.addRow(['Indicador', 'Valor']));
   for (const detalle of detalles) {
     let valor;
     if (detalle.error) valor = `Error: ${detalle.error}`;
     else if (!detalle.hasData) valor = 'Sin datos';
     else valor = detalle.formattedTotal ?? detalle.total ?? '';
-    resumen.push([detalle.title || detalle.indicatorKey, valor]);
+    estiloDato(resumen.addRow([detalle.title || detalle.indicatorKey, valor]));
   }
-  const hojaResumen = XLSX.utils.aoa_to_sheet(resumen);
-  hojaResumen['!cols'] = [{ wch: 42 }, { wch: 30 }];
-  XLSX.utils.book_append_sheet(workbook, hojaResumen, 'Resumen');
+  for (const n of [2, 3, 4]) resumen.getRow(n).getCell(1).font = { bold: true };
 
+  // --- Hoja por indicador ---
   detalles.forEach((detalle, indice) => {
-    const filas = [];
+    const hoja = wb.addWorksheet(nombreHoja(indice, detalle.title));
+    hoja.columns = [{ width: 34 }, { width: 22 }];
+    estiloTituloHoja(hoja.addRow([detalle.title || detalle.indicatorKey]).getCell(1));
     if (detalle.description) {
-      filas.push(['Qué mide', detalle.description]);
-      filas.push([]);
+      const r = hoja.addRow(['Qué mide', detalle.description]);
+      r.getCell(1).font = { bold: true };
+      r.getCell(2).alignment = { wrapText: true, vertical: 'top' };
     }
-    filas.push(detalle.disaggregated ? ['Categoría', 'Valor'] : ['Período', 'Valor']);
+    hoja.addRow([]);
+    const enc = hoja.addRow(detalle.disaggregated ? ['Categoría', 'Valor'] : ['Período', 'Valor']);
+    estiloEncabezado(enc);
     const cuerpo = detalle.table || [];
     if (cuerpo.length === 0) {
-      filas.push(['Sin datos para el período', '']);
+      estiloDato(hoja.addRow(['Sin datos para el período', '']));
     } else {
       for (const fila of cuerpo) {
-        filas.push(filaTabla(fila));
+        estiloDato(hoja.addRow(filaTabla(fila)));
       }
     }
-    const hoja = XLSX.utils.aoa_to_sheet(filas);
-    hoja['!cols'] = [{ wch: 32 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(workbook, hoja, nombreHoja(indice, detalle.title));
+    hoja.views = [{ state: 'frozen', ySplit: enc.number }];
   });
 
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+  return Buffer.from(await wb.xlsx.writeBuffer());
 };
 
 // Genera el archivo al vuelo y registra la ejecución (solo metadata, sin archivo).
