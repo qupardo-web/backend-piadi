@@ -820,6 +820,8 @@ const getIndicatorDetail = async (indicatorKey, query = {}) => {
   return result.data;
 };
 
+
+
 module.exports = {
   ServiceError,
   parseYear,
@@ -839,5 +841,6 @@ module.exports = {
   getDepartmentFilters,
   getIndicatorValue,
   getIndicatorSeries,
-  getIndicatorBreakdown
+  getIndicatorBreakdown,
+  getIndicatorDetailView
 };

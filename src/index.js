@@ -12,6 +12,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const metaRoutes = require('./routes/metaRoutes');
 const landingRoutes = require('./routes/landingRoutes');
+const reporteRoutes = require('./routes/reporteRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -42,6 +43,11 @@ app.use('/api', dashboardRoutes);
 app.use('/api', auditRoutes);
 app.use('/api/metas', metaRoutes);
 app.use('/api/landing', landingRoutes);
+
+// Reportes (PIADI-418). Activo por defecto; desactivar con REPORTES_ENABLED=false.
+if (process.env.REPORTES_ENABLED !== 'false') {
+  app.use('/api/reportes', reporteRoutes);
+}
 
 // Registar Middleware Centralizado de Errores (Siempre después de las rutas)
 app.use(errorHandler);
