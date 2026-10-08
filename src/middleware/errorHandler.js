@@ -1,4 +1,5 @@
 const { AppError } = require('../utils/errors');
+const { MAX_UPLOAD_SIZE_MB } = require('../config/upload');
 
 const INTERNAL_ERROR_MESSAGE = 'Error interno, contacte al administrador';
 
@@ -112,7 +113,7 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 422;
     errorMessage = 'No se pudo validar el archivo enviado.';
     if (err.code === 'LIMIT_FILE_SIZE') {
-      errorMessage = 'Error al subir archivo: El tamaño del archivo excede el límite permitido.';
+      errorMessage = `El archivo supera el tamaño máximo permitido de ${MAX_UPLOAD_SIZE_MB} MB.`;
     } else if (err.code === 'LIMIT_UNEXPECTED_FIELD') {
       errorMessage = 'Error al subir archivo: Campo de carga inesperado en el formulario (debe ser "archivo").';
     }

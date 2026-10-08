@@ -103,12 +103,12 @@ const createCargarArchivo = ({
       valido,
       errores,
       advertencias = [],
-      pendientesCaracterizacion = [],
+      metadata = {},
       campos,
       workbook
     } = validacion;
-    const contextoAdmision = Object.hasOwn(validacion, 'advertencias') || Object.hasOwn(validacion, 'pendientesCaracterizacion')
-      ? { advertencias, pendientesCaracterizacion }
+    const contextoValidacion = Object.hasOwn(validacion, 'advertencias') || Object.hasOwn(validacion, 'metadata')
+      ? { advertencias, ...metadata }
       : {};
 
     if (!valido) {
@@ -126,7 +126,7 @@ const createCargarArchivo = ({
           ...(e.codigo ? { codigo: e.codigo } : {}),
           ...(e.severidad ? { severidad: e.severidad } : {})
         })),
-        ...contextoAdmision,
+        ...contextoValidacion,
         success: false
       });
     }
@@ -134,7 +134,7 @@ const createCargarArchivo = ({
     const resultado = await processUpload(workbook, campos);
     res.json({
       ...resultado,
-      ...contextoAdmision
+      ...contextoValidacion
     });
   } catch (err) {
     next(err);
@@ -154,6 +154,7 @@ const descargarExcel = async (req, res, next) => {
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.setHeader('Content-Disposition', `attachment; filename=${plantilla.archivoNombre}`);
     return res.send(plantilla.archivoData);
   } catch (err) {
@@ -169,7 +170,12 @@ const subirTemplate = async (req, res, next) => {
     }
 
     const originalname = normalizeUploadedFilename(req.file.originalname);
-    const plantilla = await plantillaService.guardarArchivoTemplate(id, req.file.buffer, originalname);
+    const plantilla = await plantillaService.guardarArchivoTemplate(
+      id,
+      req.file.buffer,
+      originalname,
+      req.plantilla
+    );
     res.json({
       success: true,
       message: 'Archivo de plantilla guardado exitosamente en base de datos',

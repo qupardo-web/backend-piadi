@@ -157,9 +157,9 @@ test('summary Admisión integra los 13 KPIs habilitados mediante el motor genér
   }
 
   const ageRange = department.cards.find((card) => card.indicatorKey === 'rango_etario');
-  assert.equal(ageRange.value, null);
-  assert.equal(ageRange.formattedValue, null);
-  assert.equal(ageRange.hasData, false);
+  assert.equal(ageRange.value, 2);
+  assert.equal(ageRange.formattedValue, '2');
+  assert.equal(ageRange.hasData, true);
   assert.ok(observedFilters.every(({ filters }) => filters.year === 2026));
   for (const { filters } of observedFilters) {
     assert.deepEqual(filters.periodo, [1]);

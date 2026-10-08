@@ -49,6 +49,8 @@ Department.hasMany(User, { foreignKey: 'departmentId', sourceKey: 'key', as: 'us
 User.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
 Plantilla.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
 Role.hasMany(Plantilla, { foreignKey: 'roleId' });
+Plantilla.belongsTo(Department, { foreignKey: 'departmentId', targetKey: 'key', as: 'department' });
+Department.hasMany(Plantilla, { foreignKey: 'departmentId', sourceKey: 'key', as: 'plantillas' });
 Plantilla.hasMany(CampoPlantilla, { foreignKey: 'plantillaId' });
 CampoPlantilla.belongsTo(Plantilla, { foreignKey: 'plantillaId', as: 'plantilla' });
 

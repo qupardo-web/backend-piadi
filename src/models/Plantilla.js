@@ -10,6 +10,7 @@ const sequelize = require('../config/database');
  *       required:
  *         - name
  *         - roleId
+ *         - departmentId
  *       properties:
  *         id:
  *           type: integer
@@ -23,6 +24,9 @@ const sequelize = require('../config/database');
  *         roleId:
  *           type: integer
  *           description: ID del rol/area asociado a la plantilla.
+ *         departmentId:
+ *           type: string
+ *           description: Identificador del departamento propietario de la plantilla.
  *         variante:
  *           type: string
  *           description: Variante de la plantilla (combinada, matricula, caracterizacion).
@@ -63,6 +67,14 @@ const Plantilla = sequelize.define('Plantilla', {
       key: 'id'
     }
   },
+  departmentId: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    references: {
+      model: 'departments',
+      key: 'key'
+    }
+  },
   variante: {
     type: DataTypes.STRING(50),
     allowNull: true
@@ -84,4 +96,3 @@ const Plantilla = sequelize.define('Plantilla', {
 });
 
 module.exports = Plantilla;
-

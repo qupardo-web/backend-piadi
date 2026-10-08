@@ -1,4 +1,11 @@
+const { Op } = require('sequelize');
 const { User, Role, Department, Plantilla, CampoPlantilla } = require('../models');
+const {
+  createEducacionContinuaPlantilla
+} = require('../config/plantillaEducacionContinua');
+const {
+  createVcmPlantilla
+} = require('../config/plantillaVcm');
 const {
   INNOVACION_TEMPLATE_NAME,
   createInnovationPlantilla,
@@ -139,45 +146,60 @@ async function seedDatabase() {
 
     let plantillaMap = {};
     const plantillasToSeed = [
-      { 
-        name: 'Educación Continua', 
-        description: 'Plantilla para carga de programas de educación continua', 
-        roleId: roleMap['Educación Continua'],
-        variante: null,
-        archivoData: null,
-        archivoNombre: null
-      },
-      { 
-        name: 'Vinculación Con El Medio', 
-        description: 'Plantilla para carga de convenios, actividades y articulaciones de VCM', 
-        roleId: roleMap['Vinculación Con El Medio'],
-        variante: null,
-        archivoData: null,
-        archivoNombre: null
-      },
+      createEducacionContinuaPlantilla(roleMap['Educación Continua']),
+      createVcmPlantilla(roleMap['Vinculación Con El Medio']),
       createInnovationPlantilla(roleMap[INNOVACION_TEMPLATE_NAME]),
       ...createAllAdmisionPlantillas(roleMap['Admisión'])
     ];
 
     for (const data of plantillasToSeed) {
+      const whereClause = (data.roleId && data.variante)
+        ? { roleId: data.roleId, variante: data.variante }
+        : { name: data.name };
+
       const [created] = await Plantilla.findOrCreate({
-        where: { name: data.name },
+        where: whereClause,
         defaults: data
       });
       plantillaMap[data.name] = created.id;
 
       const updateData = {};
+      if (created.name !== data.name) updateData.name = data.name;
       if (created.roleId !== data.roleId) updateData.roleId = data.roleId;
+      if (created.departmentId !== data.departmentId) updateData.departmentId = data.departmentId;
       if (data.variante !== undefined && created.variante !== data.variante) updateData.variante = data.variante;
       if (data.description && created.description !== data.description) updateData.description = data.description;
+      if (data.archivoNombre && created.archivoNombre !== data.archivoNombre) updateData.archivoNombre = data.archivoNombre;
       if (data.archivoData) {
         updateData.archivoData = data.archivoData;
-        updateData.archivoNombre = data.archivoNombre;
       }
       if (Object.keys(updateData).length > 0) {
         await created.update(updateData);
       }
     }
+
+    // Clean up any obsolete plantillas for Admisión role that don't match the current 3 IDs
+    const admisionRoleId = roleMap['Admisión'];
+    if (admisionRoleId) {
+      const validAdmisionIds = [
+        plantillaMap[ADMISION_COMBINADA_NAME],
+        plantillaMap[ADMISION_MATRICULA_NAME],
+        plantillaMap[ADMISION_CARACTERIZACION_NAME]
+      ].filter(Boolean);
+
+      const obsoletePlantillas = await Plantilla.findAll({
+        where: {
+          roleId: admisionRoleId,
+          id: { [Op.notIn]: validAdmisionIds }
+        }
+      });
+
+      for (const obsolete of obsoletePlantillas) {
+        await CampoPlantilla.destroy({ where: { plantillaId: obsolete.id } });
+        await obsolete.destroy();
+      }
+    }
+
     plantillaMap['Admisión'] = plantillaMap[ADMISION_COMBINADA_NAME];
     console.log('Plantillas ensured in database.');
 
@@ -224,16 +246,16 @@ async function seedDatabase() {
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Matrícula',  columna_excel: 'Matrícula',  hoja_origen: 'Base Programas', tabla_destino: 'ResultadosPrograma', columna_destino: 'matricula',      tipo_dato: 'number', requerido: false, orden_insercion: 2 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Aprobados',  columna_excel: 'Aprobados',  hoja_origen: 'Base Programas', tabla_destino: 'ResultadosPrograma', columna_destino: 'aprobados',      tipo_dato: 'number', requerido: false, orden_insercion: 2 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Reprobados', columna_excel: 'Reprobados', hoja_origen: 'Base Programas', tabla_destino: 'ResultadosPrograma', columna_destino: 'reprobados',     tipo_dato: 'number', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Tasa Aprobación', columna_excel: 'Tasa Aprobación', hoja_origen: 'Base Programas', tabla_destino: 'ResultadosPrograma', columna_destino: 'tasaAprobacion', tipo_dato: 'string', requerido: false, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Tasa Aprobación', columna_excel: 'Tasa Aprobación', hoja_origen: 'Base Programas', tabla_destino: 'ResultadosPrograma', columna_destino: 'tasaAprobacion', tipo_dato: 'number', requerido: false, orden_insercion: 2 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Estado',     columna_excel: 'Estado',     hoja_origen: 'Base Programas', tabla_destino: 'ResultadosPrograma', columna_destino: 'estado',          tipo_dato: 'string', requerido: false, orden_insercion: 2 },
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Ejecutado',  columna_excel: 'Ejecutado',  hoja_origen: 'Base Programas', tabla_destino: 'ResultadosPrograma', columna_destino: 'ejecutado',       tipo_dato: 'string', requerido: false, orden_insercion: 2 },
 
       // EDUCACIÓN CONTINUA - ORDEN 2 — Hoja Base Programas → EstadoFinancieroPrograma
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Programa',        columna_excel: 'ID Programa',        hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'idPrograma',       tipo_dato: 'string', requerido: true,  orden_insercion: 2, campo_lookup_tabla: 'Programa', campo_lookup_columna_db: 'idPrograma', campo_lookup_retorno: 'idPrograma' },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Valor Lista CLP',    columna_excel: 'Valor Lista CLP',    hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'valorListaCLP',     tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Descuento Promedio', columna_excel: 'Descuento Promedio', hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'descuentoPromedio', tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Ingresos Brutos CLP',columna_excel: 'Ingresos Brutos CLP', hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'ingresosBrutosCLP', tipo_dato: 'string', requerido: false, orden_insercion: 2 },
-      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Ingresos Netos CLP', columna_excel: 'Ingresos Netos CLP', hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'ingresosNetosCLP',  tipo_dato: 'string', requerido: false, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Valor Lista CLP',    columna_excel: 'Valor Lista CLP',    hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'valorListaCLP',     tipo_dato: 'number', requerido: false, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Descuento Promedio', columna_excel: 'Descuento Promedio', hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'descuentoPromedio', tipo_dato: 'number', requerido: false, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Ingresos Brutos CLP',columna_excel: 'Ingresos Brutos CLP', hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'ingresosBrutosCLP', tipo_dato: 'number', requerido: false, orden_insercion: 2 },
+      { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'Ingresos Netos CLP', columna_excel: 'Ingresos Netos CLP', hoja_origen: 'Base Programas',       tabla_destino: 'EstadoFinancieroPrograma', columna_destino: 'ingresosNetosCLP',  tipo_dato: 'number', requerido: false, orden_insercion: 2 },
 
       // EDUCACIÓN CONTINUA - ORDEN 2 — Hoja Participantes Detalle → MatriculaPrograma
       { plantillaId: plantillaMap['Educación Continua'], nombre_campo: 'ID Inscripción',     columna_excel: 'ID Inscripción',     hoja_origen: 'Participantes Detalle', tabla_destino: 'MatriculaPrograma', columna_destino: 'idInscripcion',      tipo_dato: 'string', requerido: true,  orden_insercion: 2 },

@@ -28,6 +28,53 @@ const ADMISSION_CHARACTERIZATION_GROUP_BY = [
   'tipoColegio', 'viaAcceso', 'nivelSocioeconomico', 'situacionFamiliar', 'beneficios'
 ];
 
+const DIMENSION_LABELS = {
+  area: 'Área',
+  areaTematica: 'Área Temática',
+  areaVinculada: 'Área Vinculada',
+  asignatura: 'Asignatura',
+  beneficios: 'Beneficios',
+  cohorte: 'Cohorte',
+  colegioLiceoTP: 'Colegio/Liceo TP',
+  comuna: 'Comuna',
+  contraparte: 'Contraparte',
+  edad: 'Edad',
+  especialidadTP: 'Especialidad TP',
+  estado: 'Estado',
+  estadoAcademico: 'Estado Académico',
+  fuente: 'Fuente',
+  institucion: 'Institución',
+  internosExternos: 'Internos/Externos',
+  lineaVcM: 'Línea VcM',
+  modalidad: 'Modalidad',
+  nivel: 'Nivel',
+  nivelDeEstudio: 'Nivel de Estudio',
+  nivelSocioeconomico: 'Nivel Socioeconómico',
+  nuevoAntiguo: 'Nuevo/Antiguo',
+  periodo: 'Período',
+  plataformaFoco: 'Plataforma Foco',
+  programa: 'Programa',
+  rangoEdad: 'Rango de Edad',
+  rangoEtario: 'Rango Etario',
+  region: 'Región',
+  responsableEcas: 'Responsable ECAS',
+  seccion: 'Sección',
+  sector: 'Sector',
+  sectorEconomico: 'Sector Económico',
+  semestre: 'Semestre',
+  sexo: 'Sexo',
+  situacionFamiliar: 'Situación Familiar',
+  tipo: 'Tipo',
+  tipoActividad: 'Tipo de Actividad',
+  tipoArticulacion: 'Tipo de Articulación',
+  tipoColegio: 'Tipo de Colegio',
+  tipoConvenio: 'Tipo de Convenio',
+  tipoParticipante: 'Tipo de Participante',
+  tipoPractica: 'Tipo de Práctica',
+  viaAcceso: 'Vía de Acceso',
+  year: 'Año',
+};
+
 const INDICATORS = {
   // Educación Continua
   oferta_programada: { kind: 'program', formulaKey: 'COUNT_PROGRAMMED_OFFER', allowedGroupBy: PROGRAM_GROUP_BY },
@@ -48,7 +95,7 @@ const INDICATORS = {
   actividades_realizadas: { kind: 'vcm_actividad', formulaKey: 'COUNT_ACTIVITIES', allowedGroupBy: VCM_ACTIVIDAD_GROUP_BY },
   participaciones: { kind: 'vcm_participacion', formulaKey: 'PARTICIPACIONES_SUM', allowedGroupBy: VCM_PARTICIPACION_GROUP_BY },
   articulaciones_tp: { kind: 'vcm_articulacion', formulaKey: 'COUNT_ARTICULACIONES', allowedGroupBy: VCM_ARTICULACION_GROUP_BY },
-  proyectos_vcm: { kind: 'vcm_proyecto', formulaKey: 'COUNT_PROJECTS', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
+  proyectos_vcm: { kind: 'vcm_active_project', formulaKey: 'COUNT_PROJECTS', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
   financiamiento_vcm: { kind: 'vcm_proyecto', formulaKey: 'FINANCING_SUM', allowedGroupBy: VCM_PROYECTO_GROUP_BY },
 
   // Innovación 
@@ -133,4 +180,4 @@ const getIndicatorConfig = (indicatorKey, definition = null) => {
   return null;
 };
 
-module.exports = { INDICATORS, getIndicatorConfig };
+module.exports = { INDICATORS, DIMENSION_LABELS, getIndicatorConfig };

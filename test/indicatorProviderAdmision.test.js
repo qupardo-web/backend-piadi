@@ -91,8 +91,35 @@ test('characterization provider deduplica estudiante por año y período y conse
   const rows = await provider.getAdmissionCharacterizationRows(filters({ year: '2026', periodo: '1' }));
   assert.equal(rows.length, 1);
   assert.equal(rows[0].edad, 26);
-  assert.equal(rows[0].rangoEtario, null);
+  assert.equal(rows[0].rangoEtario, '25 a 29');
   assert.equal(rows[0].comuna, null);
+});
+
+test('characterization deriva el tramo etario institucional y filtra por rangoEtario', async () => {
+  const nacimientos = {
+    A: '2011-06-15', // 15 años en 2026 -> 15 a 19
+    B: '2006-06-15', // 20 -> 20 a 24
+    C: '2001-06-15', // 25 -> 25 a 29
+    D: '1996-06-15', // 30 -> 30 a 34
+    E: '1991-06-15', // 35 -> 35 a 39
+    F: '1980-06-15', // 46 -> 40 y más
+    G: '2015-06-15'  // 11 -> sin tramo
+  };
+  stub(models.MatriculaPorAsignatura, 'findAll', async () => Object.keys(nacimientos).map((codCli) => ({
+    codCli, anio: 2026, periodo: 1,
+    alumno: { rut: codCli.charCodeAt(0), caracterizacion: {
+      rut: codCli.charCodeAt(0), fechaNacimiento: nacimientos[codCli]
+    } }
+  })));
+
+  const all = await provider.getAdmissionCharacterizationRows(filters({ year: '2026' }));
+  assert.deepEqual(
+    all.map((row) => row.rangoEtario),
+    ['15 a 19', '20 a 24', '25 a 29', '30 a 34', '35 a 39', '40 y más', null]
+  );
+
+  const mayores = await provider.getAdmissionCharacterizationRows(filters({ year: '2026', rangoEtario: '40 y más' }));
+  assert.deepEqual(mayores.map((row) => row.codCli), ['F']);
 });
 
 test('calculateAge respeta cumpleaños, fechas nulas y fechas futuras', () => {

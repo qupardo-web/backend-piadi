@@ -8,6 +8,7 @@ const indicatorService = require('../src/services/indicatorService');
 const formulaService = require('../src/services/indicatorFormulaService');
 const metaIndicatorIntegrationService = require('../src/services/metaIndicatorIntegrationService');
 const { parseIndicatorFilters } = require('../src/services/indicatorFilters');
+const cacheService = require('../src/services/cacheService');
 const { MatriculaPorAsignatura } = require('../src/models');
 const { swaggerDocs } = require('../src/config/swagger');
 
@@ -18,6 +19,7 @@ const stub = (object, key, value) => {
 };
 
 test.afterEach(() => {
+  cacheService.flush();
   while (originals.length) {
     const [object, key, value] = originals.pop();
     object[key] = value;
@@ -136,14 +138,21 @@ test('distribuciones de caracterización cuentan un estudiante por identidad', a
   }
 });
 
-test('rango_etario queda protegido mientras no existan tramos institucionales', async () => {
+test('rango_etario agrega estudiantes con tramo etario y desagrega por tramo', async () => {
   stubKpi('rango_etario');
   stub(provider, 'getAdmissionCharacterizationRows', async () => [
-    { codCli: 'A', rut: 1, anio: 2026, periodo: 1, edad: 20, rangoEtario: null }
+    { codCli: 'A', rut: 1, anio: 2026, periodo: 1, edad: 20, rangoEtario: '20 a 24' },
+    { codCli: 'B', rut: 2, anio: 2026, periodo: 1, edad: 26, rangoEtario: '25 a 29' }
   ]);
-  const result = await indicatorService.getIndicatorValue('rango_etario', { department: 'admision', year: '2026' });
-  assert.equal(result.data.value, null);
-  assert.equal(result.data.hasData, false);
+  const value = await indicatorService.getIndicatorValue('rango_etario', { department: 'admision', year: '2026' });
+  assert.equal(value.data.value, 2);
+  assert.equal(value.data.hasData, true);
+
+  const breakdown = await indicatorService.getIndicatorBreakdown('rango_etario', {
+    department: 'admision', year: '2026', groupBy: 'rangoEtario'
+  });
+  const items = Object.fromEntries(breakdown.data.items.map((item) => [item.label, item.value]));
+  assert.deepEqual(items, { '20 a 24': 1, '25 a 29': 1 });
 });
 
 test('período admite aliases 1/2, rechaza 3/4 y groupBy=periodo se conserva', async () => {
@@ -158,7 +167,7 @@ test('período admite aliases 1/2, rechaza 3/4 y groupBy=periodo se conserva', a
   assert.equal(periodoValidation.max, 2);
 });
 
-test('las 13 fórmulas están registradas y reutilizan el conteo común salvo rango etario', () => {
+test('las 13 fórmulas están registradas y reutilizan el conteo común', () => {
   for (const [key, formulaKey] of Object.entries(formulas)) {
     assert.equal(typeof formulaService.formulaRegistry[formulaKey], 'function', `${key} debe registrar ${formulaKey}`);
   }
@@ -166,11 +175,11 @@ test('las 13 fórmulas están registradas y reutilizan el conteo común salvo ra
     value: 3, hasData: true
   });
   assert.deepEqual(formulaService.apply('DISTRIBUTION_ADMISSION_AGE_RANGE', { admissionUniqueCount: 3 }), {
-    value: null, hasData: false
+    value: 3, hasData: true
   });
 });
 
-test('motor genérico entrega series por período y detail reutiliza esas series', async () => {
+test('motor genérico entrega series por período y detail entrega serie por año', async () => {
   stubKpi('matricula_total');
   stub(provider, 'getAdmissionEnrollmentRows', async () => [
     enrollment('A', { periodo: 1 }),
@@ -187,10 +196,65 @@ test('motor genérico entrega series por período y detail reutiliza esas series
   ]);
 
   const detail = await indicatorService.getIndicatorDetail('matricula_total', { year: '2026' });
-  assert.deepEqual(detail.data, [
-    { period: '2026-P1', value: 1 },
-    { period: '2026-P2', value: 1 }
+  assert.equal(detail.groupBy, null);
+  assert.deepEqual(detail.series, [{ year: 2026, value: 2 }]);
+});
+
+test('matricula_total por período cuenta la primera matrícula del año una sola vez', async () => {
+  stubKpi('matricula_total');
+  stub(provider, 'getAdmissionEnrollmentRows', async () => [
+    enrollment('A', { periodo: 1 }),
+    enrollment('A', { periodo: 2 }),
+    enrollment('B', { periodo: 2 })
   ]);
+
+  const otono = await indicatorService.getIndicatorValue('matricula_total', {
+    department: 'admision', year: '2026', periodo: '1'
+  });
+  assert.equal(otono.data.value, 1);
+
+  const primavera = await indicatorService.getIndicatorValue('matricula_total', {
+    department: 'admision', year: '2026', periodo: '2'
+  });
+  assert.equal(primavera.data.value, 1);
+
+  const anual = await indicatorService.getIndicatorValue('matricula_total', {
+    department: 'admision', year: '2026'
+  });
+  assert.equal(anual.data.value, 2);
+});
+
+test('matricula_total por período agrupa por primera matrícula y no recuenta al continuar', async () => {
+  stubKpi('matricula_total');
+  stub(provider, 'getAdmissionEnrollmentRows', async () => [
+    enrollment('A', { periodo: 1 }),
+    enrollment('A', { periodo: 2 }),
+    enrollment('B', { periodo: 2 })
+  ]);
+
+  const series = await indicatorService.getIndicatorSeries('matricula_total', {
+    department: 'admision', year: '2026', groupBy: 'periodo'
+  });
+  assert.deepEqual(series.data.series, [
+    { label: '1', points: [{ year: 2026, value: 1 }] },
+    { label: '2', points: [{ year: 2026, value: 1 }] }
+  ]);
+});
+
+test('sólo los indicadores que usan nuevoAntiguo piden el historial de primera matrícula', async () => {
+  stubKpi('matricula_total');
+  let captured = null;
+  stub(provider, 'getAdmissionEnrollmentRows', async (filters) => {
+    captured = filters;
+    return [enrollment('A', { periodo: 1 })];
+  });
+  await indicatorService.getIndicatorValue('matricula_total', { department: 'admision', year: '2026' });
+  assert.equal(captured.needsNuevoAntiguo, false);
+
+  stubKpi('nuevos_vs_antiguos');
+  captured = null;
+  await indicatorService.getIndicatorValue('nuevos_vs_antiguos', { department: 'admision', year: '2026' });
+  assert.equal(captured.needsNuevoAntiguo, true);
 });
 
 test('Swagger documenta período y dimensiones de Admisión', () => {

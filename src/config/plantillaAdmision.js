@@ -5,14 +5,14 @@ const ESTUDIANTES_PREGRADO_SHEET = 'Estudiantes Pregrados';
 const CARACTERIZACION_SHEET = 'Caracterización Estudiante';
 
 // Nombres y archivos de las 3 plantillas
-const ADMISION_COMBINADA_NAME = 'Plantilla Admisión - Completa';
-const ADMISION_COMBINADA_FILENAME = 'plantilla-admision-combinada.xlsx';
+const ADMISION_COMBINADA_NAME = 'Plantilla Admisión (Completa)';
+const ADMISION_COMBINADA_FILENAME = 'plantilla-admision-(completa).xlsx';
 
-const ADMISION_MATRICULA_NAME = 'Plantilla Admisión - Solo Matrícula';
-const ADMISION_MATRICULA_FILENAME = 'plantilla-admision-matricula.xlsx';
+const ADMISION_MATRICULA_NAME = 'Plantilla Admisión (Estudiantes Pregrados)';
+const ADMISION_MATRICULA_FILENAME = 'plantilla-admision-(estudiantes-pregrados).xlsx';
 
-const ADMISION_CARACTERIZACION_NAME = 'Plantilla Admisión - Solo Caracterización';
-const ADMISION_CARACTERIZACION_FILENAME = 'plantilla-admision-caracterizacion.xlsx';
+const ADMISION_CARACTERIZACION_NAME = 'Plantilla Admisión (Caracterización Estudiante)';
+const ADMISION_CARACTERIZACION_FILENAME = 'plantilla-admision-(caracterizacion-estudiante).xlsx';
 
 // Variantes
 const VARIANTE_COMBINADA = 'combinada';
@@ -230,6 +230,7 @@ const createAdmisionCombinadaPlantilla = (roleId) => ({
   name: ADMISION_COMBINADA_NAME,
   description: 'Plantilla para carga completa de estudiantes, matrículas y caracterización de admisión',
   roleId,
+  departmentId: 'admision',
   variante: VARIANTE_COMBINADA,
   archivoData: createAdmisionCombinadaBuffer(),
   archivoNombre: ADMISION_COMBINADA_FILENAME
@@ -239,6 +240,7 @@ const createAdmisionMatriculaPlantilla = (roleId) => ({
   name: ADMISION_MATRICULA_NAME,
   description: 'Plantilla para carga de estudiantes y matrículas por asignatura de admisión',
   roleId,
+  departmentId: 'admision',
   variante: VARIANTE_MATRICULA,
   archivoData: createAdmisionMatriculaBuffer(),
   archivoNombre: ADMISION_MATRICULA_FILENAME
@@ -248,6 +250,7 @@ const createAdmisionCaracterizacionPlantilla = (roleId) => ({
   name: ADMISION_CARACTERIZACION_NAME,
   description: 'Plantilla para carga de caracterización socioeconómica y personal de estudiantes',
   roleId,
+  departmentId: 'admision',
   variante: VARIANTE_CARACTERIZACION,
   archivoData: createAdmisionCaracterizacionBuffer(),
   archivoNombre: ADMISION_CARACTERIZACION_FILENAME
