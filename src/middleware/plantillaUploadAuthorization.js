@@ -4,6 +4,12 @@ const { UnauthorizedError, ForbiddenError, NotFoundError } = require('../utils/e
 
 const isGlobalUploadUser = (user) => user?.role?.name === 'Rector' || user?.role?.group === 'Rectoria';
 
+const getUploadForbiddenMessage = (plantilla) => (
+  plantilla?.departmentId === 'admision'
+    ? 'No tienes permiso para cargar datos en este departamento'
+    : 'No tienes permisos para cargar esta plantilla'
+);
+
 const findCurrentUser = (id) => User.findByPk(id, {
   include: [
     { model: Role, as: 'role' },
@@ -35,7 +41,7 @@ const authorizePlantillaUpload = async (req, res, next) => {
       const ownsDepartment = Boolean(departmentId) && departmentId === plantilla.departmentId;
       const hasUploadRole = Number(user.roleId) === Number(plantilla.roleId);
       if (!ownsDepartment || !hasUploadRole) {
-        return next(new ForbiddenError('No tienes permisos para cargar esta plantilla'));
+        return next(new ForbiddenError(getUploadForbiddenMessage(plantilla)));
       }
     }
 
