@@ -11,6 +11,7 @@ const { parseIndicatorFilters } = require('../src/services/indicatorFilters');
 const cacheService = require('../src/services/cacheService');
 const { MatriculaPorAsignatura } = require('../src/models');
 const { swaggerDocs } = require('../src/config/swagger');
+const { getIndicatorConfig } = require('../src/services/indicatorCatalog');
 
 const originals = [];
 const stub = (object, key, value) => {
@@ -57,6 +58,78 @@ const stubKpi = (key) => {
 const enrollment = (codCli, overrides = {}) => ({
   codCli, anio: 2026, periodo: 1, asignatura: 'Auditoría', seccion: 1,
   estadoAcademico: 'Regular', nuevoAntiguo: 'nuevo', ...overrides
+});
+
+test('detail aplica el default de asignatura y respeta los groupBy explícitos', async () => {
+  stubKpi('matricula_por_asignatura');
+  const rows = [
+    enrollment('A', { anio: 2023, asignatura: 'Auditoría' }),
+    enrollment('A', { anio: 2024, asignatura: 'Auditoría' }),
+    enrollment('B', { anio: 2024, asignatura: 'Contabilidad', seccion: 2, periodo: 2 }),
+    enrollment('C', { anio: 2025, asignatura: 'Contabilidad', seccion: 2, periodo: 1 })
+  ];
+  stub(provider, 'getAdmissionEnrollmentRows', async (filters) => rows.filter((row) => (
+    (filters.year === null || filters.year === undefined || row.anio === filters.year)
+    && (filters.fromYear === null || filters.fromYear === undefined || row.anio >= filters.fromYear)
+    && (filters.toYear === null || filters.toYear === undefined || row.anio <= filters.toYear)
+    && (!filters.periodo?.length || filters.primeraMatricula || filters.periodo.includes(row.periodo))
+  )));
+
+  assert.ok(getIndicatorConfig('matricula_por_asignatura').allowedGroupBy.includes('asignatura'));
+  assert.equal(getIndicatorConfig('matricula_por_asignatura').defaultGroupBy, 'asignatura');
+  assert.equal(getIndicatorConfig('matricula_por_seccion').defaultGroupBy, undefined);
+  assert.equal(getIndicatorConfig('matricula_por_estado_academico').defaultGroupBy, undefined);
+
+  const defaultView = await indicatorService.getIndicatorDetail('matricula_por_asignatura');
+  assert.equal(defaultView.disaggregated, true);
+  assert.equal(defaultView.groupBy, 'asignatura');
+  assert.deepEqual(defaultView.table.map((item) => item.label), ['Contabilidad', 'Auditoría']);
+  assert.deepEqual(defaultView.series.map((item) => item.label), ['Auditoría', 'Contabilidad']);
+  assert.equal(defaultView.total, 1);
+  assert.equal(defaultView.formattedTotal, '1');
+  assert.equal(defaultView.hasData, true);
+  assert.deepEqual(defaultView.period, { from: 2023, to: 2025 });
+  assert.deepEqual(defaultView.comparison, { previousYear: 2024, previousValue: 2, diff: -1 });
+
+  for (const groupBy of ['seccion', 'periodo']) {
+    const view = await indicatorService.getIndicatorDetail('matricula_por_asignatura', { groupBy });
+    assert.equal(view.groupBy, groupBy);
+    assert.equal(view.disaggregated, true);
+    assert.ok(view.series.length > 0);
+  }
+
+  for (const query of [{ groupBy: 'year' }, { groupBy: '' }]) {
+    const view = await indicatorService.getIndicatorDetail('matricula_por_asignatura', query);
+    assert.equal(view.groupBy, query.groupBy || null);
+    assert.equal(view.disaggregated, false);
+    assert.deepEqual(view.series, [
+      { year: 2023, value: 1 }, { year: 2024, value: 2 }, { year: 2025, value: 1 }
+    ]);
+    assert.deepEqual(view.table, view.series);
+  }
+
+  await assert.rejects(
+    indicatorService.getIndicatorDetail('matricula_por_asignatura', { groupBy: 'invalido' }),
+    (error) => error.statusCode === 400 && error.code === 'INVALID_GROUP_BY'
+  );
+
+  for (const query of [
+    { year: '2024' }, { periodo: '1' }, { year: '2024', periodo: '1' },
+    { groupBy: 'seccion', year: '2024' }, { groupBy: '', year: '2024' }
+  ]) {
+    const view = await indicatorService.getIndicatorDetail('matricula_por_asignatura', query);
+    assert.equal(view.groupBy, Object.hasOwn(query, 'groupBy') ? (query.groupBy || null) : 'asignatura');
+    assert.equal(view.total, query.year === '2024' && query.periodo === '1' ? 1 : (query.year === '2024' ? 2 : 1));
+    assert.equal(view.hasData, true);
+  }
+
+  stubKpi('matricula_total');
+  const unchanged = await indicatorService.getIndicatorDetail('matricula_total');
+  assert.equal(unchanged.groupBy, null);
+  assert.equal(unchanged.disaggregated, false);
+  assert.deepEqual(unchanged.series, [
+    { year: 2023, value: 1 }, { year: 2024, value: 2 }, { year: 2025, value: 1 }
+  ]);
 });
 
 test('matricula_total cuenta estudiantes únicos y no inscripciones', async () => {
