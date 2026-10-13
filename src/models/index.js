@@ -25,6 +25,11 @@ const Asignatura = require('./EntidadesBBDD/Asignatura');
 const MatriculaPorAsignatura = require('./EntidadesBBDD/MatriculaPorAsignatura');
 const CaracterizacionEstudiante = require('./EntidadesBBDD/CaracterizacionEstudiante');
 
+// --- Entidades BBDD Desarrollo Curricular ---
+const RendimientoAsignatura = require('./EntidadesBBDD/RendimientoAsignatura');
+const Practica = require('./EntidadesBBDD/Practica');
+const Titulacion = require('./EntidadesBBDD/Titulacion');
+
 // --- Entidades BBDD de Programas y Alumnos Externos ---
 const AlumnoExterno = require('./EntidadesBBDD/AlumnoExterno');
 const EstadoFinancieroPrograma = require('./EntidadesBBDD/EstadoFinancieroProgramas');
@@ -82,6 +87,19 @@ Asignatura.hasMany(MatriculaPorAsignatura, { foreignKey: 'ramoEquiv' });
 // Relación 1:1 Alumno y Caracterización Estudiante por RUT (Admisión)
 Alumno.hasOne(CaracterizacionEstudiante, { foreignKey: 'rut', sourceKey: 'rut', as: 'caracterizacion', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
 CaracterizacionEstudiante.belongsTo(Alumno, { foreignKey: 'rut', targetKey: 'rut', as: 'alumno' });
+
+// --- Asociaciones de Desarrollo Curricular ---
+Alumno.hasMany(RendimientoAsignatura, { foreignKey: 'rut', sourceKey: 'rut', as: 'rendimientos', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+RendimientoAsignatura.belongsTo(Alumno, { foreignKey: 'rut', targetKey: 'rut', as: 'alumno' });
+
+Asignatura.hasMany(RendimientoAsignatura, { foreignKey: 'ramoEquiv', as: 'rendimientos', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+RendimientoAsignatura.belongsTo(Asignatura, { foreignKey: 'ramoEquiv', as: 'asignatura' });
+
+Alumno.hasMany(Practica, { foreignKey: 'rut', sourceKey: 'rut', as: 'practicas', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Practica.belongsTo(Alumno, { foreignKey: 'rut', targetKey: 'rut', as: 'alumno' });
+
+Alumno.hasMany(Titulacion, { foreignKey: 'rut', sourceKey: 'rut', as: 'titulaciones', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
+Titulacion.belongsTo(Alumno, { foreignKey: 'rut', targetKey: 'rut', as: 'alumno' });
 
 // --- Asociaciones de Programas y Alumnos Externos ---
 Programa.hasOne(EstadoFinancieroPrograma, { foreignKey: 'idPrograma', onDelete: 'CASCADE', onUpdate: 'CASCADE' });
@@ -164,6 +182,9 @@ module.exports = {
   Asignatura,
   MatriculaPorAsignatura,
   CaracterizacionEstudiante,
+  RendimientoAsignatura,
+  Practica,
+  Titulacion,
   AlumnoExterno,
   EstadoFinancieroPrograma,
   EstadoMatricula,

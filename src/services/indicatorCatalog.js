@@ -28,6 +28,10 @@ const ADMISSION_CHARACTERIZATION_GROUP_BY = [
   'tipoColegio', 'viaAcceso', 'nivelSocioeconomico', 'situacionFamiliar', 'beneficios'
 ];
 
+const CURRICULAR_RENDIMIENTO_GROUP_BY = ['year', 'periodo', 'asignatura', 'seccion'];
+const CURRICULAR_PRACTICA_GROUP_BY = ['year', 'periodo', 'tipoPractica', 'estado'];
+const CURRICULAR_TITULACION_GROUP_BY = ['year', 'cohorte'];
+
 const DIMENSION_LABELS = {
   area: 'Área',
   areaTematica: 'Área Temática',
@@ -122,7 +126,21 @@ const INDICATORS = {
   via_acceso: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_ACCESS_ROUTE', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
   beneficios_becas: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_BENEFITS', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
   distribucion_sexo: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_GENDER', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
-  rango_etario: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_AGE_RANGE', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY }
+  rango_etario: { kind: 'admission_characterization', formulaKey: 'DISTRIBUTION_ADMISSION_AGE_RANGE', allowedGroupBy: ADMISSION_CHARACTERIZATION_GROUP_BY },
+
+  // Desarrollo Curricular - Rendimiento Académico
+  tasa_aprobacion_asignatura: { kind: 'curricular_rendimiento', formulaKey: 'APPROVAL_RATE_BY_COURSE', allowedGroupBy: CURRICULAR_RENDIMIENTO_GROUP_BY },
+  tasa_reprobacion_asignatura: { kind: 'curricular_rendimiento', formulaKey: 'FAILURE_RATE_BY_COURSE', allowedGroupBy: CURRICULAR_RENDIMIENTO_GROUP_BY },
+  asignaturas_criticas: { kind: 'curricular_rendimiento', formulaKey: 'CRITICAL_COURSES', allowedGroupBy: CURRICULAR_RENDIMIENTO_GROUP_BY },
+
+  // Desarrollo Curricular - Prácticas
+  practicas_inscritas: { kind: 'curricular_practica', formulaKey: 'COUNT_ENROLLED_INTERNSHIPS', allowedGroupBy: CURRICULAR_PRACTICA_GROUP_BY },
+  practicas_aprobadas: { kind: 'curricular_practica', formulaKey: 'COUNT_APPROVED_INTERNSHIPS', allowedGroupBy: CURRICULAR_PRACTICA_GROUP_BY },
+
+  // Desarrollo Curricular - Titulación
+  tasa_titulacion_cohorte: { kind: 'curricular_titulacion', formulaKey: 'GRADUATION_RATE_BY_COHORT', allowedGroupBy: ['cohorte', 'year'] },
+  titulados_por_anio: { kind: 'curricular_titulacion', formulaKey: 'COUNT_GRADUATES_BY_YEAR', allowedGroupBy: ['year'] },
+  tiempo_promedio_titulacion: { kind: 'curricular_titulacion', formulaKey: 'AVERAGE_GRADUATION_TIME', allowedGroupBy: CURRICULAR_TITULACION_GROUP_BY }
 };
 
 const PARTICIPANT_FORMULAS = ['UNIQUE_PARTICIPANTS', 'PARTICIPANT_PROFILE', 'TRAINING_RECURRENCE'];
@@ -156,6 +174,23 @@ const ADMISSION_CHARACTERIZATION_FORMULAS = [
   'DISTRIBUTION_ADMISSION_AGE_RANGE'
 ];
 
+const CURRICULAR_RENDIMIENTO_FORMULAS = [
+  'APPROVAL_RATE_BY_COURSE',
+  'FAILURE_RATE_BY_COURSE',
+  'CRITICAL_COURSES'
+];
+
+const CURRICULAR_PRACTICA_FORMULAS = [
+  'COUNT_ENROLLED_INTERNSHIPS',
+  'COUNT_APPROVED_INTERNSHIPS'
+];
+
+const CURRICULAR_TITULACION_FORMULAS = [
+  'GRADUATION_RATE_BY_COHORT',
+  'COUNT_GRADUATES_BY_YEAR',
+  'AVERAGE_GRADUATION_TIME'
+];
+
 const getIndicatorConfig = (indicatorKey, definition = null) => {
   if (INDICATORS[indicatorKey]) {
     return INDICATORS[indicatorKey];
@@ -170,6 +205,12 @@ const getIndicatorConfig = (indicatorKey, definition = null) => {
       kind = 'admission_enrollment';
     } else if (ADMISSION_CHARACTERIZATION_FORMULAS.includes(definition.formulaKey)) {
       kind = 'admission_characterization';
+    } else if (CURRICULAR_RENDIMIENTO_FORMULAS.includes(definition.formulaKey)) {
+      kind = 'curricular_rendimiento';
+    } else if (CURRICULAR_PRACTICA_FORMULAS.includes(definition.formulaKey)) {
+      kind = 'curricular_practica';
+    } else if (CURRICULAR_TITULACION_FORMULAS.includes(definition.formulaKey)) {
+      kind = 'curricular_titulacion';
     }
     return {
       kind,
