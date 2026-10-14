@@ -696,7 +696,7 @@ const getEnabledKpis = async (departmentKey) => {
  * Vista detallada de un indicador: metadatos + serie por año + tabla + comparación.
  * Fuente del endpoint GET /api/indicators/:key/detail.
  *
- * Sin groupBy -> serie por año (fase 1). Con groupBy -> desagregado por categoría (fase 2).
+ * Sin groupBy efectivo -> serie por año. Un default opcional del catálogo activa el desagregado.
  * Acepta year/fromYear/toYear y groupBy (debe estar en allowedGroupBy del indicador).
  */
 const getIndicatorDetailView = async (indicatorKey, query = {}) => {
@@ -711,7 +711,10 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
   return cacheService.wrap(cacheKey, async () => {
     const baseQuery = { ...query, department };
     const config = getIndicatorConfig(key, kpi) || { allowedGroupBy: [] };
-    const groupBy = validateGroupBy(config, query.groupBy || null);
+    const requestedGroupBy = Object.prototype.hasOwnProperty.call(query, 'groupBy')
+      ? query.groupBy
+      : (config.defaultGroupBy ?? null);
+    const groupBy = validateGroupBy(config, requestedGroupBy);
     const requestedFilters = parseIndicatorFilters(baseQuery);
 
     // Un año puntual define la referencia, pero no recorta la historia. Un rango
@@ -775,7 +778,7 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
 
     let table;
     let series;
-    if (groupBy) {
+    if (groupBy && groupBy !== 'year') {
       const breakdownResult = await module.exports.getIndicatorBreakdown(key, { ...baseQuery, groupBy });
       table = (breakdownResult.data.items || []).map((item) => ({ label: item.label, value: item.value }));
       const seriesResult = await module.exports.getIndicatorSeries(key, { ...baseQuery, groupBy });
@@ -796,7 +799,7 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
         total,
         formattedTotal: hasData ? formatValue(total, kpi.format) : null,
         hasData,
-        disaggregated: Boolean(groupBy),
+        disaggregated: Boolean(groupBy && groupBy !== 'year'),
         groupBy,
         allowedGroupBy: Array.isArray(config.allowedGroupBy) ? config.allowedGroupBy : [],
         dimensionLabels: Object.fromEntries(

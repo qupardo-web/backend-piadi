@@ -451,7 +451,7 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *         schema: { type: string }
  *       - in: query
  *         name: groupBy
- *         description: Dimensión de desagregación; debe estar en allowedGroupBy del indicador.
+ *         description: Dimensión explícita prevalece sobre defaultGroupBy del catálogo (matricula_por_asignatura usa asignatura). Un valor vacío desactiva el default; year devuelve la vista temporal agregada. Debe estar en allowedGroupBy del indicador.
  *         schema: { type: string }
  *     responses:
  *       200:
