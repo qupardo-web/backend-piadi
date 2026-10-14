@@ -77,13 +77,88 @@ const CURRICULAR_DEPARTMENT_SEED = {
   name: 'Desarrollo Curricular',
   description: 'Dirección de desarrollo curricular y rediseño de planes de estudio.',
   enabled: true,
-  hasData: false,
+  hasData: true,
   order: 5
 };
 
 const CURRICULAR_KPI_SEED = [
-  { key: 'programas_actualizados', name: 'Programas de estudio actualizados', description: 'Porcentaje o cantidad de programas de estudio actualizados o rediseñados.', unit: 'programas', format: 'number', formulaKey: 'COUNT_CURRICULUM_UPDATED', enabled: true },
-  { key: 'innovaciones_pedagogicas', name: 'Innovaciones pedagógicas', description: 'Cantidad de innovaciones pedagógicas o metodologías activas implementadas en el aula.', unit: 'innovaciones', format: 'number', formulaKey: 'COUNT_PEDAGOGICAL_INNOVATIONS', enabled: true }
+  // Rendimiento Académico
+  {
+    key: 'tasa_aprobacion_asignatura',
+    name: 'Tasa de aprobación por asignatura',
+    description: 'Porcentaje de estudiantes que aprueban cada asignatura en el período académico.',
+    unit: '%',
+    format: 'percentage',
+    formulaKey: 'APPROVAL_RATE_BY_COURSE',
+    enabled: true
+  },
+  {
+    key: 'tasa_reprobacion_asignatura',
+    name: 'Tasa de reprobación por asignatura',
+    description: 'Porcentaje de estudiantes que reprueban cada asignatura en el período académico.',
+    unit: '%',
+    format: 'percentage',
+    formulaKey: 'FAILURE_RATE_BY_COURSE',
+    enabled: true
+  },
+  {
+    key: 'asignaturas_criticas',
+    name: 'Asignaturas críticas',
+    description: 'Listado o cantidad de asignaturas con tasa de reprobación superior al umbral crítico (30%).',
+    unit: 'asignaturas',
+    format: 'number',
+    formulaKey: 'CRITICAL_COURSES',
+    enabled: true
+  },
+
+  // Prácticas
+  {
+    key: 'practicas_inscritas',
+    name: 'Prácticas inscritas',
+    description: 'Cantidad de estudiantes inscritos en práctica profesional en el período académico.',
+    unit: 'estudiantes',
+    format: 'number',
+    formulaKey: 'COUNT_ENROLLED_INTERNSHIPS',
+    enabled: true
+  },
+  {
+    key: 'practicas_aprobadas',
+    name: 'Prácticas aprobadas',
+    description: 'Cantidad de estudiantes que aprueban su práctica profesional en el período académico.',
+    unit: 'estudiantes',
+    format: 'number',
+    formulaKey: 'COUNT_APPROVED_INTERNSHIPS',
+    enabled: true
+  },
+
+  // Titulación
+  {
+    key: 'tasa_titulacion_cohorte',
+    name: 'Tasa de titulación por cohorte',
+    description: 'Porcentaje de estudiantes de una cohorte que obtienen su título dentro del tiempo normativo o con desfase.',
+    unit: '%',
+    format: 'percentage',
+    formulaKey: 'GRADUATION_RATE_BY_COHORT',
+    enabled: true
+  },
+  {
+    key: 'titulados_por_anio',
+    name: 'Titulados por año',
+    description: 'Total de estudiantes titulados por año académico.',
+    unit: 'titulados',
+    format: 'number',
+    formulaKey: 'COUNT_GRADUATES_BY_YEAR',
+    enabled: true
+  },
+  {
+    key: 'tiempo_promedio_titulacion',
+    name: 'Tiempo promedio de titulación',
+    description: 'Promedio de semestres cursados hasta la obtención del título profesional.',
+    unit: 'semestres',
+    format: 'number',
+    formulaKey: 'AVERAGE_GRADUATION_TIME',
+    enabled: true
+  }
 ];
 
 const ADMISION_DEPARTMENT_SEED = {
@@ -165,6 +240,16 @@ async function seedIndicators() {
 
   // 5. Seed Desarrollo Curricular
   await Department.findOrCreate({ where: { key: CURRICULAR_DEPARTMENT_SEED.key }, defaults: CURRICULAR_DEPARTMENT_SEED });
+  await Department.update(
+    { hasData: true },
+    { where: { key: CURRICULAR_DEPARTMENT_SEED.key } }
+  );
+  await IndicatorDefinition.destroy({
+    where: {
+      departmentId: CURRICULAR_DEPARTMENT_SEED.key,
+      key: ['programas_actualizados', 'innovaciones_pedagogicas']
+    }
+  }).catch(() => {});
   for (const kpi of CURRICULAR_KPI_SEED) {
     await IndicatorDefinition.findOrCreate({
       where: { departmentId: CURRICULAR_DEPARTMENT_SEED.key, key: kpi.key },
