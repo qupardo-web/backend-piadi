@@ -1155,7 +1155,300 @@ async function initDbConstraints() {
       FOR EACH ROW EXECUTE FUNCTION check_caracterizacion_integrity();
     `);
 
+    // ═══════════════════════════════════════════════════════
+    // DESARROLLO CURRICULAR (PIADI-301)
+    // ═══════════════════════════════════════════════════════
+    console.log('Applying database-level constraints, triggers, and SQL documentation for Desarrollo Curricular...');
 
+    // 1. Asegurar existencia de tablas para Desarrollo Curricular
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS rendimiento_asignatura (
+        id SERIAL PRIMARY KEY,
+        rut INTEGER NOT NULL,
+        "codCli" VARCHAR(50),
+        "ramoEquiv" VARCHAR(50) NOT NULL,
+        seccion INTEGER,
+        anio INTEGER NOT NULL,
+        periodo INTEGER NOT NULL,
+        "notaFinal" DECIMAL(3, 1),
+        "estadoAsignatura" VARCHAR(20) NOT NULL DEFAULT 'APROBADO',
+        asistencia DECIMAL(5, 2),
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS practicas (
+        id SERIAL PRIMARY KEY,
+        rut INTEGER NOT NULL,
+        "codCli" VARCHAR(50),
+        anio INTEGER NOT NULL,
+        periodo INTEGER NOT NULL,
+        "tipoPractica" VARCHAR(100) NOT NULL,
+        estado VARCHAR(50) NOT NULL,
+        "fechaInicio" DATE,
+        "fechaTermino" DATE,
+        horas INTEGER,
+        empresa VARCHAR(150),
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS titulacion (
+        id SERIAL PRIMARY KEY,
+        rut INTEGER NOT NULL,
+        "codCli" VARCHAR(50),
+        "anioTitulacion" INTEGER NOT NULL,
+        periodo INTEGER NOT NULL,
+        cohorte INTEGER NOT NULL,
+        "tiempoNormativo" DECIMAL(4, 1),
+        "semestresCursados" DECIMAL(4, 1),
+        "fechaTitulacion" DATE,
+        distincion VARCHAR(50),
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    // 2. Claves Foráneas (FK hacia alumnos y asignaturas)
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_rendimiento_alumno') THEN
+          ALTER TABLE rendimiento_asignatura
+            ADD CONSTRAINT fk_rendimiento_alumno FOREIGN KEY (rut)
+            REFERENCES alumnos(rut) ON UPDATE CASCADE ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_rendimiento_asignatura') THEN
+          ALTER TABLE rendimiento_asignatura
+            ADD CONSTRAINT fk_rendimiento_asignatura FOREIGN KEY ("ramoEquiv")
+            REFERENCES asignaturas("ramoEquiv") ON UPDATE CASCADE ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_practicas_alumno') THEN
+          ALTER TABLE practicas
+            ADD CONSTRAINT fk_practicas_alumno FOREIGN KEY (rut)
+            REFERENCES alumnos(rut) ON UPDATE CASCADE ON DELETE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_titulacion_alumno') THEN
+          ALTER TABLE titulacion
+            ADD CONSTRAINT fk_titulacion_alumno FOREIGN KEY (rut)
+            REFERENCES alumnos(rut) ON UPDATE CASCADE ON DELETE CASCADE;
+        END IF;
+      END $$;
+    `);
+
+    // 3. CHECK Constraints de Dominio
+    await sequelize.query(`
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_rut;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_rut CHECK (rut > 0 AND rut <= 99999999);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_ramo;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_ramo CHECK (TRIM("ramoEquiv") <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_anio;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_anio CHECK (anio >= 1990 AND anio <= 2100);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_periodo;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_periodo CHECK (periodo >= 1 AND periodo <= 2);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_seccion;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_seccion CHECK (seccion IS NULL OR seccion >= 1);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_nota;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_nota CHECK ("notaFinal" IS NULL OR ("notaFinal" >= 1.0 AND "notaFinal" <= 7.0));
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_asistencia;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_asistencia CHECK (asistencia IS NULL OR (asistencia >= 0.0 AND asistencia <= 100.0));
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE rendimiento_asignatura DROP CONSTRAINT IF EXISTS chk_rendimiento_estado;
+        ALTER TABLE rendimiento_asignatura ADD CONSTRAINT chk_rendimiento_estado CHECK (UPPER(TRIM("estadoAsignatura")) IN ('APROBADO', 'REPROBADO'));
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE practicas DROP CONSTRAINT IF EXISTS chk_practicas_rut;
+        ALTER TABLE practicas ADD CONSTRAINT chk_practicas_rut CHECK (rut > 0 AND rut <= 99999999);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE practicas DROP CONSTRAINT IF EXISTS chk_practicas_anio;
+        ALTER TABLE practicas ADD CONSTRAINT chk_practicas_anio CHECK (anio >= 1990 AND anio <= 2100);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE practicas DROP CONSTRAINT IF EXISTS chk_practicas_periodo;
+        ALTER TABLE practicas ADD CONSTRAINT chk_practicas_periodo CHECK (periodo >= 1 AND periodo <= 2);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE practicas DROP CONSTRAINT IF EXISTS chk_practicas_tipo;
+        ALTER TABLE practicas ADD CONSTRAINT chk_practicas_tipo CHECK (TRIM("tipoPractica") <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE practicas DROP CONSTRAINT IF EXISTS chk_practicas_estado;
+        ALTER TABLE practicas ADD CONSTRAINT chk_practicas_estado CHECK (TRIM(estado) <> '');
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE practicas DROP CONSTRAINT IF EXISTS chk_practicas_horas;
+        ALTER TABLE practicas ADD CONSTRAINT chk_practicas_horas CHECK (horas IS NULL OR horas >= 0);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE practicas DROP CONSTRAINT IF EXISTS chk_practicas_fechas;
+        ALTER TABLE practicas ADD CONSTRAINT chk_practicas_fechas CHECK ("fechaInicio" IS NULL OR "fechaTermino" IS NULL OR "fechaTermino" >= "fechaInicio");
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE titulacion DROP CONSTRAINT IF EXISTS chk_titulacion_rut;
+        ALTER TABLE titulacion ADD CONSTRAINT chk_titulacion_rut CHECK (rut > 0 AND rut <= 99999999);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE titulacion DROP CONSTRAINT IF EXISTS chk_titulacion_anio;
+        ALTER TABLE titulacion ADD CONSTRAINT chk_titulacion_anio CHECK ("anioTitulacion" >= 1990 AND "anioTitulacion" <= 2100);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE titulacion DROP CONSTRAINT IF EXISTS chk_titulacion_periodo;
+        ALTER TABLE titulacion ADD CONSTRAINT chk_titulacion_periodo CHECK (periodo >= 1 AND periodo <= 2);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE titulacion DROP CONSTRAINT IF EXISTS chk_titulacion_cohorte;
+        ALTER TABLE titulacion ADD CONSTRAINT chk_titulacion_cohorte CHECK (cohorte >= 1990 AND cohorte <= 2100);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE titulacion DROP CONSTRAINT IF EXISTS chk_titulacion_anio_cohorte;
+        ALTER TABLE titulacion ADD CONSTRAINT chk_titulacion_anio_cohorte CHECK ("anioTitulacion" >= cohorte);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE titulacion DROP CONSTRAINT IF EXISTS chk_titulacion_tiempo_normativo;
+        ALTER TABLE titulacion ADD CONSTRAINT chk_titulacion_tiempo_normativo CHECK ("tiempoNormativo" IS NULL OR "tiempoNormativo" > 0);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+      DO $$
+      BEGIN
+        ALTER TABLE titulacion DROP CONSTRAINT IF EXISTS chk_titulacion_semestres;
+        ALTER TABLE titulacion ADD CONSTRAINT chk_titulacion_semestres CHECK ("semestresCursados" IS NULL OR "semestresCursados" > 0);
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    `);
+
+    // 4. Triggers de integridad y validación
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_rendimiento_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM alumnos WHERE rut = NEW.rut) THEN
+          RAISE EXCEPTION 'El estudiante con RUT % no existe en la tabla alumnos.', NEW.rut;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM asignaturas WHERE "ramoEquiv" = NEW."ramoEquiv") THEN
+          RAISE EXCEPTION 'La asignatura con código "%" no existe en la tabla asignaturas.', NEW."ramoEquiv";
+        END IF;
+        IF NEW."notaFinal" IS NOT NULL AND (NEW."notaFinal" < 1.0 OR NEW."notaFinal" > 7.0) THEN
+          RAISE EXCEPTION 'La nota final (%) debe estar entre 1.0 y 7.0.', NEW."notaFinal";
+        END IF;
+        IF NEW.asistencia IS NOT NULL AND (NEW.asistencia < 0.0 OR NEW.asistencia > 100.0) THEN
+          RAISE EXCEPTION 'El porcentaje de asistencia (%) debe estar entre 0.0 y 100.0.', NEW.asistencia;
+        END IF;
+        IF UPPER(TRIM(NEW."estadoAsignatura")) NOT IN ('APROBADO', 'REPROBADO') THEN
+          RAISE EXCEPTION 'El estado de la asignatura "%" es inválido. Debe ser APROBADO o REPROBADO.', NEW."estadoAsignatura";
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_rendimiento_integrity ON rendimiento_asignatura;
+      CREATE TRIGGER trg_check_rendimiento_integrity
+      BEFORE INSERT OR UPDATE ON rendimiento_asignatura
+      FOR EACH ROW EXECUTE FUNCTION check_rendimiento_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_practica_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM alumnos WHERE rut = NEW.rut) THEN
+          RAISE EXCEPTION 'El estudiante con RUT % no existe en la tabla alumnos.', NEW.rut;
+        END IF;
+        IF NEW."fechaInicio" IS NOT NULL AND NEW."fechaTermino" IS NOT NULL AND NEW."fechaTermino" < NEW."fechaInicio" THEN
+          RAISE EXCEPTION 'La fecha de término (%) no puede ser anterior a la fecha de inicio (%).', NEW."fechaTermino", NEW."fechaInicio";
+        END IF;
+        IF NEW.horas IS NOT NULL AND NEW.horas < 0 THEN
+          RAISE EXCEPTION 'La cantidad de horas de práctica (%) no puede ser negativa.', NEW.horas;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_practica_integrity ON practicas;
+      CREATE TRIGGER trg_check_practica_integrity
+      BEFORE INSERT OR UPDATE ON practicas
+      FOR EACH ROW EXECUTE FUNCTION check_practica_integrity();
+    `);
+
+    await sequelize.query(`
+      CREATE OR REPLACE FUNCTION check_titulacion_integrity()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM alumnos WHERE rut = NEW.rut) THEN
+          RAISE EXCEPTION 'El estudiante con RUT % no existe en la tabla alumnos.', NEW.rut;
+        END IF;
+        IF NEW."anioTitulacion" < NEW.cohorte THEN
+          RAISE EXCEPTION 'El año de titulación (%) no puede ser anterior a la cohorte de ingreso (%).', NEW."anioTitulacion", NEW.cohorte;
+        END IF;
+        IF NEW."semestresCursados" IS NOT NULL AND NEW."semestresCursados" <= 0 THEN
+          RAISE EXCEPTION 'Los semestres cursados (%) deben ser un número positivo.', NEW."semestresCursados";
+        END IF;
+        IF NEW."tiempoNormativo" IS NOT NULL AND NEW."tiempoNormativo" <= 0 THEN
+          RAISE EXCEPTION 'El tiempo normativo (%) debe ser un número positivo.', NEW."tiempoNormativo";
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS trg_check_titulacion_integrity ON titulacion;
+      CREATE TRIGGER trg_check_titulacion_integrity
+      BEFORE INSERT OR UPDATE ON titulacion
+      FOR EACH ROW EXECUTE FUNCTION check_titulacion_integrity();
+    `);
 
     console.log('Database-level constraints, triggers, and SQL documentation applied successfully.');
   } catch (error) {
