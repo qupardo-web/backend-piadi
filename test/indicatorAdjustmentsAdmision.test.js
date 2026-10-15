@@ -77,8 +77,8 @@ test('detail aplica el default de asignatura y respeta los groupBy explícitos',
 
   assert.ok(getIndicatorConfig('matricula_por_asignatura').allowedGroupBy.includes('asignatura'));
   assert.equal(getIndicatorConfig('matricula_por_asignatura').defaultGroupBy, 'asignatura');
-  assert.equal(getIndicatorConfig('matricula_por_seccion').defaultGroupBy, undefined);
-  assert.equal(getIndicatorConfig('matricula_por_estado_academico').defaultGroupBy, undefined);
+  assert.equal(getIndicatorConfig('matricula_por_seccion').defaultGroupBy, 'seccion');
+  assert.equal(getIndicatorConfig('matricula_por_estado_academico').defaultGroupBy, 'estadoAcademico');
 
   const defaultView = await indicatorService.getIndicatorDetail('matricula_por_asignatura');
   assert.equal(defaultView.disaggregated, true);
