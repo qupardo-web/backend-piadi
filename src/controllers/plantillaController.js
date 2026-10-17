@@ -149,14 +149,18 @@ const descargarExcel = async (req, res, next) => {
   const { id } = req.params;
   try {
     const plantilla = await plantillaService.getPlantillaWithArchivo(id);
-    if (!plantilla.archivoData) {
+    let archivoData = plantilla.archivoData;
+    if (archivoData && typeof archivoData.then === 'function') {
+      archivoData = await archivoData;
+    }
+    if (!archivoData) {
       throw new NotFoundError('El archivo Excel de plantilla no está registrado en la base de datos');
     }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.setHeader('Content-Disposition', `attachment; filename=${plantilla.archivoNombre}`);
-    return res.send(plantilla.archivoData);
+    return res.send(archivoData);
   } catch (err) {
     next(err);
   }

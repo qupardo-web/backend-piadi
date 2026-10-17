@@ -1,4 +1,4 @@
-const XLSX = require('xlsx');
+const { buildStyledTemplateBuffer } = require('../utils/excelTemplateBuilder');
 
 const VCM_TEMPLATE_NAME = 'Vinculación Con El Medio';
 const VCM_TEMPLATE_FILENAME = 'plantilla-vinculacion-con-el-medio.xlsx';
@@ -27,30 +27,12 @@ const articulacionesHeaders = [
   'Región', 'Especialidad TP', 'Plataforma / foco'
 ];
 
-const createVcmTemplateBuffer = () => {
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([conveniosHeaders]),
-    'Convenios'
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([actividadesHeaders]),
-    'Actividades VcM'
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([participacionHeaders]),
-    'Participacion detalle'
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([articulacionesHeaders]),
-    'Articulaciones TP'
-  );
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-};
+const createVcmTemplateBuffer = () => buildStyledTemplateBuffer([
+  { name: 'Convenios', headers: conveniosHeaders },
+  { name: 'Actividades VcM', headers: actividadesHeaders },
+  { name: 'Participacion detalle', headers: participacionHeaders },
+  { name: 'Articulaciones TP', headers: articulacionesHeaders }
+]);
 
 const createVcmPlantilla = (roleId) => ({
   name: VCM_TEMPLATE_NAME,

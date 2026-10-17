@@ -420,16 +420,16 @@ test('10.1 Secciones Cursos conserva exactamente los 11 encabezados oficiales', 
   const { body } = await downloadTemplate();
   const workbook = XLSX.read(body, { type: 'buffer' });
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[SECCIONES_SHEET], { header: 1 });
-  assert.deepEqual(rows[0], sectionFields.map(([column]) => column));
+  assert.deepEqual(rows[0], sectionFields.map(([column]) => column.toUpperCase()));
 });
 
 test('11. la hoja descargada de proyectos contiene las columnas de participantes', async () => {
   const { body } = await downloadTemplate();
   const workbook = XLSX.read(body, { type: 'buffer' });
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[PROYECTOS_SHEET], { header: 1 });
-  assert.ok(rows[0].includes('N° estudiantes'));
-  assert.ok(rows[0].includes('N° docentes'));
-  assert.ok(rows[0].includes('N° funcionarios'));
+  assert.ok(rows[0].includes('N° ESTUDIANTES'));
+  assert.ok(rows[0].includes('N° DOCENTES'));
+  assert.ok(rows[0].includes('N° FUNCIONARIOS'));
 });
 
 test('12. Swagger documenta las hojas y participantes agregados de Innovación', () => {

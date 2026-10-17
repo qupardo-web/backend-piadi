@@ -21,6 +21,11 @@ const {
   createAllAdmisionPlantillas,
   createAdmisionFields
 } = require('../config/plantillaAdmision');
+const {
+  DESARROLLO_CURRICULAR_TEMPLATE_NAME,
+  createDesarrolloCurricularPlantilla,
+  createDesarrolloCurricularFields
+} = require('../config/plantillaDesarrolloCurricular');
 
 async function seedDatabase() {
   try {
@@ -119,6 +124,14 @@ async function seedDatabase() {
         password: 'admin123',
         roleId: roleMap['Admisión'],
         departmentId: 'admision'
+      },
+      {
+        email: 'desarrollocurricular@ecas.cl',
+        username: 'desarrollocurricular@ecas.cl',
+        name: 'Dirección de Desarrollo Curricular',
+        password: 'admin123',
+        roleId: roleMap['Desarrollo Curricular'],
+        departmentId: 'desarrollo_curricular'
       }
     ];
 
@@ -149,10 +162,15 @@ async function seedDatabase() {
       createEducacionContinuaPlantilla(roleMap['Educación Continua']),
       createVcmPlantilla(roleMap['Vinculación Con El Medio']),
       createInnovationPlantilla(roleMap[INNOVACION_TEMPLATE_NAME]),
+      createDesarrolloCurricularPlantilla(roleMap['Desarrollo Curricular']),
       ...createAllAdmisionPlantillas(roleMap['Admisión'])
     ];
 
     for (const data of plantillasToSeed) {
+      if (data.archivoData && typeof data.archivoData.then === 'function') {
+        data.archivoData = await data.archivoData;
+      }
+
       const whereClause = (data.roleId && data.variante)
         ? { roleId: data.roleId, variante: data.variante }
         : { name: data.name };
@@ -360,15 +378,25 @@ async function seedDatabase() {
       // INNOVACIÓN — Proyecto/Seccion (orden 1) y Financiamiento (orden 2)
       ...createInnovationFields(plantillaMap[INNOVACION_TEMPLATE_NAME]),
 
+      // DESARROLLO CURRICULAR — Rendimiento (orden 1), Prácticas (orden 2), Titulación (orden 3)
+      ...createDesarrolloCurricularFields(plantillaMap[DESARROLLO_CURRICULAR_TEMPLATE_NAME]),
+
       // ADMISIÓN — 3 variantes
       ...createAdmisionFields(plantillaMap[ADMISION_COMBINADA_NAME], VARIANTE_COMBINADA),
       ...createAdmisionFields(plantillaMap[ADMISION_MATRICULA_NAME], VARIANTE_MATRICULA),
       ...createAdmisionFields(plantillaMap[ADMISION_CARACTERIZACION_NAME], VARIANTE_CARACTERIZACION)
     ];
 
+    const seededKeysByPlantilla = new Map();
     for (const data of camposToSeed) {
       if (!data.plantillaId) continue;
-      await CampoPlantilla.findOrCreate({
+      if (!seededKeysByPlantilla.has(data.plantillaId)) {
+        seededKeysByPlantilla.set(data.plantillaId, new Set());
+      }
+      const key = `${data.hoja_origen}__${data.tabla_destino}__${data.columna_destino}__${data.nombre_campo}`;
+      seededKeysByPlantilla.get(data.plantillaId).add(key);
+
+      const [campo, created] = await CampoPlantilla.findOrCreate({
         where: { 
           plantillaId: data.plantillaId, 
           nombre_campo: data.nombre_campo, 
@@ -378,6 +406,22 @@ async function seedDatabase() {
         },
         defaults: data
       });
+      if (!created && campo && typeof campo.update === 'function') {
+        await campo.update(data);
+      }
+    }
+
+    // Limpieza de campos obsoletos en plantillas sembradas
+    for (const [plantillaId, validKeys] of seededKeysByPlantilla.entries()) {
+      if (typeof CampoPlantilla.findAll === 'function') {
+        const existingFields = await CampoPlantilla.findAll({ where: { plantillaId } });
+        for (const ef of existingFields) {
+          const key = `${ef.hoja_origen}__${ef.tabla_destino}__${ef.columna_destino}__${ef.nombre_campo}`;
+          if (!validKeys.has(key) && typeof ef.destroy === 'function') {
+            await ef.destroy();
+          }
+        }
+      }
     }
     console.log('Campos plantilla ensured in database.');
 
