@@ -1,4 +1,5 @@
 const XLSX = require('xlsx');
+const { buildStyledTemplateBuffer } = require('../utils/excelTemplateBuilder');
 
 // Nombres de hojas
 const ESTUDIANTES_PREGRADO_SHEET = 'Estudiantes Pregrados';
@@ -95,7 +96,7 @@ const esConfiguracionAdmision = (campos) => {
 
 // Encabezados en el archivo Excel
 const estudiantesPregradosHeaders = [
-  'Número',
+  'NÚMERO',
   'RUT',
   'DIG',
   'CODCLI',
@@ -189,41 +190,19 @@ const caracterizacionFields = [
   ['BENEFICIOS', 'beneficios', 'string', false]
 ];
 
-// Generación de buffers Excel XLSX
-const createAdmisionCombinadaBuffer = () => {
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([estudiantesPregradosHeaders]),
-    ESTUDIANTES_PREGRADO_SHEET
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([caracterizacionEstudianteHeaders]),
-    CARACTERIZACION_SHEET
-  );
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-};
+// Generación de buffers Excel XLSX con estilo institucional azul y encabezados en mayúsculas
+const createAdmisionCombinadaBuffer = () => buildStyledTemplateBuffer([
+  { name: ESTUDIANTES_PREGRADO_SHEET, headers: estudiantesPregradosHeaders },
+  { name: CARACTERIZACION_SHEET, headers: caracterizacionEstudianteHeaders }
+]);
 
-const createAdmisionMatriculaBuffer = () => {
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([estudiantesPregradosHeaders]),
-    ESTUDIANTES_PREGRADO_SHEET
-  );
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-};
+const createAdmisionMatriculaBuffer = () => buildStyledTemplateBuffer([
+  { name: ESTUDIANTES_PREGRADO_SHEET, headers: estudiantesPregradosHeaders }
+]);
 
-const createAdmisionCaracterizacionBuffer = () => {
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([caracterizacionEstudianteHeaders]),
-    CARACTERIZACION_SHEET
-  );
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-};
+const createAdmisionCaracterizacionBuffer = () => buildStyledTemplateBuffer([
+  { name: CARACTERIZACION_SHEET, headers: caracterizacionEstudianteHeaders }
+]);
 
 // Generación de registros para tabla plantillas
 const createAdmisionCombinadaPlantilla = (roleId) => ({
