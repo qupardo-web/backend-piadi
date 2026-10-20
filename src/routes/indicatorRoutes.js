@@ -453,6 +453,10 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *         name: groupBy
  *         description: Dimensión explícita prevalece sobre defaultGroupBy del catálogo (matricula_por_asignatura usa asignatura). Un valor vacío desactiva el default; year devuelve la vista temporal agregada. Debe estar en allowedGroupBy del indicador.
  *         schema: { type: string }
+  *       - in: query
+  *         name: splitBy
+  *         description: Segunda dimensión opcional de matriz (máximo dos dimensiones, distintas y permitidas). Requiere groupBy explícito o defaultGroupBy; groupBy vacío no es válido. Sin splitBy el contrato anterior no cambia. Ejemplos nivel_socioeconomico × sexo/periodo y matricula_por_asignatura × year. year filtra la matriz al año de referencia; fromYear/toYear la limitan al rango cuando no hay year.
+  *         schema: { type: string }
  *     responses:
  *       200:
  *         description: Detalle del indicador con serie por año, tabla y comparación.
@@ -497,7 +501,29 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *                 series:
  *                   type: array
  *                   items: { type: object }
- *       400: { description: Filtros inválidos. }
+  *                 isBidimensional: { type: boolean, description: Solo presente con splitBy. }
+  *                 rowDimension: { type: string }
+  *                 colDimension: { type: string }
+  *                 columns:
+  *                   type: array
+  *                   description: IDs tipados y ordenados de columnas; no son las etiquetas visibles.
+  *                   items: { type: string }
+  *                 columnLabels:
+  *                   type: object
+  *                   description: Mapa de ID a etiqueta visible. periodos se ordenan numéricamente.
+  *                   additionalProperties: { type: string }
+  *                 matrix:
+  *                   type: array
+  *                   description: Cada fila contiene row, rowKey, values (ID de columna a valor o null) y total recalculado.
+  *                   items: { type: object }
+  *                 totals:
+  *                   type: object
+  *                   description: Totales por columna y general recalculados desde registros; general puede diferir de total, que conserva el KPI del año de referencia.
+  *                   properties:
+  *                     columns: { type: object }
+  *                     general: { type: number, nullable: true }
+  *                 matrixFilters: { type: object, description: Alcance temporal y filtros aplicados a la matriz. }
+  *       400: { description: Filtros o dimensiones inválidos (INVALID_SPLIT_BY, INVALID_GROUP_BY, MISSING_ROW_DIMENSION, DUPLICATE_GROUP_DIMENSIONS, MATRIX_LIMIT_EXCEEDED). }
  *       401: { description: Token ausente o inválido. }
  *       404: { description: Indicador inexistente. }
  */

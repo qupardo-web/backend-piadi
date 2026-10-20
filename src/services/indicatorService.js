@@ -288,6 +288,93 @@ const validateGroupBy = (config, groupBy) => {
   return resolvedGroupBy;
 };
 
+const matrixDimension = (dimension, row) => dimension === 'year' ? Number(row.anio) : row[dimension];
+const matrixCategory = (dimension, value) => {
+  const missing = value === null || value === undefined || value === '' ||
+    (typeof value === 'number' && !Number.isFinite(value));
+  return missing
+    ? { id: `${dimension}:null`, label: 'Sin dato', value: null }
+    : { id: `${dimension}:${typeof value}:${String(value)}`, label: String(value), value };
+};
+const sortMatrixCategories = (dimension, left, right) => {
+  if (left.value === null) return right.value === null ? 0 : 1;
+  if (right.value === null) return -1;
+  if (dimension === 'year' || dimension === 'periodo') return Number(left.value) - Number(right.value);
+  return left.label.localeCompare(right.label, 'es', { numeric: true });
+};
+const matrixLimit = (name, fallback) => {
+  const configured = Number(process.env[name]);
+  return Number.isSafeInteger(configured) && configured > 0 ? configured : fallback;
+};
+
+const buildBidimensionalMatrix = async ({ config, definition, filters, rowDimension, colDimension }) => {
+  const admissionDimension = [rowDimension, colDimension].includes('periodo') ? 'periodo' : rowDimension;
+  const fetchFilters = admissionFetchFilters(config, definition, filters, admissionDimension);
+  if (config.kind === 'admission_enrollment' && [rowDimension, colDimension].includes('nuevoAntiguo')) {
+    fetchFilters.needsNuevoAntiguo = true;
+  }
+  let rows = await getRows(config, fetchFilters, { historical: colDimension === 'year' || rowDimension === 'year' });
+  if (fetchFilters.primeraMatricula) rows = applyAdmissionFirstPeriod(rows, filters);
+
+  const rowGroups = new Map();
+  const colGroups = new Map();
+  const intersections = new Map();
+  for (const record of rows) {
+    const rowCategory = matrixCategory(rowDimension, matrixDimension(rowDimension, record));
+    const colCategory = matrixCategory(colDimension, matrixDimension(colDimension, record));
+    if (!rowGroups.has(rowCategory.id)) rowGroups.set(rowCategory.id, { ...rowCategory, rows: [] });
+    if (!colGroups.has(colCategory.id)) colGroups.set(colCategory.id, { ...colCategory, rows: [] });
+    rowGroups.get(rowCategory.id).rows.push(record);
+    colGroups.get(colCategory.id).rows.push(record);
+    if (!intersections.has(rowCategory.id)) intersections.set(rowCategory.id, new Map());
+    const byColumn = intersections.get(rowCategory.id);
+    if (!byColumn.has(colCategory.id)) byColumn.set(colCategory.id, []);
+    byColumn.get(colCategory.id).push(record);
+  }
+
+  const maxRows = matrixLimit('INDICATOR_MATRIX_MAX_ROWS', 50);
+  const maxColumns = matrixLimit('INDICATOR_MATRIX_MAX_COLUMNS', 20);
+  if (rowGroups.size > maxRows || colGroups.size > maxColumns) {
+    throw new ServiceError(400, 'MATRIX_LIMIT_EXCEEDED', 'La matriz supera el límite de categorías permitido', {
+      rows: rowGroups.size, columns: colGroups.size, maxRows, maxColumns
+    });
+  }
+
+  const orderedRows = [...rowGroups.values()].sort((a, b) => sortMatrixCategories(rowDimension, a, b));
+  const orderedColumns = [...colGroups.values()].sort((a, b) => sortMatrixCategories(colDimension, a, b));
+  const columns = orderedColumns.map((category) => category.id);
+  const columnLabels = Object.create(null);
+  const columnTotals = Object.create(null);
+  for (const category of orderedColumns) {
+    columnLabels[category.id] = category.label;
+    columnTotals[category.id] = computeFromRows(config, definition, category.rows).value;
+  }
+  const matrix = orderedRows.map((category) => {
+    const values = Object.create(null);
+    for (const column of orderedColumns) {
+      values[column.id] = computeFromRows(
+        config, definition, intersections.get(category.id).get(column.id) || []
+      ).value;
+    }
+    return {
+      row: category.label,
+      rowKey: category.id,
+      values,
+      total: computeFromRows(config, definition, category.rows).value
+    };
+  });
+  return {
+    isBidimensional: true,
+    rowDimension,
+    colDimension,
+    columns,
+    columnLabels,
+    matrix,
+    totals: { columns: columnTotals, general: computeFromRows(config, definition, rows).value },
+    matrixFilters: buildFilterMeta(filters)
+  };
+};
+
 const getRequestedYearRange = (filters) => {
   if (filters.year !== null && filters.year !== undefined) return [filters.year];
   const hasFrom = filters.fromYear !== null && filters.fromYear !== undefined;
@@ -709,12 +796,37 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
   const department = kpi.departmentId;
   const cacheKey = `kpi:${department}:detail:${key}:${JSON.stringify(query)}`;
   return cacheService.wrap(cacheKey, async () => {
-    const baseQuery = { ...query, department };
+    const hasSplitBy = Object.prototype.hasOwnProperty.call(query, 'splitBy');
+    const { splitBy: _omitSplitBy, ...detailQuery } = query;
+    const baseQuery = { ...detailQuery, department };
     const config = getIndicatorConfig(key, kpi) || { allowedGroupBy: [] };
     const requestedGroupBy = Object.prototype.hasOwnProperty.call(query, 'groupBy')
       ? query.groupBy
       : (config.defaultGroupBy ?? null);
+    if (hasSplitBy) {
+      for (const [name, value] of [['groupBy', requestedGroupBy], ['splitBy', query.splitBy]]) {
+        if (typeof value !== 'string' || !value.trim() || value.includes(',')) {
+          throw new ServiceError(400, name === 'splitBy' ? 'INVALID_SPLIT_BY' :
+            (value === null || value === '' ? 'MISSING_ROW_DIMENSION' : 'INVALID_GROUP_BY'),
+          `El parámetro ${name} debe contener una sola dimensión válida`);
+        }
+      }
+    }
     const groupBy = validateGroupBy(config, requestedGroupBy);
+    let splitBy = null;
+    if (hasSplitBy) {
+      try {
+        splitBy = validateGroupBy(config, query.splitBy === 'anio' ? 'year' : query.splitBy);
+      } catch (error) {
+        if (error.code !== 'INVALID_GROUP_BY') throw error;
+        throw new ServiceError(400, 'INVALID_SPLIT_BY', 'El splitBy solicitado no aplica para este indicador', {
+          splitBy: query.splitBy, allowed: config.allowedGroupBy
+        });
+      }
+      if (groupBy === splitBy) {
+        throw new ServiceError(400, 'DUPLICATE_GROUP_DIMENSIONS', 'groupBy y splitBy deben ser diferentes');
+      }
+    }
     const requestedFilters = parseIndicatorFilters(baseQuery);
 
     // Un año puntual define la referencia, pero no recorta la historia. Un rango
@@ -788,6 +900,9 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
       series = annualPoints;
     }
 
+    const matrixResult = hasSplitBy ? await buildBidimensionalMatrix({
+      config, definition: kpi, filters: requestedFilters, rowDimension: groupBy, colDimension: splitBy
+    }) : null;
     return {
       data: {
         indicatorKey: key,
@@ -812,7 +927,8 @@ const getIndicatorDetailView = async (indicatorKey, query = {}) => {
         table,
         series,
         filters: buildFilterMeta(requestedFilters),
-        meta: { source: 'postgresql', formulaKey: kpi.formulaKey }
+        meta: { source: 'postgresql', formulaKey: kpi.formulaKey },
+        ...(matrixResult || {})
       }
     };
   });
