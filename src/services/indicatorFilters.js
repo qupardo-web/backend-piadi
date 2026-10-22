@@ -70,7 +70,8 @@ const normalizeGroupBy = (value, department = null) => {
   }
   const g = String(value).trim();
   if (g === 'anio') return 'year';
-  if (g === 'periodo' && String(department || '').toLocaleLowerCase('es') !== 'admision') return 'year';
+  if (g === 'periodo' && !['admision', 'desarrollo_curricular']
+    .includes(String(department || '').toLocaleLowerCase('es'))) return 'year';
   return g === 'ageRange' ? 'rangoEdad' : g;
 };
 
@@ -123,6 +124,7 @@ const parseIndicatorFilters = (query = {}) => {
     cohorte: normalizeArrayParam(query.cohorte),
     jornada: normalizeArrayParam(query.jornada),
     periodo: normalizeArrayParam(query.periodo),
+    tipoPractica: normalizeArrayParam(query.tipoPractica),
     region: normalizeArrayParam(query.region),
     // Admisión
     asignatura: normalizeArrayParam(query.asignatura),
@@ -180,6 +182,30 @@ const parseIndicatorFilters = (query = {}) => {
       ...semesterTokens
     ].map(normalizeAdmissionPeriod));
   }
+  if (String(filters.department || '').toLocaleLowerCase('es') === 'desarrollo_curricular') {
+    filters.periodo = uniq([...filters.periodo, ...semesterTokens].map((value) => {
+      const normalized = ADMISSION_PERIOD_ALIASES[String(value).trim().toLocaleLowerCase('es')];
+      if (!normalized) {
+        throw new FilterError('INVALID_PERIOD', 'El período curricular debe corresponder al semestre 1 o 2', {
+          periodo: value, allowed: [1, 2]
+        });
+      }
+      return normalized;
+    }));
+    filters.seccion = filters.seccion.map((value) => {
+      const number = Number(value);
+      if (!Number.isInteger(number) || number < 1) {
+        throw new FilterError('INVALID_SECTION', 'La sección debe ser un entero positivo', { seccion: value });
+      }
+      return number;
+    });
+    filters.cohorte = filters.cohorte.map((value) => {
+      if (!isFourDigitYear(value)) {
+        throw new FilterError('INVALID_COHORT', 'La cohorte debe ser un año numérico de 4 dígitos', { cohorte: value });
+      }
+      return Number(value);
+    });
+  }
 
   const monthTokens = uniq([...normalizeArrayParam(query.month), ...normalizeArrayParam(query.startMonth)]);
   for (const token of monthTokens) {
@@ -233,6 +259,7 @@ const buildFilterMeta = (filters) => {
   if (filters.tipoParticipante.length) meta.tipoParticipante = filters.tipoParticipante;
   if (filters.sectorEconomico.length) meta.sectorEconomico = filters.sectorEconomico;
   if (filters.cohorte.length) meta.cohorte = filters.cohorte;
+  if (filters.tipoPractica.length) meta.tipoPractica = filters.tipoPractica;
   if (filters.jornada.length) meta.jornada = filters.jornada;
   if (filters.periodo.length) meta.periodo = filters.periodo;
   if (filters.asignatura.length) meta.asignatura = filters.asignatura;
