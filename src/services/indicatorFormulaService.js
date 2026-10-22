@@ -57,6 +57,30 @@ const SUM_INNOVATION_TEACHERS = (m = {}) => ({ value: m.docentesSum || 0, hasDat
 // común garantiza que una persona se cuente una sola vez en cada grupo.
 const ADMISSION_UNIQUE_COUNT = (m = {}) => ({ value: m.admissionUniqueCount || 0, hasData: true });
 
+// Desarrollo Curricular: las tasas se calculan a partir de conteos del grupo,
+// nunca promediando porcentajes de asignaturas o períodos.
+const curricularRate = (numerator, denominator) => denominator > 0
+  ? { value: round2((numerator / denominator) * 100), hasData: true }
+  : { value: null, hasData: false };
+const APPROVAL_RATE_BY_COURSE = (m = {}) => curricularRate(m.aprobadosCount, m.evaluablesCount);
+const FAILURE_RATE_BY_COURSE = (m = {}) => curricularRate(m.reprobadosCount, m.evaluablesCount);
+const CRITICAL_COURSES = (m = {}) => m.evaluablesCount > 0
+  ? { value: m.asignaturasCriticasCount || 0, hasData: true }
+  : { value: null, hasData: false };
+const COUNT_ENROLLED_INTERNSHIPS = (m = {}) => m.practicasRegistradasCount > 0
+  ? { value: m.practicasInscritasCount || 0, hasData: true }
+  : { value: null, hasData: false };
+const COUNT_APPROVED_INTERNSHIPS = (m = {}) => m.practicasRegistradasCount > 0
+  ? { value: m.practicasAprobadasCount || 0, hasData: true }
+  : { value: null, hasData: false };
+const COUNT_GRADUATES_BY_YEAR = (m = {}) => ({ value: m.tituladosCount || 0, hasData: true });
+const AVERAGE_GRADUATION_TIME = (m = {}) => m.semestresCount > 0
+  ? { value: round2(m.semestresSum / m.semestresCount), hasData: true }
+  : { value: null, hasData: false };
+// El modelo Titulacion sólo almacena titulados: no contiene el universo de
+// ingresantes de una cohorte, imprescindible como denominador de la tasa.
+const GRADUATION_RATE_BY_COHORT = () => ({ value: null, hasData: false });
+
 const formulaRegistry = {
   COUNT_PROGRAMMED_OFFER,
   COUNT_COURSES_DICTATED,
@@ -96,7 +120,15 @@ const formulaRegistry = {
   DISTRIBUTION_ADMISSION_ACCESS_ROUTE: ADMISSION_UNIQUE_COUNT,
   DISTRIBUTION_ADMISSION_BENEFITS: ADMISSION_UNIQUE_COUNT,
   DISTRIBUTION_ADMISSION_GENDER: ADMISSION_UNIQUE_COUNT,
-  DISTRIBUTION_ADMISSION_AGE_RANGE: ADMISSION_UNIQUE_COUNT
+  DISTRIBUTION_ADMISSION_AGE_RANGE: ADMISSION_UNIQUE_COUNT,
+  APPROVAL_RATE_BY_COURSE,
+  FAILURE_RATE_BY_COURSE,
+  CRITICAL_COURSES,
+  COUNT_ENROLLED_INTERNSHIPS,
+  COUNT_APPROVED_INTERNSHIPS,
+  GRADUATION_RATE_BY_COHORT,
+  COUNT_GRADUATES_BY_YEAR,
+  AVERAGE_GRADUATION_TIME
 };
 
 const apply = (formulaKey, metrics) => {

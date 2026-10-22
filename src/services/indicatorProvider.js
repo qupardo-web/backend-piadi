@@ -18,10 +18,13 @@ const {
   Alumno,
   MatriculaPorAsignatura,
   Asignatura,
-  CaracterizacionEstudiante
+  CaracterizacionEstudiante,
+  RendimientoAsignatura,
+  Practica,
+  Titulacion
 } = require('../models');
 
-const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio', 'innovacion', 'admision'];
+const SUPPORTED_DATA_DEPARTMENTS = ['educacion_continua', 'vinculacion_medio', 'innovacion', 'admision', 'desarrollo_curricular'];
 const INNOVATION_PROJECT_TYPES = ['Estudiantil', 'Institucional'];
 const INNOVATION_COURSE = 'Emprendimiento e Innovación';
 const DICTATED_VALUES = ['si', 'sí', 'true', '1', 'x', 'ejecutado', 'dictado', 'realizado', 'finalizado'];
@@ -690,6 +693,84 @@ const getInnovationFinancingRows = async (filters = {}) => {
     }));
 };
 
+// Desarrollo Curricular: cada consulta conserva una fila por registro académico.
+// Las asociaciones belongsTo sólo aportan el nombre, sin multiplicar resultados.
+const buildCurricularWhere = (filters = {}, yearField = 'anio') => {
+  const where = buildVcmCommonWhere(filters, yearField);
+  if (filters.periodo?.length) where.periodo = { [Op.in]: filters.periodo.map(Number) };
+  return where;
+};
+
+const getCurricularRendimientoRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'desarrollo_curricular') return [];
+  const subjectWhere = filters.asignatura?.length
+    ? { nombre: buildCaseInsensitiveIn(filters.asignatura) }
+    : {};
+  const where = buildCurricularWhere(filters);
+  if (filters.seccion?.length) where.seccion = { [Op.in]: filters.seccion.map(Number) };
+  const records = await RendimientoAsignatura.findAll({
+    where,
+    attributes: ['rut', 'codCli', 'ramoEquiv', 'seccion', 'anio', 'periodo', 'notaFinal', 'estadoAsignatura'],
+    include: [{
+      model: Asignatura,
+      as: 'asignatura',
+      attributes: ['nombre'],
+      required: Boolean(filters.asignatura?.length),
+      ...(filters.asignatura?.length ? { where: subjectWhere } : {})
+    }]
+  });
+  return records.map((record) => ({
+    rut: record.rut,
+    codCli: record.codCli,
+    ramoEquiv: record.ramoEquiv,
+    asignatura: record.asignatura?.nombre ?? null,
+    seccion: record.seccion == null ? null : Number(record.seccion),
+    anio: Number(record.anio),
+    periodo: Number(record.periodo),
+    notaFinal: record.notaFinal == null ? null : Number(record.notaFinal),
+    estadoAsignatura: record.estadoAsignatura
+  }));
+};
+
+const getCurricularPracticaRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'desarrollo_curricular') return [];
+  const where = buildCurricularWhere(filters);
+  if (filters.tipoPractica?.length) where.tipoPractica = buildCaseInsensitiveIn(filters.tipoPractica);
+  if (filters.estado?.length) where.estado = buildCaseInsensitiveIn(filters.estado);
+  const records = await Practica.findAll({
+    where,
+    attributes: ['rut', 'codCli', 'anio', 'periodo', 'tipoPractica', 'estado']
+  });
+  return records.map((record) => ({
+    rut: record.rut,
+    codCli: record.codCli,
+    anio: Number(record.anio),
+    periodo: Number(record.periodo),
+    tipoPractica: record.tipoPractica,
+    estado: record.estado
+  }));
+};
+
+const getCurricularTitulacionRows = async (filters = {}) => {
+  if (String(filters.department || '').toLowerCase() !== 'desarrollo_curricular') return [];
+  const where = buildCurricularWhere(filters, 'anioTitulacion');
+  if (filters.cohorte?.length) where.cohorte = { [Op.in]: filters.cohorte.map(Number) };
+  const records = await Titulacion.findAll({
+    where,
+    attributes: ['id', 'rut', 'codCli', 'anioTitulacion', 'periodo', 'cohorte', 'tiempoNormativo', 'semestresCursados'],
+    order: [['anioTitulacion', 'ASC'], ['periodo', 'ASC'], ['id', 'ASC']]
+  });
+  return records.map((record) => ({
+    rut: record.rut,
+    codCli: record.codCli,
+    anio: Number(record.anioTitulacion),
+    periodo: Number(record.periodo),
+    cohorte: Number(record.cohorte),
+    tiempoNormativo: record.tiempoNormativo == null ? null : Number(record.tiempoNormativo),
+    semestresCursados: record.semestresCursados == null ? null : Number(record.semestresCursados)
+  }));
+};
+
 const distinctValues = (rows, key) => {
   const set = new Set();
   rows.forEach((r) => {
@@ -827,6 +908,22 @@ const getFilterOptions = async (department, filters = {}) => {
       situacionesFamiliares: distinctTextValues(characterizationRows, 'situacionFamiliar'),
       beneficios: distinctTextValues(characterizationRows, 'beneficios')
     };
+  } else if (deptKey === 'desarrollo_curricular') {
+    const [rendimientos, practicas, titulaciones] = await Promise.all([
+      getCurricularRendimientoRows(filters),
+      getCurricularPracticaRows(filters),
+      getCurricularTitulacionRows(filters)
+    ]);
+    return {
+      ...empty,
+      years: [...new Set([...rendimientos, ...practicas, ...titulaciones].map((row) => row.anio))].sort((a, b) => a - b),
+      semesters: [...new Set([...rendimientos, ...practicas, ...titulaciones].map((row) => row.periodo))].sort((a, b) => a - b),
+      asignaturas: distinctTextValues(rendimientos, 'asignatura'),
+      secciones: distinctValues(rendimientos, 'seccion').sort((a, b) => a - b),
+      tiposPractica: distinctTextValues(practicas, 'tipoPractica'),
+      estados: distinctTextValues(practicas, 'estado'),
+      cohortes: distinctValues(titulaciones, 'cohorte').sort((a, b) => a - b)
+    };
   }
 
   return empty;
@@ -917,6 +1014,9 @@ module.exports = {
   getInnovationSectionRows,
   getAdmissionEnrollmentRows,
   getAdmissionCharacterizationRows,
+  getCurricularRendimientoRows,
+  getCurricularPracticaRows,
+  getCurricularTitulacionRows,
   calculateAge,
   getFilterOptions,
   getDepartments,

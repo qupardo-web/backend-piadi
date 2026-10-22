@@ -151,6 +151,68 @@ const aggregateAdmissionCharacterization = (rows) => ({
   ).size
 });
 
+const curricularState = (value) => String(value || '').trim().toUpperCase();
+
+const aggregateCurricularRendimiento = (rows) => {
+  // La clave natural del modelo identifica una evaluación, no cada JOIN o fila repetida.
+  const evaluations = new Map();
+  rows.forEach((row) => {
+    const state = curricularState(row.estadoAsignatura);
+    if (!['APROBADO', 'REPROBADO'].includes(state)) return;
+    const key = `${row.rut}|${row.ramoEquiv}|${row.anio}|${row.periodo}`;
+    if (!evaluations.has(key)) evaluations.set(key, { ...row, state });
+  });
+  const byCourse = new Map();
+  for (const row of evaluations.values()) {
+    const course = byCourse.get(row.ramoEquiv) || { evaluables: 0, reprobados: 0 };
+    course.evaluables += 1;
+    if (row.state === 'REPROBADO') course.reprobados += 1;
+    byCourse.set(row.ramoEquiv, course);
+  }
+  return {
+    evaluablesCount: evaluations.size,
+    aprobadosCount: [...evaluations.values()].filter((row) => row.state === 'APROBADO').length,
+    reprobadosCount: [...evaluations.values()].filter((row) => row.state === 'REPROBADO').length,
+    // Criterio operativo pendiente de ratificación académica: cantidad de
+    // ramos cuya reprobación es estrictamente superior al 30 % del grupo.
+    asignaturasCriticasCount: [...byCourse.values()]
+      .filter((course) => course.evaluables > 0 && course.reprobados / course.evaluables > 0.30).length
+  };
+};
+
+const aggregateCurricularPractica = (rows) => {
+  const registered = rows.filter((row) => ['INSCRITA', 'APROBADA'].includes(curricularState(row.estado)));
+  return {
+    // Criterio operativo pendiente de ratificación académica: una práctica
+    // aprobada también fue una inscripción; cada estudiante cuenta una vez.
+    practicasRegistradasCount: registered.length,
+    practicasInscritasCount: new Set(registered
+      .map((row) => row.rut).filter((rut) => rut !== null && rut !== undefined)).size,
+    practicasAprobadasCount: new Set(rows
+      .filter((row) => curricularState(row.estado) === 'APROBADA')
+      .map((row) => row.rut).filter((rut) => rut !== null && rut !== undefined)).size
+  };
+};
+
+const aggregateCurricularTitulacion = (rows) => {
+  const byStudent = new Map();
+  rows.forEach((row) => {
+    if (row.rut === null || row.rut === undefined) return;
+    const previous = byStudent.get(row.rut);
+    if (!previous || (previous.semestresCursados == null && row.semestresCursados != null)) {
+      byStudent.set(row.rut, row);
+    }
+  });
+  const times = [...byStudent.values()]
+    .map((row) => Number(row.semestresCursados))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return {
+    tituladosCount: byStudent.size,
+    semestresSum: times.reduce((sum, value) => sum + value, 0),
+    semestresCount: times.length
+  };
+};
+
 // (A) Primera matrícula dentro del año: cada alumno cuenta una sola vez, en el
 // primer semestre en que aparece ese año (Otoño=1, Primavera=2). Reasigna el
 // periodo de cada fila a esa primera matrícula para que el agrupamiento por
@@ -215,6 +277,9 @@ const aggregate = (config, rows) => {
   if (config.kind === 'innovation_section') return aggregateInnovationSection(rows);
   if (config.kind === 'admission_enrollment') return aggregateAdmissionEnrollment(rows);
   if (config.kind === 'admission_characterization') return aggregateAdmissionCharacterization(rows);
+  if (config.kind === 'curricular_rendimiento') return aggregateCurricularRendimiento(rows);
+  if (config.kind === 'curricular_practica') return aggregateCurricularPractica(rows);
+  if (config.kind === 'curricular_titulacion') return aggregateCurricularTitulacion(rows);
   return aggregateProgram(rows);
 };
 
@@ -240,6 +305,9 @@ const getRows = (config, filters, { historical = false } = {}) => {
   if (config.kind === 'innovation_section') return provider.getInnovationSectionRows(filters);
   if (config.kind === 'admission_enrollment') return provider.getAdmissionEnrollmentRows(filters);
   if (config.kind === 'admission_characterization') return provider.getAdmissionCharacterizationRows(filters);
+  if (config.kind === 'curricular_rendimiento') return provider.getCurricularRendimientoRows(filters);
+  if (config.kind === 'curricular_practica') return provider.getCurricularPracticaRows(filters);
+  if (config.kind === 'curricular_titulacion') return provider.getCurricularTitulacionRows(filters);
   return provider.getProgramRows(filters);
 };
 
@@ -339,7 +407,9 @@ const buildAnnualPoints = (config, definition, rows, filters, yearAxis = null) =
   const years = yearAxis || buildYearAxis(filters, rows);
   return years.map((year) => {
     const bucket = byYear.get(year);
-    if (!bucket || !bucket.length) return { year: Number(year), value: 0 };
+    if (!bucket || !bucket.length) {
+      return { year: Number(year), value: config.kind.startsWith('curricular_') ? null : 0 };
+    }
     const { value, hasData } = computeFromRows(config, definition, bucket);
     return { year: Number(year), value: hasData ? value : null };
   });
