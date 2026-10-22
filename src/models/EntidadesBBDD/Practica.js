@@ -78,6 +78,11 @@ const Practica = sequelize.define('Practica', {
     {
       name: 'idx_practicas_estado',
       fields: ['estado']
+    },
+    {
+      name: 'idx_practicas_alumno_periodo_tipo',
+      unique: true,
+      fields: ['rut', 'anio', 'periodo', 'tipoPractica']
     }
   ]
 });

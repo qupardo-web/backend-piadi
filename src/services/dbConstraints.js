@@ -1207,6 +1207,20 @@ async function initDbConstraints() {
         "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_rendimiento_alumno_asignatura_periodo 
+        ON rendimiento_asignatura (rut, "ramoEquiv", anio, periodo);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_practicas_alumno_periodo_tipo 
+        ON practicas (rut, anio, periodo, "tipoPractica");
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_titulacion_alumno_anio_periodo 
+        ON titulacion (rut, "anioTitulacion", periodo);
+
+      CREATE INDEX IF NOT EXISTS idx_rendimiento_anio_periodo ON rendimiento_asignatura (anio, periodo);
+      CREATE INDEX IF NOT EXISTS idx_rendimiento_rut ON rendimiento_asignatura (rut);
+      CREATE INDEX IF NOT EXISTS idx_practicas_anio_periodo ON practicas (anio, periodo);
+      CREATE INDEX IF NOT EXISTS idx_practicas_rut ON practicas (rut);
+      CREATE INDEX IF NOT EXISTS idx_titulacion_anio ON titulacion ("anioTitulacion");
+      CREATE INDEX IF NOT EXISTS idx_titulacion_rut ON titulacion (rut);
     `);
 
     // 2. Claves Foráneas (FK hacia alumnos y asignaturas)

@@ -31,6 +31,7 @@ const Titulacion = sequelize.define('Titulacion', {
   periodo: {
     type: DataTypes.INTEGER,
     allowNull: false,
+    defaultValue: 1,
     validate: {
       min: 1,
       max: 2
@@ -80,6 +81,11 @@ const Titulacion = sequelize.define('Titulacion', {
     {
       name: 'idx_titulacion_rut',
       fields: ['rut']
+    },
+    {
+      name: 'idx_titulacion_alumno_anio_periodo',
+      unique: true,
+      fields: ['rut', 'anioTitulacion', 'periodo']
     }
   ]
 });

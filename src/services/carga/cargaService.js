@@ -97,7 +97,11 @@ const procesarCarga = async (workbook, campos) => {
           }
           let valor = fila[campo.columna_excel];
           if (valor === undefined) {
-            const matchingKey = filaKeys.find(k => normalizarTexto(k) === normalizarTexto(campo.columna_excel));
+            const normCol = normalizarTexto(campo.columna_excel).replace(/[_\s]+/g, ' ');
+            const matchingKey = filaKeys.find(k => {
+              const normK = normalizarTexto(k);
+              return normK === normalizarTexto(campo.columna_excel) || normK.replace(/[_\s]+/g, ' ') === normCol;
+            });
             if (matchingKey) valor = fila[matchingKey];
           }
           if (esAdmision && typeof valor === 'string') {
@@ -280,6 +284,32 @@ const procesarCarga = async (workbook, campos) => {
             registro[colDest] = valor;
           }
 
+          if (tabla === 'Titulacion' && (registro.periodo === undefined || registro.periodo === null)) {
+            registro.periodo = 1;
+          }
+
+          if (lookupMaps['Alumno']) {
+            let alumnoCached = null;
+            if (registro.rut && lookupMaps['Alumno']['rut']) {
+              alumnoCached = lookupMaps['Alumno']['rut'][registro.rut] || lookupMaps['Alumno']['rut'][String(registro.rut)];
+            }
+            if (!alumnoCached && lookupMaps['Alumno']['codCli']) {
+              const rawCodCliKey = Object.keys(fila._raw || {}).find((key) => normalizarTexto(key) === 'codcli');
+              if (rawCodCliKey && fila._raw[rawCodCliKey] !== null && fila._raw[rawCodCliKey] !== undefined) {
+                const codCliVal = String(fila._raw[rawCodCliKey]).trim();
+                alumnoCached = lookupMaps['Alumno']['codCli'][codCliVal] || lookupMaps['Alumno']['codCli'][codCliVal.toUpperCase()];
+              }
+            }
+            if (alumnoCached) {
+              if (!registro.codCli && alumnoCached.codCli) {
+                registro.codCli = alumnoCached.codCli;
+              }
+              if (!registro.rut && alumnoCached.rut) {
+                registro.rut = alumnoCached.rut;
+              }
+            }
+          }
+
           if (Object.keys(registro).length > 0) {
             const rawCodCliKey = Object.keys(fila._raw || {}).find((key) => normalizarTexto(key) === 'codcli');
             registrosAInsertar.push({
@@ -325,6 +355,12 @@ const procesarCarga = async (workbook, campos) => {
             pkAttrs = ['idProyecto'];
           } else if (Model.rawAttributes['idSeccion']) {
             pkAttrs = ['idSeccion'];
+          } else if (tabla === 'RendimientoAsignatura') {
+            pkAttrs = ['rut', 'ramoEquiv', 'anio', 'periodo'];
+          } else if (tabla === 'Practica') {
+            pkAttrs = ['rut', 'anio', 'periodo', 'tipoPractica'];
+          } else if (tabla === 'Titulacion') {
+            pkAttrs = ['rut', 'anioTitulacion', 'periodo'];
           }
         }
 
@@ -370,6 +406,9 @@ const procesarCarga = async (workbook, campos) => {
               };
               if (nonPkAttributes.length > 0) {
                 bulkOptions.updateOnDuplicate = nonPkAttributes;
+                if (pkAttrs && pkAttrs.length > 0) {
+                  bulkOptions.conflictAttributes = pkAttrs;
+                }
               }
               const chunkResult = await Model.bulkCreate(chunk, bulkOptions);
               insertados.push(...chunkResult);

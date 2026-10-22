@@ -1,4 +1,5 @@
 const XLSX = require('xlsx');
+const { buildStyledTemplateBuffer } = require('../utils/excelTemplateBuilder');
 
 const INNOVACION_TEMPLATE_NAME = 'Innovación';
 const INNOVACION_TEMPLATE_FILENAME = 'plantilla-innovacion.xlsx';
@@ -55,25 +56,11 @@ const sectionFields = [
   ['Observación', 'observacion', 'string']
 ];
 
-const createInnovationTemplateBuffer = () => {
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([projectFields.map(([column]) => column)]),
-    PROYECTOS_SHEET
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([financingFields.map(([column]) => column)]),
-    FINANCIAMIENTO_SHEET
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([sectionFields.map(([column]) => column)]),
-    SECCIONES_SHEET
-  );
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-};
+const createInnovationTemplateBuffer = () => buildStyledTemplateBuffer([
+  { name: PROYECTOS_SHEET, headers: projectFields.map(([column]) => column) },
+  { name: FINANCIAMIENTO_SHEET, headers: financingFields.map(([column]) => column) },
+  { name: SECCIONES_SHEET, headers: sectionFields.map(([column]) => column) }
+]);
 
 const createInnovationPlantilla = (roleId) => ({
   name: INNOVACION_TEMPLATE_NAME,

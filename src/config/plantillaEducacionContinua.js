@@ -1,4 +1,4 @@
-const XLSX = require('xlsx');
+const { buildStyledTemplateBuffer } = require('../utils/excelTemplateBuilder');
 
 const EDUCACION_CONTINUA_TEMPLATE_NAME = 'Educación Continua';
 const EDUCACION_CONTINUA_TEMPLATE_FILENAME = 'plantilla-educacion-continua.xlsx';
@@ -20,20 +20,10 @@ const participantesDetalleHeaders = [
   'Estado académico', 'Aprobó', 'Nota final', 'Asistencia %'
 ];
 
-const createEducacionContinuaTemplateBuffer = () => {
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([baseProgramasHeaders]),
-    'Base Programas'
-  );
-  XLSX.utils.book_append_sheet(
-    workbook,
-    XLSX.utils.aoa_to_sheet([participantesDetalleHeaders]),
-    'Participantes Detalle'
-  );
-  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-};
+const createEducacionContinuaTemplateBuffer = () => buildStyledTemplateBuffer([
+  { name: 'Base Programas', headers: baseProgramasHeaders },
+  { name: 'Participantes Detalle', headers: participantesDetalleHeaders }
+]);
 
 const createEducacionContinuaPlantilla = (roleId) => ({
   name: EDUCACION_CONTINUA_TEMPLATE_NAME,
