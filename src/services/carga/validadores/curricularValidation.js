@@ -2,22 +2,29 @@ const { Op } = require('sequelize');
 const XLSX = require('xlsx');
 
 const SHEETS = Object.freeze({
-  'Rendimiento Academico': {
-    table: 'RendimientoAsignatura',
+  Rendimiento: {
+    tables: ['Asignatura', 'RendimientoAsignatura'],
     columns: ['CODCLI', 'RAMOEQUIV', 'ASIGNATURA', 'AÑO', 'PERIODO', 'SECCION', 'ESTADO_ASIGNATURA', 'NOTA']
   },
   Practicas: {
-    table: 'Practica',
+    tables: ['Practica'],
     columns: ['CODCLI', 'TIPO_PRACTICA', 'AÑO', 'PERIODO', 'ESTADO', 'FECHA']
   },
   Titulacion: {
-    table: 'Titulacion',
-    columns: ['CODCLI', 'COHORTE', 'AÑO_TITULACION', 'SEMESTRES_CURSADOS', 'TIEMPO_NORMATIVO']
+    tables: ['Titulacion'],
+    columns: ['CODCLI', 'COHORTE', 'AÑO TITULACION', 'SEMESTRES_CURSADOS', 'TIEMPO_NORMATIVO']
   }
 });
 
 const normalizeName = (value) => String(value ?? '').trim().toLocaleLowerCase('es')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+const normalizeColumn = (value) => normalizeName(value).replace(/_/g, ' ').replace(/\s+/g, ' ');
+const canonicalSheet = (value) => {
+  const normalized = normalizeName(value);
+  return ['rendimiento', 'rendimiento academico'].includes(normalized) ? 'rendimiento' : normalized;
+};
+const canonicalColumn = (value) => normalizeColumn(value) === 'ano titulacion'
+  ? 'AÑO_TITULACION' : text(value).toLocaleUpperCase('es');
 const text = (value) => String(value ?? '').trim();
 const plain = (record) => record?.dataValues || record || {};
 const key = (...parts) => JSON.stringify(parts.map(text));
@@ -110,17 +117,18 @@ const curricularValidation = {
     if (!Array.isArray(campos) || campos.length === 0) return false;
     const expected = Object.entries(SHEETS);
     if (campos.some((field) => !expected.some(([sheet, config]) =>
-      normalizeName(field.hoja_origen) === normalizeName(sheet) && field.tabla_destino === config.table))) return false;
+      canonicalSheet(field.hoja_origen) === canonicalSheet(sheet) &&
+      config.tables.includes(field.tabla_destino)))) return false;
     return expected.every(([sheet, config]) => config.columns.every((column) => campos.some((field) =>
-      normalizeName(field.hoja_origen) === normalizeName(sheet) &&
-      field.tabla_destino === config.table && normalizeName(field.columna_excel) === normalizeName(column))));
+      canonicalSheet(field.hoja_origen) === canonicalSheet(sheet) &&
+      normalizeColumn(field.columna_excel) === normalizeColumn(column))));
   },
 
   prepare({ workbook, nombresHojas }) {
     const resoluciones = new Map();
     const errores = [];
     for (const expected of nombresHojas) {
-      const matches = workbook.SheetNames.filter((name) => normalizeName(name) === normalizeName(expected));
+      const matches = workbook.SheetNames.filter((name) => canonicalSheet(name) === canonicalSheet(expected));
       resoluciones.set(expected, { nombre: matches.length === 1 ? matches[0] : null, ambiguas: matches });
       if (matches.length > 1) {
         errores.push({ hoja: expected, esperado: 'una sola hoja curricular',
@@ -139,10 +147,10 @@ const curricularValidation = {
       ? normalized.toLocaleUpperCase('es') : normalized;
   },
 
-  normalizarNombreColumna({ valor }) { return text(valor); },
+  normalizarNombreColumna({ valor }) { return normalizeColumn(valor); },
 
   validarValor({ valor, campo }) {
-    const column = text(campo.columna_excel).toLocaleUpperCase('es');
+    const column = canonicalColumn(campo.columna_excel);
     if (['CODCLI', 'RAMOEQUIV'].includes(column)) {
       const valid = (typeof valor === 'string' || typeof valor === 'number') && text(valor) !== '';
       return valid ? { valido: true, valor: text(valor) } : validationError('identificador textual',
@@ -184,7 +192,7 @@ const curricularValidation = {
   },
 
   validarSemantica({ valor, campo, hoja, fila, celda, serializarValor }) {
-    const column = text(campo.columna_excel).toLocaleUpperCase('es');
+    const column = canonicalColumn(campo.columna_excel);
     const domains = {
       ESTADO_ASIGNATURA: ['APROBADO', 'REPROBADO'],
       ESTADO: ['INSCRITA', 'APROBADA']
@@ -215,15 +223,7 @@ const curricularValidation = {
       ? text(valor) : valor;
   },
 
-  validarHoja({ nombreEsperado, nombreReal, filas, resolverColumna }) {
-    if (nombreEsperado !== 'Rendimiento Academico') return [];
-    return agruparDuplicados({
-      resolved: { nombreReal, filas, resolverColumna },
-      columns: ['CODCLI', 'RAMOEQUIV', 'AÑO', 'PERIODO'],
-      payloadColumns: ['ASIGNATURA', 'SECCION', 'ESTADO_ASIGNATURA', 'NOTA'],
-      code: 'CURRICULAR_RENDIMIENTO', hardError: true
-    });
-  },
+  validarHoja() { return []; },
 
   async validateSpecific({ hojasResueltas, models }) {
     const errores = [];
@@ -234,6 +234,12 @@ const curricularValidation = {
       for (const [index, row] of resolved.filas.entries()) {
         allRows.push({ sheet, resolved, row, rowNumber: index + 2, read });
       }
+      if (canonicalSheet(sheet) === 'rendimiento') {
+        advertencias.push(...agruparDuplicados({ resolved,
+          columns: ['CODCLI', 'RAMOEQUIV', 'AÑO', 'PERIODO'],
+          payloadColumns: ['ASIGNATURA', 'SECCION', 'ESTADO_ASIGNATURA', 'NOTA'],
+          code: 'CURRICULAR_RENDIMIENTO', hardError: false }));
+      }
       if (sheet === 'Practicas') {
         advertencias.push(...agruparDuplicados({ resolved,
           columns: ['CODCLI', 'TIPO_PRACTICA', 'AÑO', 'PERIODO', 'FECHA'],
@@ -242,11 +248,11 @@ const curricularValidation = {
     }
 
     const titleSheet = hojasResueltas.get('Titulacion');
-    if (titleSheet && !titleSheet.campos.some((field) => normalizeName(field.columna_excel) === 'periodo')) {
-      errores.push({ hoja: titleSheet.nombreReal, campo: 'PERIODO',
-        esperado: 'definición funcional del período de titulación',
-        codigo: 'CURRICULAR_PERIODO_TITULACION_NO_DEFINIDO', severidad: 'ERROR',
-        mensaje: 'La hoja Titulacion no contiene PERIODO, requerido por el modelo; no se puede inferir su valor.' });
+    if (titleSheet && !titleSheet.campos.some((field) => normalizeColumn(field.columna_excel) === 'periodo')) {
+      advertencias.push({ hoja: titleSheet.nombreReal, campo: 'PERIODO',
+        esperado: 'período académico confirmado',
+        codigo: 'CURRICULAR_PERIODO_TITULACION_IMPLICITO', severidad: 'WARNING',
+        mensaje: 'El archivo no indica el período de titulación; el modelo y la carga usan 1 por defecto.' });
     }
 
     for (const item of allRows.filter(({ sheet }) => sheet === 'Titulacion')) {
@@ -261,7 +267,7 @@ const curricularValidation = {
     }
 
     const codClis = [...new Set(allRows.map((item) => text(item.read(item.row, 'CODCLI'))).filter(Boolean))];
-    const rendimiento = allRows.filter(({ sheet }) => sheet === 'Rendimiento Academico');
+    const rendimiento = allRows.filter(({ sheet }) => canonicalSheet(sheet) === 'rendimiento');
     const ramoEquivs = [...new Set(rendimiento.map((item) => text(item.read(item.row, 'RAMOEQUIV'))).filter(Boolean))];
     const years = [...new Set(rendimiento.map((item) => parseNumber(item.read(item.row, 'AÑO'), { integer: true })).filter((value) => value !== null))];
     const periods = [...new Set(rendimiento.map((item) => parseNumber(item.read(item.row, 'PERIODO'), { integer: true })).filter((value) => value !== null))];
@@ -321,7 +327,7 @@ const curricularValidation = {
           code: `CURRICULAR_CODCLI_${reason === 'inexistente' ? 'INEXISTENTE' : reason === 'ambiguo' ? 'AMBIGUO' : 'SIN_RUT'}`,
           message: `Fila ${item.rowNumber}: CODCLI ${reason} en Alumnos`, resolved: item.resolved }));
       }
-      if (item.sheet !== 'Rendimiento Academico') continue;
+      if (canonicalSheet(item.sheet) !== 'rendimiento') continue;
       const subjectCode = text(item.read(item.row, 'RAMOEQUIV'));
       if (!subjectCode) continue;
       const subjectMatches = subjectsByCode.get(subjectCode) || [];

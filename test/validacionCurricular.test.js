@@ -156,8 +156,8 @@ test('referencias se resuelven en tres lotes de sólo lectura', async () => {
   assert.deepEqual(references.calls, { students: 1, subjects: 1, enrollments: 1 });
   assert.equal(result.errores.filter((error) => error.codigo?.startsWith('CURRICULAR_CODCLI')).length, 0);
   assert.equal(result.errores.filter((error) => error.codigo?.includes('RAMOEQUIV') || error.codigo?.includes('MATRICULA')).length, 0);
-  assert.ok(result.errores.some((error) => error.codigo === 'CURRICULAR_PERIODO_TITULACION_NO_DEFINIDO'));
-  assert.equal(result.advertencias.length, 0);
+  assert.equal(result.errores.length, 0);
+  assert.ok(result.advertencias.some((warning) => warning.codigo === 'CURRICULAR_PERIODO_TITULACION_IMPLICITO'));
 });
 
 test('CODCLI inexistente, ambiguo y sin RUT válido producen errores por fila', async () => {
@@ -201,23 +201,19 @@ test('titulación anterior a cohorte informa celda y no inventa PERIODO', async 
   });
   const finding = result.errores.find((error) => error.codigo === 'CURRICULAR_TITULACION_ANTERIOR_COHORTE');
   assert.equal(finding.celda, 'C2');
-  assert.ok(result.errores.some((error) => error.codigo === 'CURRICULAR_PERIODO_TITULACION_NO_DEFINIDO'));
+  assert.ok(result.advertencias.some((warning) => warning.codigo === 'CURRICULAR_PERIODO_TITULACION_IMPLICITO'));
 });
 
-test('duplicados de rendimiento obedecen índice único; prácticas solo advierten sin política', async () => {
-  const duplicate = curricularValidation.validarHoja({
-    nombreEsperado: 'Rendimiento Academico', nombreReal: 'Rendimiento Academico',
-    filas: [rendimiento(), rendimiento({ SECCION: 2, NOTA: 5 })],
-    resolverColumna: (column) => column
-  });
-  assert.equal(duplicate.length, 1);
-  assert.equal(duplicate[0].codigo, 'CURRICULAR_RENDIMIENTO_CONFLICTO');
-  assert.equal(duplicate[0].fila, 3);
+test('duplicados de rendimiento y prácticas se advierten sin bloquear el upsert de carga', async () => {
   const result = await curricularValidation.validateSpecific({
-    hojasResueltas: allResolved({ practicas: [practica(), practica()] }), models: referenceModels().models
+    hojasResueltas: allResolved({
+      rendimientos: [rendimiento(), rendimiento({ SECCION: 2, NOTA: 5 })],
+      practicas: [practica(), practica()]
+    }), models: referenceModels().models
   });
-  assert.equal(result.advertencias.length, 1);
-  assert.equal(result.advertencias[0].codigo, 'CURRICULAR_PRACTICA_DUPLICADO');
+  assert.equal(result.errores.length, 0);
+  assert.ok(result.advertencias.some((warning) => warning.codigo === 'CURRICULAR_RENDIMIENTO_CONFLICTO' && warning.fila === 3));
+  assert.ok(result.advertencias.some((warning) => warning.codigo === 'CURRICULAR_PRACTICA_DUPLICADO'));
 });
 
 test('si la consulta referencial falla no se presenta como referencia válida', async () => {
@@ -245,9 +241,103 @@ test('validarArchivo usa el validador curricular y detecta columna requerida fal
     const result = await validarArchivo(filename, 302);
     assert.equal(result.valido, false);
     assert.ok(result.errores.some((error) => error.hoja === 'Titulacion' && error.campo === 'COHORTE'));
-    assert.ok(result.errores.some((error) => error.codigo === 'CURRICULAR_PERIODO_TITULACION_NO_DEFINIDO'));
+    assert.ok(result.advertencias.some((warning) => warning.codigo === 'CURRICULAR_PERIODO_TITULACION_IMPLICITO'));
   } finally {
     models.CampoPlantilla.findAll = originalFindAll;
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+const pr114ConfigPath = path.join(__dirname, '../src/config/plantillaDesarrolloCurricular.js');
+test('PR #114: plantilla oficial y sus mapeos repetidos se validan sin rechazos espurios',
+  { skip: !fs.existsSync(pr114ConfigPath) }, async () => {
+    const config = require(pr114ConfigPath);
+    const officialFields = config.createDesarrolloCurricularFields(114);
+    assert.equal(officialFields.length, 23);
+    assert.equal(obtenerValidador({ campos: officialFields }), curricularValidation);
+    assert.equal(officialFields.filter((field) => field.columna_excel === 'CODCLI').length, 6);
+    assert.equal(officialFields.find((field) => field.columna_excel === 'AÑO TITULACION').columna_destino, 'anioTitulacion');
+
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'piadi-302-pr114-'));
+    const filename = path.join(directory, 'curricular-oficial.xlsx');
+    const originals = {
+      fields: models.CampoPlantilla.findAll,
+      students: models.Alumno.findAll,
+      subjects: models.Asignatura.findAll,
+      enrollments: models.MatriculaPorAsignatura.findAll
+    };
+    try {
+      const writeFixture = ({ sheet = config.RENDIMIENTO_SHEET, titleHeader = 'AÑO TITULACION',
+        rows = [rendimiento()], practiceRow = practica() } = {}) => {
+        const book = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet(rows,
+          { header: config.rendimientoHeaders }), sheet);
+        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([practiceRow],
+          { header: config.practicasHeaders }), config.PRACTICAS_SHEET);
+        const title = { ...titulacion(), [titleHeader]: 2026 };
+        delete title[titleHeader === 'AÑO TITULACION' ? 'AÑO_TITULACION' : 'AÑO TITULACION'];
+        const titleColumns = config.titulacionHeaders.map((column) =>
+          column === 'AÑO TITULACION' ? titleHeader : column);
+        XLSX.utils.book_append_sheet(book, XLSX.utils.json_to_sheet([title],
+          { header: titleColumns }), config.TITULACION_SHEET);
+        XLSX.writeFile(book, filename);
+      };
+      writeFixture();
+
+      const refs = referenceModels();
+      models.CampoPlantilla.findAll = async () => officialFields;
+      models.Alumno.findAll = refs.models.Alumno.findAll;
+      models.Asignatura.findAll = refs.models.Asignatura.findAll;
+      models.MatriculaPorAsignatura.findAll = refs.models.MatriculaPorAsignatura.findAll;
+      const result = await validarArchivo(filename, 114);
+      assert.equal(result.valido, true, JSON.stringify(result.errores));
+      assert.deepEqual(result.errores, []);
+      assert.ok(result.advertencias.some((warning) => warning.codigo === 'CURRICULAR_PERIODO_TITULACION_IMPLICITO'));
+      assert.deepEqual(refs.calls, { students: 1, subjects: 1, enrollments: 1 });
+
+      writeFixture({ sheet: 'Rendimiento Academico', titleHeader: 'AÑO_TITULACION' });
+      const originalHeaders = await validarArchivo(filename, 114);
+      assert.equal(originalHeaders.valido, true, JSON.stringify(originalHeaders.errores));
+
+      writeFixture({ rows: [rendimiento({ CODCLI: 'CLI-DESCONOCIDO' })] });
+      const unknownStudent = await validarArchivo(filename, 114);
+      assert.equal(unknownStudent.valido, false);
+      assert.equal(unknownStudent.errores.filter((error) => error.codigo === 'CURRICULAR_CODCLI_INEXISTENTE').length, 1);
+      assert.ok(unknownStudent.errores.some((error) => error.codigo === 'CURRICULAR_CODCLI_INEXISTENTE' &&
+        error.hoja === 'Rendimiento' && error.fila === 2 && error.celda === 'A2'));
+
+      writeFixture({ rows: [rendimiento({ RAMOEQUIV: 'RAMO-DESCONOCIDO' })] });
+      const unknownSubject = await validarArchivo(filename, 114);
+      assert.ok(unknownSubject.errores.some((error) => error.codigo === 'CURRICULAR_RAMOEQUIV_INEXISTENTE' &&
+        error.hoja === 'Rendimiento' && error.fila === 2 && error.celda === 'B2'));
+
+      writeFixture({ rows: [rendimiento({ NOTA: 7.1, ESTADO_ASIGNATURA: 'PENDIENTE' })],
+        practiceRow: practica({ FECHA: '31-02-2026' }) });
+      const invalidValues = await validarArchivo(filename, 114);
+      assert.ok(invalidValues.errores.some((error) => error.codigo === 'CURRICULAR_VALOR_FUERA_DOMINIO' && error.campo === 'NOTA'));
+      assert.ok(invalidValues.errores.some((error) => error.codigo === 'CURRICULAR_VALOR_FUERA_DOMINIO' && error.campo === 'ESTADO_ASIGNATURA'));
+      assert.ok(invalidValues.errores.some((error) => error.codigo === 'CURRICULAR_FECHA_INVALIDA'));
+
+      writeFixture({ rows: [rendimiento(), rendimiento()] });
+      const exactDuplicate = await validarArchivo(filename, 114);
+      assert.equal(exactDuplicate.valido, true, JSON.stringify(exactDuplicate.errores));
+      assert.ok(exactDuplicate.advertencias.some((warning) => warning.codigo === 'CURRICULAR_RENDIMIENTO_DUPLICADO'));
+      writeFixture({ rows: [rendimiento(), rendimiento({ SECCION: 2, NOTA: 5 })] });
+      const conflictingDuplicate = await validarArchivo(filename, 114);
+      assert.equal(conflictingDuplicate.valido, true, JSON.stringify(conflictingDuplicate.errores));
+      assert.ok(conflictingDuplicate.advertencias.some((warning) => warning.codigo === 'CURRICULAR_RENDIMIENTO_CONFLICTO'));
+
+      models.MatriculaPorAsignatura.findAll = async () => [
+        { codCli: 'CLI-FICTICIO', ramoEquiv: 'RAMO-FICTICIO', anio: 2026, periodo: 2 }
+      ];
+      writeFixture({ rows: [rendimiento({ PERIODO: 2, NOTA: 1.0 })] });
+      const secondPeriod = await validarArchivo(filename, 114);
+      assert.equal(secondPeriod.valido, true, JSON.stringify(secondPeriod.errores));
+    } finally {
+      models.CampoPlantilla.findAll = originals.fields;
+      models.Alumno.findAll = originals.students;
+      models.Asignatura.findAll = originals.subjects;
+      models.MatriculaPorAsignatura.findAll = originals.enrollments;
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
