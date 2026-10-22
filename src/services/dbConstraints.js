@@ -136,6 +136,52 @@ async function initDbConstraints() {
 
     console.log('Creating materialized view v_meta_indicator_values...');
     await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS rendimiento_asignatura (
+        id SERIAL PRIMARY KEY,
+        rut INTEGER NOT NULL,
+        "codCli" VARCHAR(50),
+        "ramoEquiv" VARCHAR(50) NOT NULL,
+        seccion INTEGER,
+        anio INTEGER NOT NULL,
+        periodo INTEGER NOT NULL,
+        "notaFinal" DECIMAL(3, 1),
+        "estadoAsignatura" VARCHAR(20) NOT NULL DEFAULT 'APROBADO',
+        asistencia DECIMAL(5, 2),
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS practicas (
+        id SERIAL PRIMARY KEY,
+        rut INTEGER NOT NULL,
+        "codCli" VARCHAR(50),
+        anio INTEGER NOT NULL,
+        periodo INTEGER NOT NULL,
+        "tipoPractica" VARCHAR(100) NOT NULL,
+        estado VARCHAR(50) NOT NULL,
+        "fechaInicio" DATE,
+        "fechaTermino" DATE,
+        horas INTEGER,
+        empresa VARCHAR(150),
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS titulacion (
+        id SERIAL PRIMARY KEY,
+        rut INTEGER NOT NULL,
+        "codCli" VARCHAR(50),
+        "anioTitulacion" INTEGER NOT NULL,
+        periodo INTEGER NOT NULL,
+        cohorte INTEGER NOT NULL,
+        "tiempoNormativo" DECIMAL(4, 1),
+        "semestresCursados" DECIMAL(4, 1),
+        "fechaTitulacion" DATE,
+        distincion VARCHAR(50),
+        "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      );
+
       DROP MATERIALIZED VIEW IF EXISTS v_meta_indicator_values CASCADE;
     `);
     await sequelize.query(`
@@ -667,7 +713,206 @@ async function initDbConstraints() {
         COALESCE(SUM("nDocentes"), 0)::numeric AS value
       FROM proyectos
       WHERE LOWER("tipoProyecto") IN ('estudiantil', 'institucional')
-      GROUP BY "anioInicio", CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END;
+      GROUP BY "anioInicio", CASE WHEN LOWER("semestreInicio") IN ('1', 'primer semestre', '1er semestre', 'semestre 1') THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 25. Desarrollo Curricular - tasa_aprobacion_asignatura
+      SELECT
+        'tasa_aprobacion_asignatura'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        'Anual'::varchar AS periodo,
+        CASE WHEN COUNT(*) > 0 THEN ROUND((COUNT(*) FILTER (WHERE UPPER("estadoAsignatura") = 'APROBADO')::numeric / COUNT(*)::numeric) * 100.0, 2) ELSE 0::numeric END AS value
+      FROM rendimiento_asignatura
+      GROUP BY anio
+
+      UNION ALL
+
+      SELECT
+        'tasa_aprobacion_asignatura'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        CASE WHEN COUNT(*) > 0 THEN ROUND((COUNT(*) FILTER (WHERE UPPER("estadoAsignatura") = 'APROBADO')::numeric / COUNT(*)::numeric) * 100.0, 2) ELSE 0::numeric END AS value
+      FROM rendimiento_asignatura
+      GROUP BY anio, CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 26. Desarrollo Curricular - tasa_reprobacion_asignatura
+      SELECT
+        'tasa_reprobacion_asignatura'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        'Anual'::varchar AS periodo,
+        CASE WHEN COUNT(*) > 0 THEN ROUND((COUNT(*) FILTER (WHERE UPPER("estadoAsignatura") = 'REPROBADO')::numeric / COUNT(*)::numeric) * 100.0, 2) ELSE 0::numeric END AS value
+      FROM rendimiento_asignatura
+      GROUP BY anio
+
+      UNION ALL
+
+      SELECT
+        'tasa_reprobacion_asignatura'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        CASE WHEN COUNT(*) > 0 THEN ROUND((COUNT(*) FILTER (WHERE UPPER("estadoAsignatura") = 'REPROBADO')::numeric / COUNT(*)::numeric) * 100.0, 2) ELSE 0::numeric END AS value
+      FROM rendimiento_asignatura
+      GROUP BY anio, CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 27. Desarrollo Curricular - asignaturas_criticas (> 30% reprobación)
+      SELECT
+        'asignaturas_criticas'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*) FILTER (WHERE tasa_rep > 30.0)::numeric AS value
+      FROM (
+        SELECT
+          anio,
+          "ramoEquiv",
+          CASE WHEN COUNT(*) > 0 THEN (COUNT(*) FILTER (WHERE UPPER("estadoAsignatura") = 'REPROBADO')::numeric / COUNT(*)::numeric) * 100.0 ELSE 0::numeric END AS tasa_rep
+        FROM rendimiento_asignatura
+        GROUP BY anio, "ramoEquiv"
+      ) sub_crit_anual
+      GROUP BY anio
+
+      UNION ALL
+
+      SELECT
+        'asignaturas_criticas'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(*) FILTER (WHERE tasa_rep > 30.0)::numeric AS value
+      FROM (
+        SELECT
+          anio,
+          periodo,
+          "ramoEquiv",
+          CASE WHEN COUNT(*) > 0 THEN (COUNT(*) FILTER (WHERE UPPER("estadoAsignatura") = 'REPROBADO')::numeric / COUNT(*)::numeric) * 100.0 ELSE 0::numeric END AS tasa_rep
+        FROM rendimiento_asignatura
+        GROUP BY anio, periodo, "ramoEquiv"
+      ) sub_crit_sem
+      GROUP BY anio, CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 28. Desarrollo Curricular - practicas_inscritas
+      SELECT
+        'practicas_inscritas'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM practicas
+      GROUP BY anio
+
+      UNION ALL
+
+      SELECT
+        'practicas_inscritas'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(*)::numeric AS value
+      FROM practicas
+      GROUP BY anio, CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 29. Desarrollo Curricular - practicas_aprobadas
+      SELECT
+        'practicas_aprobadas'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        'Anual'::varchar AS periodo,
+        COUNT(*) FILTER (WHERE UPPER(estado) = 'APROBADA')::numeric AS value
+      FROM practicas
+      GROUP BY anio
+
+      UNION ALL
+
+      SELECT
+        'practicas_aprobadas'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        anio,
+        CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(*) FILTER (WHERE UPPER(estado) = 'APROBADA')::numeric AS value
+      FROM practicas
+      GROUP BY anio, CASE WHEN periodo = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 30. Desarrollo Curricular - tasa_titulacion_cohorte
+      SELECT
+        'tasa_titulacion_cohorte'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        "anioTitulacion" AS anio,
+        'Anual'::varchar AS periodo,
+        CASE WHEN COUNT(*) > 0 THEN ROUND((COUNT(DISTINCT rut) FILTER (WHERE "semestresCursados" IS NULL OR "tiempoNormativo" IS NULL OR "semestresCursados" <= "tiempoNormativo")::numeric / COUNT(DISTINCT rut)::numeric) * 100.0, 2) ELSE 0::numeric END AS value
+      FROM titulacion
+      GROUP BY "anioTitulacion"
+
+      UNION ALL
+
+      SELECT
+        'tasa_titulacion_cohorte'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        "anioTitulacion" AS anio,
+        CASE WHEN COALESCE(periodo, 1) = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        CASE WHEN COUNT(*) > 0 THEN ROUND((COUNT(DISTINCT rut) FILTER (WHERE "semestresCursados" IS NULL OR "tiempoNormativo" IS NULL OR "semestresCursados" <= "tiempoNormativo")::numeric / COUNT(DISTINCT rut)::numeric) * 100.0, 2) ELSE 0::numeric END AS value
+      FROM titulacion
+      GROUP BY "anioTitulacion", CASE WHEN COALESCE(periodo, 1) = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 31. Desarrollo Curricular - titulados_por_anio
+      SELECT
+        'titulados_por_anio'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        "anioTitulacion" AS anio,
+        'Anual'::varchar AS periodo,
+        COUNT(DISTINCT rut)::numeric AS value
+      FROM titulacion
+      GROUP BY "anioTitulacion"
+
+      UNION ALL
+
+      SELECT
+        'titulados_por_anio'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        "anioTitulacion" AS anio,
+        CASE WHEN COALESCE(periodo, 1) = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COUNT(DISTINCT rut)::numeric AS value
+      FROM titulacion
+      GROUP BY "anioTitulacion", CASE WHEN COALESCE(periodo, 1) = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END
+
+      UNION ALL
+
+      -- 32. Desarrollo Curricular - tiempo_promedio_titulacion
+      SELECT
+        'tiempo_promedio_titulacion'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        "anioTitulacion" AS anio,
+        'Anual'::varchar AS periodo,
+        COALESCE(ROUND(AVG("semestresCursados"), 2), 0)::numeric AS value
+      FROM titulacion
+      GROUP BY "anioTitulacion"
+
+      UNION ALL
+
+      SELECT
+        'tiempo_promedio_titulacion'::varchar AS "indicatorKey",
+        'desarrollo_curricular'::varchar AS "departmentId",
+        "anioTitulacion" AS anio,
+        CASE WHEN COALESCE(periodo, 1) = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END::varchar AS periodo,
+        COALESCE(ROUND(AVG("semestresCursados"), 2), 0)::numeric AS value
+      FROM titulacion
+      GROUP BY "anioTitulacion", CASE WHEN COALESCE(periodo, 1) = 1 THEN 'Semestre 1' ELSE 'Semestre 2' END;
     `);
 
     await sequelize.query(`

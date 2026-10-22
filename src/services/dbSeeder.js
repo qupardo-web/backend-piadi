@@ -1,5 +1,16 @@
 const { Op } = require('sequelize');
-const { User, Role, Department, Plantilla, CampoPlantilla } = require('../models');
+const {
+  User,
+  Role,
+  Department,
+  Plantilla,
+  CampoPlantilla,
+  Alumno,
+  Asignatura,
+  RendimientoAsignatura,
+  Practica,
+  Titulacion
+} = require('../models');
 const {
   createEducacionContinuaPlantilla
 } = require('../config/plantillaEducacionContinua');
@@ -383,9 +394,127 @@ async function seedDatabase() {
 
     // 5. Seed VCM transactional mock data (only if empty)
     console.log('Skipping VCM mock data seeding (removed).');
+
+    // 6. Seed Desarrollo Curricular transactional data (only if empty)
+    try {
+      const existingRendimiento = await RendimientoAsignatura.count();
+      const existingPracticas = await Practica.count();
+      const existingTitulacion = await Titulacion.count();
+      if (existingRendimiento === 0 && existingPracticas === 0 && existingTitulacion === 0) {
+        await seedDesarrolloCurricularData();
+      }
+    } catch (dcSeedError) {
+      // Ignore in mocked unit test environments where tables/DB are not active
+    }
   } catch (error) {
     console.error('Error seeding database:', error);
   }
 }
 
-module.exports = { seedDatabase };
+async function seedDesarrolloCurricularData() {
+  const alumnosSeed = [
+    { codCli: 'DC-CLI-001', rut: 19100101, digitoVerificador: 'K', nombre: 'Camila', apellidoPat: 'Rojas', apellidoMat: 'Silva', mail: 'camila.rojas@ecas.cl' },
+    { codCli: 'DC-CLI-002', rut: 19100102, digitoVerificador: '8', nombre: 'Matías', apellidoPat: 'Fuentes', apellidoMat: 'Pino', mail: 'matias.fuentes@ecas.cl' },
+    { codCli: 'DC-CLI-003', rut: 19100103, digitoVerificador: '6', nombre: 'Valentina', apellidoPat: 'Morales', apellidoMat: 'Vega', mail: 'valentina.morales@ecas.cl' },
+    { codCli: 'DC-CLI-004', rut: 19100104, digitoVerificador: '4', nombre: 'Sebastián', apellidoPat: 'Castro', apellidoMat: 'Luna', mail: 'sebastian.castro@ecas.cl' },
+    { codCli: 'DC-CLI-005', rut: 19100105, digitoVerificador: '2', nombre: 'Francisca', apellidoPat: 'Herrera', apellidoMat: 'Soto', mail: 'francisca.herrera@ecas.cl' },
+    { codCli: 'DC-CLI-006', rut: 19100106, digitoVerificador: '0', nombre: 'Diego', apellidoPat: 'Muñoz', apellidoMat: 'Díaz', mail: 'diego.munoz@ecas.cl' }
+  ];
+
+  for (const alumno of alumnosSeed) {
+    await Alumno.findOrCreate({
+      where: { rut: alumno.rut },
+      defaults: alumno
+    });
+  }
+
+  const asignaturasSeed = [
+    { ramoEquiv: 'DC-AUD101', nombre: 'Auditoría I' },
+    { ramoEquiv: 'DC-CON201', nombre: 'Contabilidad Intermedia' },
+    { ramoEquiv: 'DC-FIN301', nombre: 'Finanzas Corporativas' },
+    { ramoEquiv: 'DC-GES401', nombre: 'Control de Gestión' }
+  ];
+
+  for (const asig of asignaturasSeed) {
+    await Asignatura.findOrCreate({
+      where: { ramoEquiv: asig.ramoEquiv },
+      defaults: asig
+    });
+  }
+
+  // Semilla en rendimiento_asignatura (10 registros: 2025 S1/S2 y 2026 S1, incluyendo asignatura crítica DC-FIN301 con >30% reprobación)
+  const rendimientosSeed = [
+    // 2025 - Periodo 1 (5 registros: 3 aprobados, 2 reprobados en DC-FIN301 => DC-FIN301 tiene 66.67% reprobación = crítica)
+    { rut: 19100101, codCli: 'DC-CLI-001', ramoEquiv: 'DC-AUD101', seccion: 1, anio: 2025, periodo: 1, notaFinal: 5.8, estadoAsignatura: 'APROBADO', asistencia: 92.0 },
+    { rut: 19100102, codCli: 'DC-CLI-002', ramoEquiv: 'DC-AUD101', seccion: 1, anio: 2025, periodo: 1, notaFinal: 5.1, estadoAsignatura: 'APROBADO', asistencia: 88.5 },
+    { rut: 19100103, codCli: 'DC-CLI-003', ramoEquiv: 'DC-FIN301', seccion: 1, anio: 2025, periodo: 1, notaFinal: 3.2, estadoAsignatura: 'REPROBADO', asistencia: 75.0 },
+    { rut: 19100104, codCli: 'DC-CLI-004', ramoEquiv: 'DC-FIN301', seccion: 1, anio: 2025, periodo: 1, notaFinal: 3.5, estadoAsignatura: 'REPROBADO', asistencia: 70.0 },
+    { rut: 19100105, codCli: 'DC-CLI-005', ramoEquiv: 'DC-FIN301', seccion: 1, anio: 2025, periodo: 1, notaFinal: 4.8, estadoAsignatura: 'APROBADO', asistencia: 85.0 },
+    // 2025 - Periodo 2 (3 registros: 2 aprobados, 1 reprobado en DC-CON201 => 33.33% reprobación = crítica en S2)
+    { rut: 19100101, codCli: 'DC-CLI-001', ramoEquiv: 'DC-CON201', seccion: 2, anio: 2025, periodo: 2, notaFinal: 6.0, estadoAsignatura: 'APROBADO', asistencia: 95.0 },
+    { rut: 19100102, codCli: 'DC-CLI-002', ramoEquiv: 'DC-CON201', seccion: 2, anio: 2025, periodo: 2, notaFinal: 5.4, estadoAsignatura: 'APROBADO', asistencia: 90.0 },
+    { rut: 19100103, codCli: 'DC-CLI-003', ramoEquiv: 'DC-CON201', seccion: 2, anio: 2025, periodo: 2, notaFinal: 3.6, estadoAsignatura: 'REPROBADO', asistencia: 72.0 },
+    // 2026 - Periodo 1 (2 registros: 2 aprobados en DC-GES401 => 100% aprobación, 0 críticas)
+    { rut: 19100105, codCli: 'DC-CLI-005', ramoEquiv: 'DC-GES401', seccion: 1, anio: 2026, periodo: 1, notaFinal: 6.3, estadoAsignatura: 'APROBADO', asistencia: 96.0 },
+    { rut: 19100106, codCli: 'DC-CLI-006', ramoEquiv: 'DC-GES401', seccion: 1, anio: 2026, periodo: 1, notaFinal: 5.9, estadoAsignatura: 'APROBADO', asistencia: 91.0 }
+  ];
+
+  for (const rend of rendimientosSeed) {
+    await RendimientoAsignatura.findOrCreate({
+      where: {
+        rut: rend.rut,
+        ramoEquiv: rend.ramoEquiv,
+        anio: rend.anio,
+        periodo: rend.periodo
+      },
+      defaults: rend
+    });
+  }
+
+  // Semilla en practicas (6 registros: 4 en 2025 y 2 en 2026)
+  const practicasSeed = [
+    { rut: 19100101, codCli: 'DC-CLI-001', anio: 2025, periodo: 1, tipoPractica: 'Práctica Temprana', estado: 'APROBADA', fechaInicio: '2025-03-10', fechaTermino: '2025-06-15', horas: 240, empresa: 'Deloitte' },
+    { rut: 19100102, codCli: 'DC-CLI-002', anio: 2025, periodo: 1, tipoPractica: 'Práctica Temprana', estado: 'APROBADA', fechaInicio: '2025-03-12', fechaTermino: '2025-06-20', horas: 240, empresa: 'EY Chile' },
+    { rut: 19100103, codCli: 'DC-CLI-003', anio: 2025, periodo: 2, tipoPractica: 'Práctica Profesional', estado: 'APROBADA', fechaInicio: '2025-08-04', fechaTermino: '2025-11-28', horas: 400, empresa: 'KPMG' },
+    { rut: 19100104, codCli: 'DC-CLI-004', anio: 2025, periodo: 2, tipoPractica: 'Práctica Profesional', estado: 'EN CURSO', fechaInicio: '2025-08-10', fechaTermino: null, horas: 400, empresa: 'PwC' },
+    { rut: 19100105, codCli: 'DC-CLI-005', anio: 2026, periodo: 1, tipoPractica: 'Práctica Profesional', estado: 'APROBADA', fechaInicio: '2026-03-02', fechaTermino: '2026-06-12', horas: 400, empresa: 'BDO' },
+    { rut: 19100106, codCli: 'DC-CLI-006', anio: 2026, periodo: 1, tipoPractica: 'Práctica Temprana', estado: 'EN CURSO', fechaInicio: '2026-03-15', fechaTermino: null, horas: 240, empresa: 'Grant Thornton' }
+  ];
+
+  for (const prac of practicasSeed) {
+    await Practica.findOrCreate({
+      where: {
+        rut: prac.rut,
+        anio: prac.anio,
+        periodo: prac.periodo,
+        tipoPractica: prac.tipoPractica
+      },
+      defaults: prac
+    });
+  }
+
+  // Semilla en titulacion (4 registros: 3 en 2025 y 1 en 2026)
+  const titulacionesSeed = [
+    { rut: 19100101, codCli: 'DC-CLI-001', anioTitulacion: 2025, periodo: 1, cohorte: 2021, tiempoNormativo: 8.0, semestresCursados: 8.0, fechaTitulacion: '2025-06-20', distincion: 'Distinción Máxima' },
+    { rut: 19100102, codCli: 'DC-CLI-002', anioTitulacion: 2025, periodo: 1, cohorte: 2021, tiempoNormativo: 8.0, semestresCursados: 9.0, fechaTitulacion: '2025-06-25', distincion: 'Aprobado' },
+    { rut: 19100103, codCli: 'DC-CLI-003', anioTitulacion: 2025, periodo: 2, cohorte: 2021, tiempoNormativo: 8.0, semestresCursados: 8.0, fechaTitulacion: '2025-12-10', distincion: 'Distinción' },
+    { rut: 19100105, codCli: 'DC-CLI-005', anioTitulacion: 2026, periodo: 1, cohorte: 2022, tiempoNormativo: 8.0, semestresCursados: 8.0, fechaTitulacion: '2026-06-18', distincion: 'Distinción Máxima' }
+  ];
+
+  for (const tit of titulacionesSeed) {
+    await Titulacion.findOrCreate({
+      where: {
+        rut: tit.rut,
+        anioTitulacion: tit.anioTitulacion,
+        periodo: tit.periodo
+      },
+      defaults: tit
+    });
+  }
+
+  await RendimientoAsignatura.sequelize.query('REFRESH MATERIALIZED VIEW v_meta_indicator_values;').catch(() => {});
+  console.log('Desarrollo Curricular seed data ensured in database.');
+}
+
+module.exports = { seedDatabase, seedDesarrolloCurricularData };
+
