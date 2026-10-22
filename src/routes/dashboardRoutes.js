@@ -18,10 +18,10 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *       - in: query
  *         name: department
  *         required: false
- *         description: Filtra el resumen por departamento; use admision para obtener sus 13 KPIs habilitados.
+ *         description: Filtra el resumen por departamento; admision expone sus 13 KPIs habilitados y desarrollo_curricular expone 8 indicadores habilitados.
  *         schema:
  *           type: string
- *           enum: [educacion_continua, vinculacion_medio, innovacion, admision]
+ *           enum: [educacion_continua, vinculacion_medio, innovacion, admision, desarrollo_curricular]
  *           example: innovacion
  *       - in: query
  *         name: fromYear
@@ -31,11 +31,11 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *         schema: { type: integer }
  *       - in: query
  *         name: semester
- *         description: Alias semestral. Para Admisión acepta 1, 2, Primer semestre, Segundo semestre, 1er semestre, 2do semestre, Semestre 1 y Semestre 2.
+ *         description: Alias semestral. Para Admisión y Desarrollo Curricular acepta 1, 2, Primer semestre, Segundo semestre, 1er semestre, 2do semestre, Semestre 1 y Semestre 2.
  *         schema: { type: string, example: "1" }
  *       - in: query
  *         name: periodo
- *         description: Período académico de Admisión normalizado a semestre 1 o 2.
+ *         description: Período académico de Admisión o Desarrollo Curricular, normalizado a semestre 1 o 2 al filtrar un departamento.
  *         schema:
  *           type: string
  *           enum: ["1", "2", Primer semestre, Segundo semestre, 1er semestre, 2do semestre, Semestre 1, Semestre 2]
@@ -55,6 +55,26 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *       - in: query
  *         name: sexo
  *         schema: { type: string }
+ *       - in: query
+ *         name: asignatura
+ *         description: Nombre de asignatura para los indicadores curriculares de rendimiento.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: seccion
+ *         description: Número de sección para los indicadores curriculares de rendimiento.
+ *         schema: { type: integer, minimum: 1 }
+ *       - in: query
+ *         name: tipoPractica
+ *         description: Tipo de práctica para los indicadores curriculares de prácticas.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: estado
+ *         description: Estado de práctica para los indicadores curriculares de prácticas.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: cohorte
+ *         description: Año de cohorte para los indicadores curriculares de titulación; no sustituye el denominador institucional aún no disponible.
+ *         schema: { type: integer }
  *       - in: query
  *         name: ageRange
  *         schema: { type: string }
@@ -78,7 +98,7 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *           enum: [asc, desc]
  *     responses:
  *       200:
- *         description: Resumen genérico de tarjetas por departamento. Admisión expone sus 13 indicadores habilitados y conserva hasData false cuando un indicador no dispone de datos.
+ *         description: Resumen genérico de tarjetas por departamento. Admisión expone 13 indicadores y Desarrollo Curricular sus 8 indicadores habilitados. tasa_titulacion_cohorte responde value null, formattedValue null y hasData false mientras no exista el denominador institucional oficial.
  *         content:
  *           application/json:
  *             schema:
@@ -112,7 +132,7 @@ const { authenticateToken } = require('../middleware/authMiddleware');
  *                               properties:
  *                                 indicatorKey:
  *                                   type: string
- *                                   enum: [convenios_activos, actividades_realizadas, proyectos_vcm, proyectos_activos, financiamiento_obtenido, proyectos_finalizados, matricula_total, nuevos_vs_antiguos, matricula_por_asignatura, matricula_por_seccion, matricula_por_estado_academico, nivel_socioeconomico, situacion_familiar, procedencia_geografica, tipo_colegio, via_acceso, beneficios_becas, distribucion_sexo, rango_etario]
+ *                                   enum: [convenios_activos, actividades_realizadas, proyectos_vcm, proyectos_activos, financiamiento_obtenido, proyectos_finalizados, matricula_total, nuevos_vs_antiguos, matricula_por_asignatura, matricula_por_seccion, matricula_por_estado_academico, nivel_socioeconomico, situacion_familiar, procedencia_geografica, tipo_colegio, via_acceso, beneficios_becas, distribucion_sexo, rango_etario, tasa_aprobacion_asignatura, tasa_reprobacion_asignatura, asignaturas_criticas, practicas_inscritas, practicas_aprobadas, tasa_titulacion_cohorte, titulados_por_anio, tiempo_promedio_titulacion]
  *                                 title: { type: string, example: Matrícula total por período }
  *                                 value: { type: number, nullable: true, example: 1200 }
  *                                 formattedValue: { type: string, nullable: true, example: "1.200" }
