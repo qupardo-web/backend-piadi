@@ -244,6 +244,12 @@ const procesarCarga = async (workbook, campos) => {
                 valor = valor.trim();
                 if (valor === '') valor = null;
               }
+              if (typeof valor === 'string' && (
+                (tabla === 'RendimientoAsignatura' && colDest === 'estadoAsignatura') ||
+                (tabla === 'Practica' && colDest === 'estado')
+              )) {
+                valor = valor.toLocaleUpperCase('es');
+              }
               if (['STRING', 'CHAR', 'TEXT'].includes(typeKey) && valor !== null && valor !== undefined) {
                 valor = String(valor).trim();
               }
