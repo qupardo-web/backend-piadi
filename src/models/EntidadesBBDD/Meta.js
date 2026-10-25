@@ -9,7 +9,7 @@ const Meta = sequelize.define('Meta', {
     },
     indicatorKey: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
         references: {
             model: 'indicator_definitions',
             key: 'key'
@@ -32,7 +32,17 @@ const Meta = sequelize.define('Meta', {
     },
     valorMeta: {
         type: DataTypes.DECIMAL(12, 2),
-        allowNull: false
+        allowNull: true
+    },
+    lifecycleStatus: {
+        type: DataTypes.STRING(16),
+        allowNull: false,
+        defaultValue: 'ACTIVA',
+        validate: { isIn: [['BORRADOR', 'ACTIVA']] }
+    },
+    draftMetrics: {
+        type: DataTypes.JSONB,
+        allowNull: true
     },
     creatorId: {
         type: DataTypes.INTEGER,
@@ -88,6 +98,18 @@ const Meta = sequelize.define('Meta', {
 }, {
     tableName: 'metas',
     timestamps: true,
+    validate: {
+        camposPorEstado() {
+            if (this.lifecycleStatus === 'ACTIVA'
+                && (this.indicatorKey == null || this.valorMeta == null || this.draftMetrics != null)) {
+                throw new Error('Una meta ACTIVA requiere indicador y valorMeta, sin draftMetrics');
+            }
+            if (this.lifecycleStatus === 'BORRADOR'
+                && (this.indicatorKey != null || this.valorMeta != null)) {
+                throw new Error('Una meta BORRADOR no debe contener indicador ni valorMeta definitivos');
+            }
+        }
+    },
     indexes: [
         {
             name: 'idx_metas_busqueda',

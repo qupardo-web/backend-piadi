@@ -6,6 +6,9 @@ const cacheService = require('./cacheService');
 const WEIGHT_SCALE = 10000;
 const EXPECTED_WEIGHT_UNITS = 100 * WEIGHT_SCALE;
 const META_FIELDS = ['departmentId', 'anio', 'periodo', 'nombre', 'fechaInicio', 'fechaLimite', 'prioridad', 'comportamiento'];
+const LIFECYCLE_STATUSES = ['BORRADOR', 'ACTIVA'];
+const DRAFT_TEXT_FIELDS = new Set(['indicatorKey', 'behavior', 'valueType']);
+const DRAFT_NUMBER_FIELDS = new Set(['weight', 'targetValue', 'lowerLimit', 'upperLimit']);
 
 const requireNonEmptyString = (value, field) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -29,6 +32,66 @@ const requirePresentValue = (value, field) => {
     throw new ValidationError(`El campo ${field} es obligatorio y no puede estar vacío`);
   }
   return value;
+};
+
+const resolveLifecycleStatus = (currentStatus, requestedStatus) => {
+  const current = currentStatus || 'ACTIVA';
+  if (!LIFECYCLE_STATUSES.includes(current)) {
+    throw new ValidationError('El estado actual de la meta no admite transiciones');
+  }
+  const next = requestedStatus === undefined ? current : requestedStatus;
+  if (!LIFECYCLE_STATUSES.includes(next)) {
+    throw new ValidationError('lifecycleStatus debe ser BORRADOR o ACTIVA');
+  }
+  if (current === 'ACTIVA' && next === 'BORRADOR') {
+    throw new ValidationError('Una meta ACTIVA no puede volver a BORRADOR');
+  }
+  return next;
+};
+
+const normalizeDraftMetrics = (draftMetrics) => {
+  if (draftMetrics === undefined || draftMetrics === null) return [];
+  if (!Array.isArray(draftMetrics)) {
+    throw new ValidationError('draftMetrics debe ser un arreglo de métricas parciales');
+  }
+  return draftMetrics.map((metric, index) => {
+    if (!metric || typeof metric !== 'object' || Array.isArray(metric)) {
+      throw new ValidationError(`draftMetrics[${index}] debe ser un objeto`);
+    }
+    const normalized = {};
+    for (const [field, value] of Object.entries(metric)) {
+      if (DRAFT_TEXT_FIELDS.has(field)) {
+        if (value !== null && typeof value !== 'string') {
+          throw new ValidationError(`draftMetrics[${index}].${field} debe ser texto o null`);
+        }
+        normalized[field] = value;
+      } else if (DRAFT_NUMBER_FIELDS.has(field)) {
+        if (value !== null && value !== '' && (typeof value !== 'number' || !Number.isFinite(value))) {
+          throw new ValidationError(`draftMetrics[${index}].${field} debe ser numérico, vacío o null`);
+        }
+        normalized[field] = value;
+      } else {
+        throw new ValidationError(`draftMetrics[${index}].${field} no está permitido`);
+      }
+    }
+    return normalized;
+  });
+};
+
+const rejectDraftFieldsOnActive = (payload) => {
+  if (payload.draftMetrics !== undefined && payload.draftMetrics !== null) {
+    throw new ValidationError('draftMetrics solo puede guardarse en una meta BORRADOR');
+  }
+};
+
+const rejectCompleteMetricsOnDraft = (payload) => {
+  if (payload.indicatorKey != null || payload.valorMeta != null) {
+    throw new ValidationError('Use draftMetrics para guardar objetivos parciales de un BORRADOR');
+  }
+  if (payload.metrics !== undefined && payload.metrics !== null
+    && (!Array.isArray(payload.metrics) || payload.metrics.length > 0)) {
+    throw new ValidationError('Use draftMetrics para guardar métricas de un BORRADOR');
+  }
 };
 
 const normalizeMetrics = (metrics) => {
@@ -173,6 +236,22 @@ const getById = async (id, options = {}) => {
 
 const create = async (payload, creatorId) => {
   const result = await sequelize.transaction(async (transaction) => {
+    const lifecycleStatus = resolveLifecycleStatus('BORRADOR',
+      payload.lifecycleStatus === undefined ? 'ACTIVA' : payload.lifecycleStatus);
+    if (lifecycleStatus === 'BORRADOR') {
+      rejectCompleteMetricsOnDraft(payload);
+      const metaFields = await normalizeMetaFields(payload, transaction);
+      const meta = await Meta.create({
+        ...metaFields,
+        creatorId,
+        lifecycleStatus,
+        indicatorKey: null,
+        valorMeta: null,
+        draftMetrics: normalizeDraftMetrics(payload.draftMetrics)
+      }, { transaction });
+      return getById(meta.id, { transaction });
+    }
+    rejectDraftFieldsOnActive(payload);
     const metrics = normalizeMetrics(payload.metrics);
     await validateIndicators(metrics, transaction);
     const metaFields = await normalizeMetaFields(payload, transaction);
@@ -180,8 +259,10 @@ const create = async (payload, creatorId) => {
     const meta = await Meta.create({
       ...metaFields,
       creatorId,
+      lifecycleStatus,
       indicatorKey: firstMetric.indicatorKey,
-      valorMeta: firstMetric.targetValue
+      valorMeta: firstMetric.targetValue,
+      draftMetrics: null
     }, { transaction });
     await MetaMetric.bulkCreate(metrics.map((metric) => ({ ...metric, metaId: meta.id })), { transaction, validate: true });
     return getById(meta.id, { transaction });
@@ -196,17 +277,38 @@ const update = async (id, payload) => {
     if (!meta) {
       throw new NotFoundError('La meta solicitada no existe');
     }
+    const lifecycleStatus = resolveLifecycleStatus(meta.lifecycleStatus, payload.lifecycleStatus);
+    const metaFields = await normalizeMetaFields(payload, transaction, { partial: true });
+    if (lifecycleStatus === 'BORRADOR') {
+      rejectCompleteMetricsOnDraft(payload);
+      await meta.update({
+        ...metaFields,
+        lifecycleStatus,
+        indicatorKey: null,
+        valorMeta: null,
+        ...(payload.draftMetrics === undefined ? {} : { draftMetrics: normalizeDraftMetrics(payload.draftMetrics) })
+      }, { transaction });
+      return getById(meta.id, { transaction });
+    }
+    rejectDraftFieldsOnActive(payload);
     const metrics = normalizeMetrics(payload.metrics);
     await validateIndicators(metrics, transaction);
-    const metaFields = await normalizeMetaFields(payload, transaction, { partial: true });
+    if (meta.lifecycleStatus === 'BORRADOR') {
+      const finalFields = Object.fromEntries(META_FIELDS.map((field) => [
+        field, metaFields[field] !== undefined ? metaFields[field] : meta[field]
+      ]));
+      await normalizeMetaFields(finalFields, transaction);
+    }
     const firstMetric = metrics[0];
     await meta.update({
       ...META_FIELDS.reduce((result, field) => {
         if (metaFields[field] !== undefined) result[field] = metaFields[field];
         return result;
       }, {}),
+      lifecycleStatus,
       indicatorKey: firstMetric.indicatorKey,
-      valorMeta: firstMetric.targetValue
+      valorMeta: firstMetric.targetValue,
+      draftMetrics: null
     }, { transaction });
     await MetaMetric.destroy({ where: { metaId: meta.id }, transaction });
     await MetaMetric.bulkCreate(metrics.map((metric) => ({ ...metric, metaId: meta.id })), { transaction, validate: true });

@@ -1,11 +1,12 @@
 const metaService = require('../services/metaService');
 const metaProgressService = require('../services/metaProgressService');
-const { canManageMeta } = require('../middleware/rectoriaAuthorization');
+const { canManageMeta, canReadMeta } = require('../middleware/rectoriaAuthorization');
+const { NotFoundError } = require('../utils/errors');
 
 const META_PUBLIC_FIELDS = [
   'id', 'indicatorKey', 'departmentId', 'anio', 'valorMeta', 'periodo', 'nombre',
   'fechaInicio', 'fechaLimite', 'prioridad', 'comportamiento', 'inicio', 'limite',
-  'totalProgress', 'elapsedProgress', 'status'
+  'totalProgress', 'elapsedProgress', 'status', 'lifecycleStatus', 'draftMetrics'
 ];
 const METRIC_PUBLIC_FIELDS = [
   'id', 'metricId', 'indicatorKey', 'weight', 'behavior', 'targetValue', 'valueType',
@@ -54,6 +55,7 @@ const create = async (req, res, next) => {
 const getById = async (req, res, next) => {
   try {
     const meta = await metaService.getById(req.params.id);
+    if (!canReadMeta(req.user, toPlain(meta))) throw new NotFoundError('La meta solicitada no existe');
     res.status(200).json({ success: true, data: serializeMeta(meta, req.user) });
   } catch (error) {
     next(error);
@@ -83,7 +85,7 @@ const remove = async (req, res, next) => {
 
 const getProgress = async (req, res, next) => {
   try {
-    const meta = await metaProgressService.getMetaProgress(req.params.id);
+    const meta = await metaProgressService.getMetaProgress(req.params.id, { user: req.user });
     res.status(200).json({ success: true, data: serializeMeta(meta, req.user) });
   } catch (error) {
     next(error);
@@ -92,7 +94,7 @@ const getProgress = async (req, res, next) => {
 
 const listWithProgress = async (req, res, next) => {
   try {
-    const metas = await metaProgressService.listMetasWithProgress(req.query);
+    const metas = await metaProgressService.listMetasWithProgress(req.query, { user: req.user });
     res.status(200).json({ success: true, data: metas.map((meta) => serializeMeta(meta, req.user)) });
   } catch (error) {
     next(error);

@@ -63,6 +63,9 @@ async function initDb(retries = 5, delay = 2000) {
       await sequelize.sync();
       console.log('Database synced successfully. Models mapped to tables.');
 
+      const { migrateMetaLifecycle } = require('./migrations/20261024-meta-lifecycle');
+      await migrateMetaLifecycle();
+
       const {
         preparePlantillaDepartmentMigration,
         migratePlantillaDepartments

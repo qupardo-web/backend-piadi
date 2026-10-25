@@ -31,6 +31,10 @@ const canManageMeta = (user, meta) => {
     && Number(user.id) === Number(meta.creatorId);
 };
 
+const canReadMeta = (user, meta) => Boolean(meta) && (meta.lifecycleStatus !== 'BORRADOR'
+  || Boolean(user && (isRectoria(user) || (user.id != null && meta.creatorId != null
+    && Number(user.id) === Number(meta.creatorId)))));
+
 const requireRectoria = (req, res, next) => {
   if (!req.user) {
     return next(new UnauthorizedError('Usuario no autenticado'));
@@ -78,6 +82,7 @@ module.exports = {
   isRectoria,
   isMetaReadOnlyUser,
   canManageMeta,
+  canReadMeta,
   requireRectoria,
   requireRectoriaForInstitutionalCreation,
   requireMetaDepartmentAccess
