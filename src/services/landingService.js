@@ -19,7 +19,7 @@ const getLandingMetas = async () => {
   // En testing, usar la lógica mockeable para pasar los tests unitarios
   if (process.env.NODE_ENV === 'test') {
     const metas = (await metaProgressService.listMetasWithProgress())
-      .filter((meta) => meta.lifecycleStatus !== 'BORRADOR');
+      .filter((meta) => meta.lifecycleStatus === 'ACTIVA');
     const departmentKeys = [...new Set(metas.map((meta) => meta.departmentId).filter(Boolean))];
     const departments = departmentKeys.length
       ? await Department.findAll({

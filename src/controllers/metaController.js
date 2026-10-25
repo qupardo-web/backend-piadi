@@ -1,12 +1,14 @@
 const metaService = require('../services/metaService');
 const metaProgressService = require('../services/metaProgressService');
 const { canManageMeta, canReadMeta } = require('../middleware/rectoriaAuthorization');
-const { NotFoundError } = require('../utils/errors');
+const { NotFoundError, ValidationError } = require('../utils/errors');
+const metaClosureService = require('../services/metaClosureService');
 
 const META_PUBLIC_FIELDS = [
   'id', 'indicatorKey', 'departmentId', 'anio', 'valorMeta', 'periodo', 'nombre',
   'fechaInicio', 'fechaLimite', 'prioridad', 'comportamiento', 'inicio', 'limite',
-  'totalProgress', 'elapsedProgress', 'status', 'lifecycleStatus', 'draftMetrics'
+  'totalProgress', 'elapsedProgress', 'status', 'lifecycleStatus', 'draftMetrics',
+  'closedAt', 'finalSnapshot'
 ];
 const METRIC_PUBLIC_FIELDS = [
   'id', 'metricId', 'indicatorKey', 'weight', 'behavior', 'targetValue', 'valueType',
@@ -29,7 +31,7 @@ const pickPublicFields = (source, fields) => fields.reduce((result, field) => {
 const serializeMeta = (value, user) => {
   const meta = toPlain(value);
   const result = pickPublicFields(meta, META_PUBLIC_FIELDS);
-  const canManage = canManageMeta(user, meta);
+  const canManage = meta.lifecycleStatus !== 'CERRADA' && canManageMeta(user, meta);
   result.permissions = { canEdit: canManage, canDelete: canManage };
   result.metrics = Array.isArray(meta.metrics)
     ? meta.metrics.map((metric) => pickPublicFields(toPlain(metric), METRIC_PUBLIC_FIELDS))
@@ -56,7 +58,11 @@ const getById = async (req, res, next) => {
   try {
     const meta = await metaService.getById(req.params.id);
     if (!canReadMeta(req.user, toPlain(meta))) throw new NotFoundError('La meta solicitada no existe');
-    res.status(200).json({ success: true, data: serializeMeta(meta, req.user) });
+    const plainMeta = toPlain(meta);
+    const result = plainMeta.lifecycleStatus === 'CERRADA'
+      ? { ...plainMeta, ...(await metaProgressService.calculateProgress(plainMeta)) }
+      : meta;
+    res.status(200).json({ success: true, data: serializeMeta(result, req.user) });
   } catch (error) {
     next(error);
   }
@@ -87,6 +93,19 @@ const getProgress = async (req, res, next) => {
   try {
     const meta = await metaProgressService.getMetaProgress(req.params.id, { user: req.user });
     res.status(200).json({ success: true, data: serializeMeta(meta, req.user) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const close = async (req, res, next) => {
+  try {
+    if (req.body && Object.keys(req.body).length > 0) {
+      throw new ValidationError('El cierre no admite un resultado enviado por el cliente');
+    }
+    const outcome = await metaClosureService.closeMeta(req.params.id, { actor: req.user, source: 'manual' });
+    const result = { ...outcome.meta, ...(await metaProgressService.calculateProgress(outcome.meta)) };
+    res.status(200).json({ success: true, data: serializeMeta(result, req.user) });
   } catch (error) {
     next(error);
   }
@@ -125,6 +144,7 @@ module.exports = {
   update,
   remove,
   getProgress,
+  close,
   listWithProgress,
   listInstitutional,
   getInstitutionalProgress

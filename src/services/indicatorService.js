@@ -526,39 +526,40 @@ const resolveConfig = async (departmentKey, indicatorKey) => {
   return { definition, config };
 };
 
-const getIndicatorValue = async (indicatorKey, query = {}) => {
+const getIndicatorValue = async (indicatorKey, query = {}, options = {}) => {
   const key = ensureIndicatorKey(indicatorKey);
   const filters = parseIndicatorFilters(query);
   const departmentId = ensureDepartment(filters.department);
   await requireDepartment(departmentId);
 
   const cacheKey = `kpi:${departmentId}:val:${key}:${JSON.stringify(query)}`;
-    return cacheService.wrap(cacheKey, async () => {
-      const { definition, config } = await resolveConfig(departmentId, key);
-      
-      const fetchFilters = admissionFetchFilters(config, definition, filters, null);
-      let rows = await getRows(config, fetchFilters);
-      if (fetchFilters.primeraMatricula) {
-        rows = applyAdmissionFirstPeriod(rows, filters);
-      }
-      const { value, hasData } = computeFromRows(config, definition, rows);
+  const calculateValue = async () => {
+    const { definition, config } = await resolveConfig(departmentId, key);
 
-      const data = {
-        indicatorKey: key,
-        department: departmentId,
-        value,
-        formattedValue: hasData ? formatValue(value, definition.format) : null,
-        unit: definition.unit,
-        format: definition.format,
-        hasData,
-        filters: buildFilterMeta(filters),
-        meta: { source: 'postgresql', formulaKey: definition.formulaKey }
-      };
-      if (!hasData) {
-        data.message = 'No existen datos suficientes para calcular este indicador.';
-      }
-      return { data };
-    });
+    const fetchFilters = admissionFetchFilters(config, definition, filters, null);
+    let rows = await getRows(config, fetchFilters);
+    if (fetchFilters.primeraMatricula) {
+      rows = applyAdmissionFirstPeriod(rows, filters);
+    }
+    const { value, hasData } = computeFromRows(config, definition, rows);
+
+    const data = {
+      indicatorKey: key,
+      department: departmentId,
+      value,
+      formattedValue: hasData ? formatValue(value, definition.format) : null,
+      unit: definition.unit,
+      format: definition.format,
+      hasData,
+      filters: buildFilterMeta(filters),
+      meta: { source: 'postgresql', formulaKey: definition.formulaKey }
+    };
+    if (!hasData) {
+      data.message = 'No existen datos suficientes para calcular este indicador.';
+    }
+    return { data };
+  };
+  return options.bypassCache ? calculateValue() : cacheService.wrap(cacheKey, calculateValue);
 };
 
 const getIndicatorSeries = async (indicatorKey, query = {}) => {

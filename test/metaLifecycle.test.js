@@ -237,7 +237,7 @@ test('ACTIVA no vuelve a BORRADOR y conserva reemplazo completo de métricas', a
     lifecycleStatus: 'ACTIVA', indicatorKey: 'kpi-a', valorMeta: 80, draftMetrics: null
   });
   await assert.rejects(metaService.update(5, { lifecycleStatus: 'BORRADOR' }), validation400);
-  await assert.rejects(metaService.update(5, { lifecycleStatus: 'CERRADA' }), validation400);
+  await assert.rejects(metaService.update(5, { lifecycleStatus: 'CERRADA' }), (error) => error.statusCode === 409);
   await assert.rejects(metaService.update(5, { draftMetrics: [{ weight: 10 }], metrics: [metric()] }), validation400);
   await metaService.update(5, { metrics: [metric({ targetValue: 90 })] });
   assert.equal(row.lifecycleStatus, 'ACTIVA');
@@ -247,7 +247,7 @@ test('ACTIVA no vuelve a BORRADOR y conserva reemplazo completo de métricas', a
 });
 
 test('un estado actual desconocido no permite transiciones arbitrarias', async () => {
-  const { calls } = setupWrites({ lifecycleStatus: 'CERRADA' });
+  const { calls } = setupWrites({ lifecycleStatus: 'ARCHIVADA' });
   await assert.rejects(metaService.update(5, { lifecycleStatus: 'ACTIVA', metrics: [metric()] }), validation400);
   assert.equal(calls.update.length, 0);
 });

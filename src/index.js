@@ -14,6 +14,7 @@ const metaRoutes = require('./routes/metaRoutes');
 const landingRoutes = require('./routes/landingRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
 const errorHandler = require('./middleware/errorHandler');
+const { startMetaClosureScheduler } = require('./services/metaClosureScheduler');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -65,6 +66,8 @@ async function initDb(retries = 5, delay = 2000) {
 
       const { migrateMetaLifecycle } = require('./migrations/20261024-meta-lifecycle');
       await migrateMetaLifecycle();
+      const { migrateMetaClosure } = require('./migrations/20261025-meta-closure');
+      await migrateMetaClosure();
 
       const {
         preparePlantillaDepartmentMigration,
@@ -96,10 +99,16 @@ async function initDb(retries = 5, delay = 2000) {
 }
 
 const startServer = async () => {
-  await initDb();
+  let databaseReady = await initDb();
   app.listen(port, () => {
     console.log(`Backend server running on port ${port}`);
     console.log(`Swagger docs available at http://localhost:${port}/api-docs`);
+  });
+  startMetaClosureScheduler({
+    ensureReady: async () => {
+      if (!databaseReady) databaseReady = await initDb(1);
+      return databaseReady;
+    }
   });
 };
 
