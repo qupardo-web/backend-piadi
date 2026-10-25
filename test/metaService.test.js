@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const models = require('../src/models');
 const metaService = require('../src/services/metaService');
+const { ValidationError } = require('../src/utils/errors');
 const { requireMetaOwnership } = require('../src/middleware/metaOwnership');
 const metaController = require('../src/controllers/metaController');
 
@@ -42,6 +43,27 @@ const setupPersistence = (keys = ['kpi-a']) => {
   stub(models.Department, 'findOne', async () => ({ key: 'calidad' }));
   return tx;
 };
+
+const setupMetaWrites = ({ anio = 2026, fechaInicio = '2026-03-10T00:00:00Z' } = {}) => {
+  const writes = { create: 0, update: 0, destroyMetrics: 0, createMetrics: 0 };
+  const instance = {
+    id: 3,
+    anio,
+    fechaInicio,
+    async update(fields) {
+      writes.update++;
+      Object.assign(this, fields);
+    }
+  };
+  stub(models.Meta, 'create', async () => { writes.create++; return { id: 3 }; });
+  stub(models.Meta, 'findByPk', async () => instance);
+  stub(models.MetaMetric, 'destroy', async () => { writes.destroyMetrics++; });
+  stub(models.MetaMetric, 'bulkCreate', async () => { writes.createMetrics++; });
+  return { writes, instance };
+};
+
+const isValidationError = (error) =>
+  error instanceof ValidationError && error.statusCode === 400;
 
 test.afterEach(restore);
 
@@ -147,9 +169,146 @@ test('CREATE exige nombre, fechaInicio y fechaLimite no vacíos', async () => {
   await assert.rejects(metaService.create(missingAll, 9), (error) => error.statusCode === 400);
 });
 
+test('CREATE acepta anio y fechaInicio consistentes y rechaza años distintos antes de escribir', async () => {
+  setupPersistence();
+  const { writes } = setupMetaWrites();
+  await metaService.create({ ...metaPayload(), fechaInicio: '2026-03-10' }, 9);
+  assert.equal(writes.create, 1);
+  assert.equal(writes.createMetrics, 1);
+
+  await assert.rejects(
+    metaService.create({ ...metaPayload(), fechaInicio: '2025-12-15' }, 9),
+    (error) => isValidationError(error) && /anio.*fechaInicio/.test(error.message)
+  );
+  assert.equal(writes.create, 1);
+  assert.equal(writes.createMetrics, 1);
+});
+
+test('CREATE interpreta el instante en UTC, incluso con desplazamientos cerca de Año Nuevo', async () => {
+  setupPersistence();
+  const { writes } = setupMetaWrites();
+  const accepted = [
+    ['2026-01-01T00:00:00Z', 2026],
+    ['2026-01-01T00:30:00+02:00', 2025],
+    ['2025-12-31T23:30:00-02:00', 2026],
+    [new Date('2026-03-10T00:00:00Z'), 2026]
+  ];
+  for (const [fechaInicio, anio] of accepted) {
+    await metaService.create({ ...metaPayload(), anio, fechaInicio }, 9);
+  }
+  assert.equal(writes.create, accepted.length);
+
+  for (const [fechaInicio, anio] of [
+    ['2026-01-01T00:30:00+02:00', 2026],
+    ['2025-12-31T23:30:00-02:00', 2025]
+  ]) {
+    await assert.rejects(
+      metaService.create({ ...metaPayload(), anio, fechaInicio }, 9),
+      isValidationError
+    );
+  }
+  assert.equal(writes.create, accepted.length);
+  assert.equal(writes.createMetrics, accepted.length);
+});
+
+test('CREATE y UPDATE rechazan fechaInicio inválida antes de cualquier escritura', async () => {
+  setupPersistence();
+  const { writes } = setupMetaWrites();
+  for (const fechaInicio of ['fecha-inválida', '2026-02-30', '2026-13-01']) {
+    await assert.rejects(
+      metaService.create({ ...metaPayload(), fechaInicio }, 9),
+      (error) => isValidationError(error) && /fechaInicio/.test(error.message)
+    );
+    await assert.rejects(
+      metaService.update(3, { metrics: [metric()], fechaInicio }),
+      (error) => isValidationError(error) && /fechaInicio/.test(error.message)
+    );
+  }
+  assert.deepEqual(writes, { create: 0, update: 0, destroyMetrics: 0, createMetrics: 0 });
+});
+
+test('inicio conserva prioridad sobre fechaInicio en CREATE y UPDATE', async () => {
+  setupPersistence();
+  const { writes, instance } = setupMetaWrites();
+  await metaService.create({
+    ...metaPayload(),
+    inicio: '2026-04-01T00:00:00Z',
+    fechaInicio: '2025-12-15T00:00:00Z'
+  }, 9);
+  assert.equal(writes.create, 1);
+  await assert.rejects(
+    metaService.create({
+      ...metaPayload(),
+      inicio: '2025-12-15T00:00:00Z',
+      fechaInicio: '2026-04-01T00:00:00Z'
+    }, 9),
+    isValidationError
+  );
+
+  await metaService.update(3, {
+    metrics: [metric()],
+    inicio: '2026-05-01T00:00:00Z',
+    fechaInicio: '2025-12-15T00:00:00Z'
+  });
+  assert.equal(instance.fechaInicio, '2026-05-01T00:00:00Z');
+  assert.equal(writes.update, 1);
+  await assert.rejects(
+    metaService.update(3, {
+      metrics: [metric()],
+      inicio: '2025-12-15T00:00:00Z',
+      fechaInicio: '2026-06-01T00:00:00Z'
+    }),
+    isValidationError
+  );
+  assert.equal(writes.update, 1);
+  assert.equal(writes.destroyMetrics, 1);
+  assert.equal(writes.createMetrics, 2);
+});
+
+test('UPDATE compara valores finales al cambiar sólo anio o sólo fechaInicio', async () => {
+  setupPersistence();
+  const { writes, instance } = setupMetaWrites();
+  await assert.rejects(
+    metaService.update(3, { metrics: [metric()], anio: 2027 }),
+    isValidationError
+  );
+  await assert.rejects(
+    metaService.update(3, { metrics: [metric()], fechaInicio: '2025-12-10' }),
+    isValidationError
+  );
+  assert.deepEqual(writes, { create: 0, update: 0, destroyMetrics: 0, createMetrics: 0 });
+
+  await metaService.update(3, { metrics: [metric()], fechaInicio: '2026-08-12' });
+  assert.equal(instance.fechaInicio, '2026-08-12');
+  assert.equal(writes.update, 1);
+
+  instance.anio = 2025;
+  await metaService.update(3, { metrics: [metric()], anio: 2026 });
+  assert.equal(instance.anio, 2026);
+  assert.equal(writes.update, 2);
+});
+
+test('UPDATE acepta ambos campos consistentes y no invalida retrospectivamente otros cambios', async () => {
+  setupPersistence();
+  const { writes, instance } = setupMetaWrites();
+  await metaService.update(3, {
+    metrics: [metric()], anio: 2027, fechaInicio: '2027-01-15T00:00:00Z'
+  });
+  assert.equal(instance.anio, 2027);
+  assert.equal(instance.fechaInicio, '2027-01-15T00:00:00Z');
+
+  instance.anio = 2026;
+  instance.fechaInicio = '2025-12-15T00:00:00Z';
+  await metaService.update(3, { metrics: [metric()], prioridad: 'Alta' });
+  assert.equal(instance.prioridad, 'Alta');
+  assert.equal(writes.update, 2);
+  assert.equal(writes.destroyMetrics, 2);
+  assert.equal(writes.createMetrics, 2);
+});
+
 test('UPDATE parcial conserva campos omitidos pero rechaza campos obligatorios nulos', async () => {
   setupPersistence();
-  const instance = { id: 3, update: async () => {} };
+  const instance = { id: 3, anio: 2026, fechaInicio: '2026-03-10T00:00:00Z', update: async () => {} };
   stub(models.Meta, 'findByPk', async () => instance);
   stub(models.MetaMetric, 'destroy', async () => {});
   stub(models.MetaMetric, 'bulkCreate', async () => {});
@@ -176,7 +335,7 @@ test('GET devuelve 404 lógico para una meta inexistente', async () => {
 
 test('PUT reemplaza completamente las métricas y sincroniza campos heredados', async () => {
   setupPersistence(['kpi-c', 'kpi-d', 'kpi-e']);
-  const instance = { id: 3, update: async (payload) => { instance.updated = payload; } };
+  const instance = { id: 3, anio: 2026, fechaInicio: '2026-03-10T00:00:00Z', update: async (payload) => { instance.updated = payload; } };
   let destroyed = false;
   let inserted;
   let findCount = 0;
@@ -199,7 +358,7 @@ test('PUT reemplaza completamente las métricas y sincroniza campos heredados', 
 
 test('PUT propaga fallos dentro de la transacción administrada', async () => {
   setupPersistence(['kpi-a']);
-  const instance = { id: 3, update: async () => {} };
+  const instance = { id: 3, anio: 2026, fechaInicio: '2026-03-10T00:00:00Z', update: async () => {} };
   stub(models.Meta, 'findByPk', async () => instance);
   stub(models.MetaMetric, 'destroy', async () => {});
   stub(models.MetaMetric, 'bulkCreate', async () => { throw new Error('fallo de métrica'); });
@@ -253,6 +412,8 @@ test('crea y actualiza la meta con los nuevos campos (nombre, inicio, limite, pr
   stub(models.MetaMetric, 'destroy', async () => {});
   stub(models.Meta, 'findByPk', async () => ({
     id: 88,
+    anio: 2026,
+    fechaInicio: '2026-01-15T00:00:00Z',
     update: async (payload) => { updatedPayload = payload; }
   }));
 
