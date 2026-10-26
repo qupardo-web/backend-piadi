@@ -196,6 +196,46 @@ test('activación valida los campos generales finales de un BORRADOR', async () 
   assert.equal(row.nombre, 'Meta completa');
 });
 
+test('BORRADOR valida año y fecha de inicio en creación y cambios parciales', async () => {
+  const { calls, row } = setupWrites({ draftMetrics: [{ weight: 40 }] });
+  await assert.rejects(
+    metaService.create({ ...fields(), lifecycleStatus: 'BORRADOR', fechaInicio: '2025-12-15' }, 7),
+    validation400
+  );
+  await assert.rejects(metaService.update(5, { anio: 2027 }), validation400);
+  await assert.rejects(metaService.update(5, { inicio: '2025-12-15' }), validation400);
+  assert.equal(calls.create.length, 0);
+  assert.equal(calls.update.length, 0);
+  assert.equal(calls.bulkCreate.length, 0);
+
+  await metaService.update(5, { anio: 2027, fechaInicio: '2027-01-15T00:00:00Z' });
+  assert.equal(row.anio, 2027);
+  assert.equal(row.fechaInicio, '2027-01-15T00:00:00Z');
+  assert.deepEqual(row.draftMetrics, [{ weight: 40 }]);
+});
+
+test('activación rechaza un BORRADOR con años incompatibles y acepta su corrección', async () => {
+  const { calls, row } = setupWrites({ fechaInicio: '2025-12-15T00:00:00Z' });
+  await assert.rejects(
+    metaService.update(5, { lifecycleStatus: 'ACTIVA', metrics: [metric()] }),
+    validation400
+  );
+  await assert.rejects(
+    metaService.update(5, { lifecycleStatus: 'ACTIVA', metrics: [metric()],
+      fechaInicio: '2026-01-01T00:30:00+02:00' }),
+    validation400
+  );
+  assert.equal(row.lifecycleStatus, 'BORRADOR');
+  assert.equal(calls.update.length, 0);
+  assert.equal(calls.bulkCreate.length, 0);
+
+  await metaService.update(5, { lifecycleStatus: 'ACTIVA', metrics: [metric()],
+    fechaInicio: '2026-01-01T00:00:00Z' });
+  assert.equal(row.lifecycleStatus, 'ACTIVA');
+  assert.equal(row.fechaInicio, '2026-01-01T00:00:00Z');
+  assert.equal(calls.bulkCreate.length, 1);
+});
+
 test('un fallo de persistencia en la activación revierte la transacción simulada', async () => {
   const { row } = setupWrites({ draftMetrics: [{ weight: 40 }] });
   const transaction = { LOCK: { UPDATE: 'UPDATE' } };
@@ -420,4 +460,26 @@ test('migración declara backfill, restricciones condicionales y vista pública 
   const views = fs.readFileSync(path.join(__dirname, '../src/services/dbConstraints.js'), 'utf8');
   assert.match(views, /FROM metas m\s+LEFT JOIN indicator_definitions i ON m\."indicatorKey" = i\.key\s+WHERE m\."lifecycleStatus" = 'ACTIVA'/);
   assert.equal((views.match(/SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL AND "lifecycleStatus" = 'ACTIVA'/g) || []).length, 2);
+});
+
+test('inicio de servidor conserva ambas migraciones antes de semillas y restricciones', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  const steps = [
+    'await sequelize.sync()',
+    'await migrateMetaLifecycle()',
+    'await migrateHelpAdmin()',
+    'await preparePlantillaDepartmentMigration()',
+    'await seedDatabase()',
+    'await migratePlantillaDepartments()',
+    'await seedIndicators()',
+    'await initDbConstraints()'
+  ];
+  let previous = -1;
+  for (const step of steps) {
+    assert.equal(source.split(step).length - 1, 1, `${step} debe ejecutarse una sola vez`);
+    const position = source.indexOf(step);
+    assert.ok(position > previous, `${step} debe conservar el orden de inicialización`);
+    previous = position;
+  }
+  assert.match(source, /app\.use\('\/api\/help', helpRoutes\)/);
 });

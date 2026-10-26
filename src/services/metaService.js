@@ -171,7 +171,32 @@ const validateIndicators = async (metrics, transaction) => {
   }
 };
 
-const normalizeMetaFields = async (payload, transaction, { partial = false } = {}) => {
+const validateStartYear = (anio, fechaInicio) => {
+  if (fechaInicio === null || fechaInicio === undefined) {
+    throw new ValidationError('fechaInicio debe ser una fecha válida');
+  }
+  const date = new Date(fechaInicio);
+  if (Number.isNaN(date.getTime())) {
+    throw new ValidationError('fechaInicio debe ser una fecha válida');
+  }
+  if (typeof fechaInicio === 'string') {
+    const isoDate = /^(\d{4})-(\d{2})-(\d{2})(?:T|$)/.exec(fechaInicio);
+    if (isoDate) {
+      const year = Number(isoDate[1]);
+      const month = Number(isoDate[2]);
+      const day = Number(isoDate[3]);
+      const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      if (month < 1 || month > 12 || day < 1 || day > lastDay) {
+        throw new ValidationError('fechaInicio debe ser una fecha válida');
+      }
+    }
+  }
+  if (anio !== date.getUTCFullYear()) {
+    throw new ValidationError('anio debe coincidir con el año UTC de fechaInicio');
+  }
+};
+
+const normalizeMetaFields = async (payload, transaction, { partial = false, currentMeta = null } = {}) => {
   const data = {};
   if (!partial || payload.anio !== undefined) {
     const anio = requireFiniteNumber(payload.anio, 'anio');
@@ -211,6 +236,10 @@ const normalizeMetaFields = async (payload, transaction, { partial = false } = {
   }
   if (!partial || payload.comportamiento !== undefined) {
     data.comportamiento = payload.comportamiento === null || payload.comportamiento === undefined ? null : String(payload.comportamiento).trim();
+  }
+
+  if (!partial || data.anio !== undefined || data.fechaInicio !== undefined) {
+    validateStartYear(data.anio ?? currentMeta?.anio, data.fechaInicio ?? currentMeta?.fechaInicio);
   }
   
   return data;
@@ -278,7 +307,7 @@ const update = async (id, payload) => {
       throw new NotFoundError('La meta solicitada no existe');
     }
     const lifecycleStatus = resolveLifecycleStatus(meta.lifecycleStatus, payload.lifecycleStatus);
-    const metaFields = await normalizeMetaFields(payload, transaction, { partial: true });
+    const metaFields = await normalizeMetaFields(payload, transaction, { partial: true, currentMeta: meta });
     if (lifecycleStatus === 'BORRADOR') {
       rejectCompleteMetricsOnDraft(payload);
       await meta.update({
