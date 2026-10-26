@@ -12,6 +12,7 @@ const AuditSesion = require('./EntidadesAudit/AuditSesion');
 // --- Reportes (PIADI-418) ---
 const Reporte = require('./Reporte');
 const ReporteEjecucion = require('./ReporteEjecucion');
+const EntradaAyuda = require('./EntradaAyuda');
 
 // --- Entidades de Indicadores (PIADI-150 / PIADI-153) ---
 const Department = require('./Department');
@@ -205,5 +206,6 @@ module.exports = {
   Meta,
   MetaMetric,
   Reporte,
-  ReporteEjecucion
+  ReporteEjecucion,
+  EntradaAyuda
 };
