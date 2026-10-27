@@ -13,6 +13,7 @@ const auditRoutes = require('./routes/auditRoutes');
 const metaRoutes = require('./routes/metaRoutes');
 const landingRoutes = require('./routes/landingRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
+const helpRoutes = require('./routes/helpRoutes');
 const errorHandler = require('./middleware/errorHandler');
 const { startMetaClosureScheduler } = require('./services/metaClosureScheduler');
 
@@ -44,6 +45,7 @@ app.use('/api', dashboardRoutes);
 app.use('/api', auditRoutes);
 app.use('/api/metas', metaRoutes);
 app.use('/api/landing', landingRoutes);
+app.use('/api/help', helpRoutes);
 
 // Reportes (PIADI-418). Activo por defecto; desactivar con REPORTES_ENABLED=false.
 if (process.env.REPORTES_ENABLED !== 'false') {
@@ -68,6 +70,9 @@ async function initDb(retries = 5, delay = 2000) {
       await migrateMetaLifecycle();
       const { migrateMetaClosure } = require('./migrations/20261025-meta-closure');
       await migrateMetaClosure();
+
+      const { migrateHelpAdmin } = require('./migrations/20261025-help-admin');
+      await migrateHelpAdmin();
 
       const {
         preparePlantillaDepartmentMigration,
