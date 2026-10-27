@@ -3,7 +3,7 @@ const { isRectoria } = require('./rectoriaAuthorization');
 
 const META_FIELDS = [
   'departmentId', 'anio', 'periodo', 'nombre', 'fechaInicio', 'fechaLimite',
-  'prioridad', 'comportamiento', 'indicatorKey', 'valorMeta'
+  'prioridad', 'comportamiento', 'indicatorKey', 'valorMeta', 'lifecycleStatus'
 ];
 const METRIC_FIELDS = [
   'indicatorKey', 'weight', 'behavior', 'targetValue', 'valueType', 'lowerLimit', 'upperLimit'

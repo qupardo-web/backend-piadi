@@ -1,6 +1,7 @@
 const { Meta, MetaMetric, IndicatorDefinition, sequelize } = require('../models');
 const indicatorService = require('./indicatorService');
 const { ValidationError, NotFoundError } = require('../utils/errors');
+const { canReadMeta } = require('../middleware/rectoriaAuthorization');
 
 const STATUSES = ['cumplida', 'en_progreso', 'en_riesgo', 'no_cumplida'];
 const TARGET_LIMIT_BEHAVIOR = 'no-debe-superar';
@@ -208,6 +209,9 @@ const calculateMetric = async (meta, rawMetric, resolveIndicator) => {
 
 const calculateProgress = async (rawMeta, options = {}) => {
   const meta = asPlain(rawMeta);
+  if (meta.lifecycleStatus === 'BORRADOR') {
+    return { totalProgress: null, elapsedProgress: null, status: null, metrics: [] };
+  }
   const metrics = Array.isArray(meta.metrics) ? meta.metrics : [];
   const resolveIndicator = options.resolveIndicator || createIndicatorResolver();
   const metricProgress = await Promise.all(metrics.map((metric) => calculateMetric(meta, metric, resolveIndicator)));
@@ -235,6 +239,9 @@ const getMetaProgress = async (id, options = {}) => {
   const meta = await Meta.findByPk(parsedId, { include: progressInclude });
   if (!meta) throw new NotFoundError('La meta solicitada no existe');
   const plainMeta = asPlain(meta);
+  if (options.user && !canReadMeta(options.user, plainMeta)) {
+    throw new NotFoundError('La meta solicitada no existe');
+  }
   return { ...plainMeta, ...(await calculateProgress(plainMeta, options)) };
 };
 
@@ -248,7 +255,8 @@ const listMetasWithProgress = async (filters = {}, options = {}) => {
   }
   const metas = await Meta.findAll({ where, include: progressInclude });
   const resolveIndicator = createIndicatorResolver();
-  const enriched = await Promise.all(metas.map(async (meta) => {
+  const visible = options.user ? metas.filter((meta) => canReadMeta(options.user, asPlain(meta))) : metas;
+  const enriched = await Promise.all(visible.map(async (meta) => {
     const plainMeta = asPlain(meta);
     return { ...plainMeta, ...(await calculateProgress(plainMeta, { ...options, resolveIndicator })) };
   }));
@@ -261,9 +269,10 @@ const listInstitutionalMetasWithProgress = (options = {}) => (
 
 const getInstitutionalProgress = async (options = {}) => {
   const metas = await listInstitutionalMetasWithProgress(options);
-  const totalProgress = metas.length === 0
+  const activeMetas = metas.filter((meta) => meta.lifecycleStatus !== 'BORRADOR');
+  const totalProgress = activeMetas.length === 0
     ? 0
-    : metas.reduce((sum, meta) => sum + meta.totalProgress, 0) / metas.length;
+    : activeMetas.reduce((sum, meta) => sum + meta.totalProgress, 0) / activeMetas.length;
   return { totalProgress };
 };
 

@@ -537,7 +537,7 @@ async function initDbConstraints() {
         UNION
         SELECT DISTINCT "anioTermino" AS anio FROM proyectos WHERE "anioTermino" IS NOT NULL
         UNION
-        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL
+        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL AND "lifecycleStatus" = 'ACTIVA'
         UNION
         SELECT generate_series(2020, 2030) AS anio
       ) y
@@ -558,7 +558,7 @@ async function initDbConstraints() {
         UNION
         SELECT DISTINCT "anioTermino" AS anio FROM proyectos WHERE "anioTermino" IS NOT NULL
         UNION
-        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL
+        SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL AND "lifecycleStatus" = 'ACTIVA'
         UNION
         SELECT generate_series(2020, 2030) AS anio
       ) y
@@ -974,6 +974,7 @@ async function initDbConstraints() {
           i.name::varchar AS "indicatorName"
         FROM metas m
         LEFT JOIN indicator_definitions i ON m."indicatorKey" = i.key
+        WHERE m."lifecycleStatus" = 'ACTIVA'
       ),
       base_calculo AS (
         SELECT

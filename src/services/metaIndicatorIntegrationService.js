@@ -26,7 +26,7 @@ const listRelevantMetas = async (query = {}) => {
   const filters = parseIndicatorFilters(query);
   const progressFilters = filters.department ? { departmentId: filters.department } : {};
   const metas = await metaProgressService.listMetasWithProgress(progressFilters);
-  return metas.filter((meta) => matchesPeriod(meta, filters));
+  return metas.filter((meta) => meta.lifecycleStatus !== 'BORRADOR' && matchesPeriod(meta, filters));
 };
 
 const getDashboardMetaSummary = async (query = {}) => {
