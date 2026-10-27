@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e:reportes": "node scripts/e2e-reporte-excel.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
