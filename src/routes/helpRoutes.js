@@ -102,4 +102,37 @@ router.post('/admin', authenticateToken, requireRectoria, helpController.createE
  */
 router.put('/admin/:id', authenticateToken, requireRectoria, helpController.updateEntry);
 
+/**
+ * @openapi
+ * /api/help:
+ *   get:
+ *     tags: [Centro de Ayuda]
+ *     summary: Consulta las entradas activas de un módulo
+ *     description: Solo devuelve entradas con activo=true del módulo solicitado, ordenadas por orden e id ascendentes.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: modulo
+ *         required: true
+ *         description: Identificador del módulo; se aceptan espacios exteriores, pero no se cambian mayúsculas.
+ *         schema: { $ref: '#/components/schemas/ModuloAyuda' }
+ *         example: desarrollo_curricular
+ *     responses:
+ *       200:
+ *         description: Entradas activas del módulo; arreglo vacío si no existen.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/EntradaAyuda' }
+ *       400: { description: 'Módulo ausente, repetido o no permitido.' }
+ *       401: { description: Token ausente o inválido. }
+ *       500: { description: Error interno. }
+ */
+router.get('/', authenticateToken, helpController.listActiveByModule);
+
 module.exports = router;

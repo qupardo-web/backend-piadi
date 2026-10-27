@@ -83,6 +83,11 @@ const listAdmin = () => EntradaAyuda.findAll({
   order: [['modulo', 'ASC'], ['orden', 'ASC'], ['id', 'ASC']]
 });
 
+const listActiveByModule = async (modulo) => EntradaAyuda.findAll({
+  where: { modulo: validateModule(modulo), activo: true },
+  order: [['orden', 'ASC'], ['id', 'ASC']]
+});
+
 const createEntry = async (payload) => EntradaAyuda.create(normalizeEntry(payload));
 
 const updateEntry = async (id, payload) => {
@@ -94,4 +99,4 @@ const updateEntry = async (id, payload) => {
   return entry;
 };
 
-module.exports = { listAdmin, createEntry, updateEntry };
+module.exports = { listAdmin, createEntry, updateEntry, listActiveByModule };

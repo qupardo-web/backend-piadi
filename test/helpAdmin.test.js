@@ -208,7 +208,7 @@ test('Swagger documenta únicamente tres operaciones administrativas con el mism
   assert.ok(admin.get && admin.post && update.put);
   assert.equal(admin.delete, undefined);
   assert.equal(update.delete, undefined);
-  assert.equal(swaggerDocs.paths['/api/help'], undefined);
+  assert.ok(swaggerDocs.paths['/api/help'].get);
   for (const operation of [admin.get, admin.post, update.put]) {
     assert.deepEqual(operation.security, [{ bearerAuth: [] }]);
     assert.ok(operation.responses['401']);
@@ -267,7 +267,8 @@ test('rutas reales exigen JWT y Rectoría; GET, POST y PUT mantienen contratos y
     assert.equal((await request('/admin', 'POST', rector, entryData({ modulo: 'otro' }))).status, 400);
     assert.equal((await request(`/admin/${saved.id}`, 'PUT', rector, {})).status, 400);
     assert.equal((await request(`/admin/${saved.id}`, 'DELETE', rector)).status, 404);
-    assert.equal((await request('?modulo=dashboard', 'GET', rector)).status, 404);
+    const publicRead = await request('?modulo=dashboard', 'GET', rector);
+    assert.equal(publicRead.status, 200);
     stub(models.EntradaAyuda, 'findAll', async () => { throw new Error('detalle interno de SQL'); });
     const serverError = await request('/admin', 'GET', rector);
     assert.equal(serverError.status, 500);

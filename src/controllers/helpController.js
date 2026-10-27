@@ -27,4 +27,13 @@ const updateEntry = async (req, res, next) => {
   }
 };
 
-module.exports = { listAdmin, createEntry, updateEntry };
+const listActiveByModule = async (req, res, next) => {
+  try {
+    const entries = await helpService.listActiveByModule(req.query.modulo);
+    res.status(200).json({ success: true, data: entries });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { listAdmin, createEntry, updateEntry, listActiveByModule };
