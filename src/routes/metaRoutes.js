@@ -160,7 +160,7 @@ const router = express.Router();
  *           type: string
  *           nullable: true
  *           enum: [cumplida, en_progreso, en_riesgo, no_cumplida]
- *           description: Estado de cumplimiento; en BORRADOR es null y en CERRADA procede del snapshot.
+ *           description: Estado de cumplimiento; en BORRADOR es null, al igual que ambos progresos; en CERRADA procede del snapshot.
  *         metrics:
  *           type: array
  *           items: { $ref: '#/components/schemas/MetaMetricProgress' }
@@ -351,7 +351,7 @@ router.post('/:id/cerrar', authenticateToken, requireMetaOwnership, requireMetaD
  *   put:
  *     tags: [Metas]
  *     summary: Edita BORRADOR o actualiza/activa una meta con métricas completas
- *     description: BORRADOR a ACTIVA exige metrics completos cuya suma de weight sea 100; limpia draftMetrics en una transacción. Una meta ACTIVA mantiene el reemplazo completo de metrics. CERRADA se obtiene únicamente con POST /api/metas/{id}/cerrar y después no admite PUT.
+ *     description: BORRADOR a ACTIVA exige metrics completos cuya suma de weight sea 100 y limpia draftMetrics en una transacción. Una meta ACTIVA mantiene el reemplazo completo de metrics; ACTIVA a BORRADOR se rechaza. CERRADA se obtiene únicamente con POST /api/metas/{id}/cerrar y después no admite PUT.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
