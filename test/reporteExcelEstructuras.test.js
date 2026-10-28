@@ -358,6 +358,7 @@ test('genera hoja 1 real con bloques anuales, totales y subfilas de sexo indenta
   assert.equal(hoja.getRow(beca + 1).getCell(2).numFmt, '#,##0');
   assert.equal(hoja.getRow(beca + 2).getCell(1).alignment.indent, 1);
   assert.equal(hoja.getRow(beca + 2).getCell(2).numFmt, '#,##0');
+  assert.ok(!hoja.views || hoja.views.length === 0, 'Los bloques por año no deben quedar congelados');
 });
 
 test('genera layout A sin período con dos dimensiones categóricas', async () => {
@@ -444,10 +445,30 @@ test('el resumen explicita el año de referencia y la lógica del valor', async 
 
   assert.ok(rows.some((fila) => String(fila[0]).includes('año de referencia')));
   const encabezado = rows.find((fila) => fila[0] === 'Indicador');
-  assert.deepEqual(encabezado.slice(0, 3), ['Indicador', 'Año ref.', 'Valor']);
+  assert.deepEqual(encabezado.slice(0, 5), [
+    'Indicador', 'Año ref.', 'Unidad', 'Desagregaciones', 'Valor'
+  ]);
   const fila = rows.find((fila) => fila[0] === 'Beneficios y becas');
   assert.equal(fila[1], 2024);
-  assert.equal(fila[2], '10');
+  assert.equal(fila[2], 'estudiantes');
+  assert.equal(fila[4], '10');
+});
+
+test('el resumen lista las desagregaciones temporales y categóricas', async () => {
+  stubDetalle();
+  const buffer = await service.armarExcel(reporte({
+    year: 2025,
+    desag: ['beneficios_becas|Año', 'beneficios_becas|Período', 'beneficios_becas|Sexo']
+  }));
+  const rows = hojaResumen(buffer);
+
+  const encabezado = rows.find((item) => item[0] === 'Indicador');
+  assert.ok(encabezado.includes('Desagregaciones'));
+  const fila = rows.find((item) => item[0] === 'Beneficios y becas');
+  assert.match(String(fila[3]), /Temporales: Año, Período/);
+  assert.match(String(fila[3]), /Categóricas: Sexo/);
+  const filtros = rows.find((item) => item[0] === 'Filtros');
+  assert.match(String(filtros[1]), /Año: 2025/);
 });
 
 test('sin desagregación conserva la tabla actual', async () => {

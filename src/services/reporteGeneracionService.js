@@ -35,6 +35,7 @@ const estiloDato = (row) => {
 };
 
 const FILTROS_INTERNOS = ['desag', 'filtrosSeleccionados', 'indicatorGroupBys'];
+const DIMENSIONES_TEMPORALES = new Set(['year', 'periodo', 'semestre']);
 
 const slug = (texto) => String(texto || 'reporte')
   .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -540,7 +541,6 @@ const escribirLayoutB = (hoja, estructura, detalle) => {
     estiloDato(hoja.addRow(['Sin datos para el período', '']));
     return;
   }
-  let encabezadoFijado = null;
   estructura.bloques.forEach((bloque, indice) => {
     if (indice > 0) hoja.addRow([]);
     const filaAnio = hoja.addRow([bloque.anio]);
@@ -551,7 +551,6 @@ const escribirLayoutB = (hoja, estructura, detalle) => {
       ...estructura.periodos.map(valorColumna)
     ]);
     estiloEncabezado(encabezado);
-    if (!encabezadoFijado) encabezadoFijado = encabezado;
 
     for (const etiqueta of estructura.filas) {
       const filaValores = bloque.valores.get(etiqueta);
@@ -562,9 +561,6 @@ const escribirLayoutB = (hoja, estructura, detalle) => {
       creada.getCell(1).font = { bold: true };
     }
   });
-  if (encabezadoFijado) {
-    hoja.views = [{ state: 'frozen', ySplit: encabezadoFijado.number }];
-  }
 };
 
 const formatearNumerosFila = (fila, desdeColumna, hastaColumna, numFmt) => {
@@ -581,7 +577,6 @@ const escribirLayoutAConPeriodo = (hoja, estructura, detalle) => {
   }
   const numFmt = formatoNumerico(detalle.format);
   const ultimaColumna = estructura.periodos.length + 1;
-  let encabezadoFijado = null;
   estructura.bloques.forEach((bloque, indice) => {
     if (indice > 0) hoja.addRow([]);
     const filaAnio = hoja.addRow([bloque.anio]);
@@ -591,7 +586,6 @@ const escribirLayoutAConPeriodo = (hoja, estructura, detalle) => {
       ...estructura.periodos.map(valorColumna)
     ]);
     estiloEncabezado(encabezado);
-    if (!encabezadoFijado) encabezadoFijado = encabezado;
     for (const fila of estructura.filas) {
       const porPeriodo = bloque.valores.get(fila.rowKey);
       const totales = estructura.periodos.map((periodo) => porPeriodo?.get(periodo)?.total ?? null);
@@ -609,7 +603,6 @@ const escribirLayoutAConPeriodo = (hoja, estructura, detalle) => {
       }
     }
   });
-  if (encabezadoFijado) hoja.views = [{ state: 'frozen', ySplit: encabezadoFijado.number }];
 };
 
 const escribirLayoutASinPeriodo = (hoja, estructura, detalle) => {
@@ -620,7 +613,6 @@ const escribirLayoutASinPeriodo = (hoja, estructura, detalle) => {
   }
   const numFmt = formatoNumerico(detalle.format);
   const ultimaColumna = estructura.columnas.length + 1;
-  let encabezadoFijado = null;
   estructura.bloques.forEach((bloque, indice) => {
     if (indice > 0) hoja.addRow([]);
     const filaAnio = hoja.addRow([bloque.anio]);
@@ -630,7 +622,6 @@ const escribirLayoutASinPeriodo = (hoja, estructura, detalle) => {
       ...estructura.columnas.map(valorColumna)
     ]);
     estiloEncabezado(encabezado);
-    if (!encabezadoFijado) encabezadoFijado = encabezado;
     for (const etiqueta of estructura.filas) {
       const porColumna = bloque.valores.get(etiqueta);
       const valores = estructura.columnas.map((columna) =>
@@ -641,7 +632,6 @@ const escribirLayoutASinPeriodo = (hoja, estructura, detalle) => {
       formatearNumerosFila(creada, 2, ultimaColumna, numFmt);
     }
   });
-  if (encabezadoFijado) hoja.views = [{ state: 'frozen', ySplit: encabezadoFijado.number }];
 };
 
 const escribirLayoutA = (hoja, estructura, detalle) => {
@@ -678,8 +668,13 @@ const reunirDetalles = async (reporte) => {
       const detalle = { ...data, anioReferencia: resolverAnioReferencia(filtrosBase, data) };
       let estructura = null;
       let estructuraError = null;
+      let dimensiones = [];
       try {
         const { seleccionadas } = resolverDimensiones(key, reporte.filtros, detalle);
+        dimensiones = [...seleccionadas].map((dimension) => ({
+          key: dimension,
+          label: detalle.dimensionLabels?.[dimension] || DIMENSION_LABELS[dimension] || dimension
+        }));
         const categoria = resolverCategoria(seleccionadas, detalle.groupBy, detalle.allowedGroupBy);
         const layout = detectarLayout(seleccionadas, categoria, detalle);
         if (layout) {
@@ -689,7 +684,7 @@ const reunirDetalles = async (reporte) => {
       } catch (err) {
         estructuraError = err.message;
       }
-      detalles.push({ ...detalle, estructura, estructuraError });
+      detalles.push({ ...detalle, estructura, estructuraError, dimensiones });
     } catch (err) {
       detalles.push({
         indicatorKey: key,
@@ -697,26 +692,162 @@ const reunirDetalles = async (reporte) => {
         description: null,
         table: [],
         error: err.message,
-        anioReferencia: null
+        anioReferencia: null,
+        dimensiones: []
       });
     }
   }
   return detalles;
 };
 
-const armarExcel = async (reporte) => {
+const formatearFechaResumen = (fecha) => new Intl.DateTimeFormat('es-CL', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'America/Santiago'
+}).format(fecha);
+
+const describirDimensiones = (dimensiones = []) => {
+  if (!dimensiones.length) return 'Sin desagregación';
+  const temporales = dimensiones
+    .filter((dimension) => DIMENSIONES_TEMPORALES.has(dimension.key))
+    .map((dimension) => dimension.label);
+  const categoricas = dimensiones
+    .filter((dimension) => !DIMENSIONES_TEMPORALES.has(dimension.key))
+    .map((dimension) => dimension.label);
+  const partes = [];
+  if (temporales.length) partes.push(`Temporales: ${temporales.join(', ')}`);
+  if (categoricas.length) partes.push(`Categóricas: ${categoricas.join(', ')}`);
+  return partes.join(' | ');
+};
+
+const FILTROS_EXCLUIDOS_RESUMEN = new Set([
+  ...FILTROS_INTERNOS, 'fromYear', 'toYear', 'year', 'anio', 'año'
+]);
+
+const describirFiltros = (filtros = {}) => {
+  const partes = [];
+  const year = filtros.year ?? filtros.anio ?? filtros['año'];
+  if (year !== undefined && year !== null && year !== '') {
+    partes.push(`Año: ${year}`);
+  } else if (filtros.fromYear || filtros.toYear) {
+    partes.push(`Años: ${filtros.fromYear ?? '...'} - ${filtros.toYear ?? '...'}`);
+  }
+
+  const seleccionados = new Map();
+  if (Array.isArray(filtros.filtrosSeleccionados)) {
+    for (const item of filtros.filtrosSeleccionados) {
+      const partesItem = String(item).split('|');
+      if (partesItem.length >= 3) {
+        const [, nombre, valor] = partesItem;
+        if (!seleccionados.has(nombre)) seleccionados.set(nombre, []);
+        seleccionados.get(nombre).push(valor);
+      }
+    }
+  }
+
+  if (seleccionados.size > 0) {
+    for (const [nombre, valores] of seleccionados) {
+      partes.push(`${nombre}: ${valores.join(', ')}`);
+    }
+  } else {
+    for (const [key, value] of Object.entries(filtros || {})) {
+      if (FILTROS_EXCLUIDOS_RESUMEN.has(key)) continue;
+      if (value === null || value === undefined || value === '') continue;
+      const valores = (Array.isArray(value) ? value : [value])
+        .filter((item) => item !== null && item !== undefined && item !== '');
+      if (valores.length === 0) continue;
+      const etiqueta = DIMENSION_LABELS[key] || key;
+      partes.push(`${etiqueta}: ${valores.join(', ')}`);
+    }
+  }
+
+  return partes.length > 0 ? partes.join(' | ') : 'Sin filtros adicionales';
+};
+
+const armarExcel = async (reporte, { user = null } = {}) => {
   const detalles = await reunirDetalles(reporte);
   const wb = new ExcelJS.Workbook();
+  const generadoEn = new Date();
   wb.creator = 'PIADI ECAS';
-  wb.created = new Date();
+  wb.created = generadoEn;
 
   // --- Hoja Resumen ---
   const resumen = wb.addWorksheet('Resumen');
-  resumen.columns = [{ width: 44 }, { width: 12 }, { width: 28 }];
-  estiloTituloHoja(resumen.addRow([reporte.nombre]).getCell(1));
-  resumen.addRow(['Área', reporte.area ? reporte.area.name : 'Global']);
-  resumen.addRow(['Tipo', reporte.tipo]);
-  resumen.addRow(['Generado', new Date().toISOString()]);
+  resumen.columns = [
+    { width: 44 },
+    { width: 10 },
+    { width: 18 },
+    { width: 52 },
+    { width: 20 }
+  ];
+
+  const titulo = resumen.addRow([reporte.nombre]);
+  estiloTituloHoja(titulo.getCell(1));
+  resumen.mergeCells(titulo.number, 1, titulo.number, 5);
+
+  const metadatos = [
+    ['Área', reporte.area ? reporte.area.name : 'Global'],
+    ['Tipo', reporte.tipo],
+    ['Formato', reporte.formato || 'XLSX']
+  ];
+  if (reporte.descripcion) metadatos.push(['Descripción', reporte.descripcion]);
+  metadatos.push(
+    ['Generado', formatearFechaResumen(generadoEn)],
+    ['Generado por', user?.name || user?.email || 'No registrado'],
+    ['Filtros', describirFiltros(reporte.filtros)]
+  );
+
+  for (const [etiqueta, valor] of metadatos) {
+    const fila = resumen.addRow([etiqueta, valor]);
+    fila.getCell(1).font = { bold: true };
+    fila.getCell(2).alignment = { wrapText: true, vertical: 'top' };
+    if (etiqueta === 'Descripción' || etiqueta === 'Filtros') {
+      fila.height = Math.max(15, Math.ceil(String(valor).length / 70) * 15);
+    }
+    resumen.mergeCells(fila.number, 2, fila.number, 5);
+  }
+
+  const encabezado = resumen.addRow([
+    'Indicador', 'Año ref.', 'Unidad', 'Desagregaciones', 'Valor'
+  ]);
+  estiloEncabezado(encabezado);
+
+  detalles.forEach((detalle, indice) => {
+    let valor;
+    if (detalle.error) valor = `Error: ${detalle.error}`;
+    else if (!detalle.hasData) valor = 'Sin datos';
+    else valor = detalle.formattedTotal ?? detalle.total ?? '';
+
+    const nombre = detalle.title || detalle.indicatorKey;
+    const hoja = nombreHoja(indice, detalle.title).replace(/'/g, "''");
+    const fila = resumen.addRow([
+      { text: nombre, hyperlink: `#'${hoja}'!A1` },
+      detalle.anioReferencia ?? '',
+      detalle.unit || '',
+      describirDimensiones(detalle.dimensiones),
+      valor
+    ]);
+    estiloDato(fila);
+    fila.getCell(1).font = { color: { argb: 'FF0563C1' }, underline: true };
+    if (detalle.error) {
+      fila.getCell(5).font = { color: { argb: 'FFC00000' } };
+    } else if (!detalle.hasData) {
+      fila.getCell(5).font = { italic: true, color: { argb: COLOR_AVISO } };
+    }
+  });
+
+  resumen.views = [{ state: 'frozen', ySplit: encabezado.number }];
+  if (detalles.length > 0) {
+    resumen.autoFilter = {
+      from: { row: encabezado.number, column: 1 },
+      to: { row: encabezado.number + detalles.length, column: 5 }
+    };
+  }
+
   resumen.addRow([]);
   const notaResumen = resumen.addRow([
     'Nota: el Valor corresponde al total del indicador en el año de referencia, no a la suma de todos los años del rango.'
@@ -724,21 +855,7 @@ const armarExcel = async (reporte) => {
   notaResumen.getCell(1).font = { italic: true, color: { argb: COLOR_AVISO } };
   notaResumen.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FONDO_AVISO } };
   notaResumen.getCell(1).alignment = { wrapText: true, vertical: 'middle' };
-  resumen.mergeCells(notaResumen.number, 1, notaResumen.number, 3);
-  resumen.addRow([]);
-  estiloEncabezado(resumen.addRow(['Indicador', 'Año ref.', 'Valor']));
-  for (const detalle of detalles) {
-    let valor;
-    if (detalle.error) valor = `Error: ${detalle.error}`;
-    else if (!detalle.hasData) valor = 'Sin datos';
-    else valor = detalle.formattedTotal ?? detalle.total ?? '';
-    estiloDato(resumen.addRow([
-      detalle.title || detalle.indicatorKey,
-      detalle.anioReferencia ?? '',
-      valor
-    ]));
-  }
-  for (const n of [2, 3, 4]) resumen.getRow(n).getCell(1).font = { bold: true };
+  resumen.mergeCells(notaResumen.number, 1, notaResumen.number, 5);
 
   // --- Hoja por indicador ---
   detalles.forEach((detalle, indice) => {
@@ -909,7 +1026,7 @@ const descargarReporte = async (user, reporteId) => {
     throw new ValidationError('El reporte está inactivo y no puede generarse');
   }
 
-  const buffer = await armarExcel(reporte);
+  const buffer = await armarExcel(reporte, { user });
   const nombre = nombreArchivo(reporte);
 
   let ejecucion;
