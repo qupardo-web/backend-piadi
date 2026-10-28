@@ -590,8 +590,15 @@ const casos = [
         dimsPorIndicador: { convenios_por_sector: ['year'] }
       });
       const rows = filas(wb, hojasIndicador(wb)[0]);
-      const esperado = await oracleConveniosSector(2025, 'Educación');
-      assert.equal(Number(valorEnAnios(rows, 'Educación', 2025)), esperado);
+      const { rows: sectores } = await db.query(
+        `SELECT sector FROM convenios
+          WHERE "anioFirma" = 2025
+          GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1`
+      );
+      assert.ok(sectores[0]?.sector, 'No hay sectores de convenios para 2025');
+      const sector = sectores[0].sector;
+      const esperado = await oracleConveniosSector(2025, sector);
+      assert.equal(Number(valorEnAnios(rows, sector, 2025)), esperado);
     }
   },
   {
@@ -610,18 +617,24 @@ const casos = [
     }
   },
   {
-    nombre: '17-ec-sin-datos',
+    nombre: '17-ec-hoja4-programas',
     async run() {
       const { wb } = await crearYDescargar({
         token: tokenEc,
-        caso: '17-ec-sin-datos',
+        caso: '17-ec-hoja4-programas',
         indicadores: ['oferta_programada'],
         filtros: { fromYear: 2025, toYear: 2026 },
         dimsPorIndicador: { oferta_programada: ['year', 'area'] }
       });
       const rows = filas(wb, hojasIndicador(wb)[0]);
-      assert.ok(rows.some((fila) => String(fila[0]).includes('Sin datos para el período')),
-        'EC sin datos debe generar la hoja sin romper');
+      const { rows: areas } = await db.query(
+        `SELECT area, COUNT(*)::int AS n
+           FROM programas
+          WHERE anio = 2025
+          GROUP BY 1 ORDER BY n DESC LIMIT 1`
+      );
+      assert.ok(areas[0]?.area, 'No hay áreas de programas para 2025');
+      assert.equal(Number(valorEnAnios(rows, areas[0].area, 2025)), areas[0].n);
     }
   },
   {
