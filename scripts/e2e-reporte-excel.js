@@ -17,6 +17,7 @@
  */
 
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const XLSX = require('xlsx');
@@ -108,6 +109,17 @@ const descargarReporte = async (token, id) => {
   if (!res.ok) {
     const texto = await res.text();
     throw new Error(`Descarga ${id} -> ${res.status}: ${texto.slice(0, 500)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+};
+
+const descargarEjecucion = async (token, ejecucionId) => {
+  const res = await fetch(`${BASE_URL}/api/reportes/ejecuciones/${ejecucionId}/descargar`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    const texto = await res.text();
+    throw new Error(`Re-descarga ${ejecucionId} -> ${res.status}: ${texto.slice(0, 500)}`);
   }
   return Buffer.from(await res.arrayBuffer());
 };
@@ -302,6 +314,29 @@ const oracleParticipacionesRegion = async (anio, region) => {
   );
   return rows[0].n;
 };
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const contarAuditoria = async (accion, reporteId) => {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS n
+       FROM audit_sesiones
+      WHERE accion = $1 AND detalles LIKE $2`,
+    [accion, `%"reporteId":${reporteId}%`]
+  );
+  return rows[0].n;
+};
+
+const esperarAuditoria = async (accion, reporteId) => {
+  for (let intento = 0; intento < 20; intento += 1) {
+    const total = await contarAuditoria(accion, reporteId);
+    if (total > 0) return total;
+    await sleep(100);
+  }
+  return 0;
+};
+
+const hashBuffer = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 
 const casos = [
   {
@@ -587,6 +622,92 @@ const casos = [
       const rows = filas(wb, hojasIndicador(wb)[0]);
       assert.ok(rows.some((fila) => String(fila[0]).includes('Sin datos para el período')),
         'EC sin datos debe generar la hoja sin romper');
+    }
+  },
+  {
+    nombre: '18-historial-y-redescarga',
+    async run(token) {
+      const { reporte, buffer } = await crearYDescargar({
+        token,
+        caso: '18-historial-y-redescarga',
+        indicadores: ['beneficios_becas'],
+        filtros: { fromYear: 2025, toYear: 2025 },
+        dimsPorIndicador: { beneficios_becas: ['year', 'periodo'] }
+      });
+
+      const listado = await api(`/api/reportes/ejecuciones?reporteId=${reporte.id}`, { token });
+      const ejecuciones = listado?.data || [];
+      assert.ok(ejecuciones.length >= 1, 'El historial no devolvió ejecuciones');
+      const ejecucion = ejecuciones[0];
+      assert.equal(ejecucion.reporteId, reporte.id);
+      assert.equal(ejecucion.reporte?.nombre, reporte.nombre);
+      assert.ok(ejecucion.solicitante?.name || ejecucion.solicitante?.email, 'Falta el usuario solicitante');
+      assert.equal(ejecucion.formato, 'XLSX');
+      assert.equal(ejecucion.estado, 'LISTO');
+      assert.equal(ejecucion.archivoDisponible, true);
+
+      const hoy = new Date().toISOString().slice(0, 10);
+      const filtrado = await api(
+        `/api/reportes/ejecuciones?reporteId=${reporte.id}&fromDate=${hoy}&toDate=${hoy}`,
+        { token }
+      );
+      assert.ok((filtrado?.data || []).some((item) => item.id === ejecucion.id),
+        'El filtro por fecha no incluyó la ejecución');
+
+      const rutaArchivo = path.join(process.cwd(), 'uploads', 'reportes', `${ejecucion.id}.xlsx`);
+      assert.equal(fs.existsSync(rutaArchivo), true, 'El archivo de la ejecución no se persistió');
+
+      const redescarga = await descargarEjecucion(token, ejecucion.id);
+      assert.equal(hashBuffer(redescarga), hashBuffer(buffer), 'La re-descarga no devolvió el archivo original');
+      assert.equal(await esperarAuditoria('REPORTE_REDOWNLOADED', reporte.id) > 0, true,
+        'Falta la auditoría de re-descarga');
+      assert.equal(await esperarAuditoria('REPORTE_GENERATED', reporte.id) > 0, true,
+        'Falta la auditoría de generación');
+
+      await api(`/api/reportes/${reporte.id}`, { token, method: 'DELETE' });
+      const indice = creados.indexOf(reporte.id);
+      if (indice >= 0) creados.splice(indice, 1);
+      assert.equal(fs.existsSync(rutaArchivo), false, 'El archivo no se eliminó al borrar el reporte');
+      assert.equal(await esperarAuditoria('REPORTE_DELETED', reporte.id) > 0, true,
+        'Falta la auditoría de eliminación');
+    }
+  },
+  {
+    nombre: '19-auditoria-edicion',
+    async run(token) {
+      const reporte = await crearReporte(token, {
+        nombre: `E2E auditoria edicion ${Date.now()}`,
+        descripcion: 'Reporte temporal E2E',
+        tipo: 'PERSONALIZADO',
+        indicadores: ['beneficios_becas'],
+        filtros: { fromYear: 2025, toYear: 2025, desag: [] },
+        formato: 'XLSX',
+        activo: true
+      });
+
+      const antes = await contarAuditoria('REPORTE_UPDATED', reporte.id);
+      await api(`/api/reportes/${reporte.id}`, {
+        token,
+        method: 'PUT',
+        body: { nombre: reporte.nombre }
+      });
+      await sleep(300);
+      assert.equal(await contarAuditoria('REPORTE_UPDATED', reporte.id), antes,
+        'No debería auditar una edición sin cambios');
+
+      await api(`/api/reportes/${reporte.id}`, {
+        token,
+        method: 'PUT',
+        body: { nombre: `${reporte.nombre} actualizado` }
+      });
+      assert.ok(await esperarAuditoria('REPORTE_UPDATED', reporte.id) > antes,
+        'Falta la auditoría de edición con cambios');
+
+      await api(`/api/reportes/${reporte.id}`, { token, method: 'DELETE' });
+      const indice = creados.indexOf(reporte.id);
+      if (indice >= 0) creados.splice(indice, 1);
+      assert.ok(await esperarAuditoria('REPORTE_DELETED', reporte.id) > 0,
+        'Falta la auditoría de eliminación');
     }
   },
   {

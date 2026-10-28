@@ -17,7 +17,8 @@ const {
   resolverDimensiones,
   resolverCategoria,
   detectarLayout,
-  ordenarPeriodos
+  ordenarPeriodos,
+  formatoNumerico
 } = service.__test;
 
 const allowed = ['year', 'periodo', 'sexo', 'beneficios', 'asignatura'];
@@ -149,6 +150,28 @@ test.afterEach(() => {
   cache.flush();
 });
 
+const matrizSexo = {
+  isBidimensional: true,
+  rowDimension: 'beneficios',
+  colDimension: 'sexo',
+  columns: ['sexo:string:F', 'sexo:string:M', 'sexo:string:O'],
+  columnLabels: { 'sexo:string:F': 'F', 'sexo:string:M': 'M', 'sexo:string:O': 'O' },
+  matrix: [
+    {
+      row: 'BECA ESTATAL',
+      rowKey: 'beneficios:string:BECA ESTATAL',
+      values: { 'sexo:string:F': 6, 'sexo:string:M': 2, 'sexo:string:O': 2 },
+      total: 10
+    },
+    {
+      row: 'Sin dato',
+      rowKey: 'beneficios:null',
+      values: { 'sexo:string:F': 1, 'sexo:string:M': 0, 'sexo:string:O': 0 },
+      total: 1
+    }
+  ]
+};
+
 const stubDetalle = () => {
   indicatorService.getIndicatorDetailView = async (key, query = {}) => {
     if (query.groupBy === 'beneficios' && query.splitBy === 'periodo' && query.splitBy2 === 'sexo') {
@@ -156,6 +179,9 @@ const stubDetalle = () => {
     }
     if (query.groupBy === 'beneficios' && query.splitBy === 'periodo') {
       return { data: matrizPeriodo(Number(query.year)) };
+    }
+    if (query.groupBy === 'beneficios' && query.splitBy === 'sexo') {
+      return { data: matrizSexo };
     }
     if (query.groupBy === 'beneficios' && query.splitBy === 'year') {
       return { data: matrizAnio };
@@ -213,7 +239,24 @@ test('detecta dimensiones, categoría y layout sin lógica por indicador', () =>
   ).seleccionadas;
   assert.deepEqual([...dimensiones], ['year', 'periodo', 'sexo']);
   assert.equal(resolverCategoria(dimensiones, 'beneficios', allowed), 'beneficios');
-  assert.deepEqual(detectarLayout(dimensiones, 'beneficios', detalleBase), { tipo: 'A' });
+  assert.deepEqual(detectarLayout(dimensiones, 'beneficios', detalleBase), {
+    tipo: 'A', categoria: 'beneficios', profundidad: 'sexo', conPeriodo: true
+  });
+
+  const sinPeriodo = new Set(['year', 'sexo']);
+  assert.deepEqual(detectarLayout(sinPeriodo, 'beneficios', detalleBase), {
+    tipo: 'A', categoria: 'beneficios', profundidad: 'sexo', conPeriodo: false
+  });
+
+  const categoriaSecundaria = new Set(['year', 'periodo', 'asignatura']);
+  assert.deepEqual(detectarLayout(categoriaSecundaria, 'beneficios', detalleBase), {
+    tipo: 'A', categoria: 'beneficios', profundidad: 'asignatura', conPeriodo: true
+  });
+
+  const detalleSexo = { ...detalleBase, groupBy: 'sexo' };
+  assert.deepEqual(detectarLayout(new Set(['year', 'periodo', 'asignatura']), 'asignatura', detalleSexo), {
+    tipo: 'A', categoria: 'sexo', profundidad: 'asignatura', conPeriodo: true
+  });
 
   const sinSexo = new Set(['year', 'periodo']);
   assert.deepEqual(detectarLayout(sinSexo, 'beneficios', detalleBase), { tipo: 'B' });
@@ -222,8 +265,17 @@ test('detecta dimensiones, categoría y layout sin lógica por indicador', () =>
   assert.deepEqual(detectarLayout(soloAnio, 'beneficios', detalleBase), { tipo: 'C' });
 
   const sinDefault = new Set(['year', 'asignatura']);
+  const detalleSinDefault = { ...detalleBase, groupBy: null };
   assert.equal(resolverCategoria(sinDefault, null, allowed), 'asignatura');
-  assert.deepEqual(detectarLayout(sinDefault, 'asignatura', detalleBase), { tipo: 'C' });
+  assert.deepEqual(detectarLayout(sinDefault, 'asignatura', detalleSinDefault), { tipo: 'C' });
+  assert.deepEqual(
+    detectarLayout(
+      new Set(['year', 'asignatura', 'region']),
+      'asignatura',
+      { ...detalleSinDefault, allowedGroupBy: [...allowed, 'region'] }
+    ),
+    { tipo: 'A', categoria: 'asignatura', profundidad: 'region', conPeriodo: false }
+  );
 
   const reemplazaDefault = new Set(['year', 'asignatura']);
   assert.equal(resolverCategoria(reemplazaDefault, 'beneficios', allowed), 'asignatura');
@@ -233,6 +285,10 @@ test('detecta dimensiones, categoría y layout sin lógica por indicador', () =>
   assert.equal(resolverCategoria(new Set(['year']), null, allowed), null);
   assert.equal(detectarLayout(new Set(['periodo']), 'beneficios', detalleBase), null);
   assert.deepEqual(ordenarPeriodos(['2', '1', 'Sin dato']), ['1', '2', 'Sin dato']);
+
+  assert.equal(formatoNumerico('number'), '#,##0');
+  assert.equal(formatoNumerico('currency'), '"$"#,##0');
+  assert.equal(formatoNumerico('percentage'), '0.00"%"');
 });
 
 test('genera hoja 3 con bloques por año, periodos y beneficio nulo', async () => {
@@ -299,7 +355,26 @@ test('genera hoja 1 real con bloques anuales, totales y subfilas de sexo indenta
   await workbook.xlsx.load(buffer);
   const hoja = workbook.worksheets.find((sheet) => sheet.name.includes('Beneficios'));
   assert.equal(hoja.getRow(beca + 1).getCell(1).font.bold, true);
+  assert.equal(hoja.getRow(beca + 1).getCell(2).numFmt, '#,##0');
   assert.equal(hoja.getRow(beca + 2).getCell(1).alignment.indent, 1);
+  assert.equal(hoja.getRow(beca + 2).getCell(2).numFmt, '#,##0');
+});
+
+test('genera layout A sin período con dos dimensiones categóricas', async () => {
+  stubDetalle();
+  const buffer = await service.armarExcel(reporte({
+    fromYear: 2025,
+    toYear: 2026,
+    desag: ['beneficios_becas|Año', 'beneficios_becas|Sexo']
+  }));
+  const rows = hojaIndicador(buffer);
+
+  const indice2025 = rows.findIndex((fila) => fila[0] === 2025);
+  assert.ok(indice2025 > 0);
+  assert.deepEqual(rows[indice2025 + 1].slice(0, 4), ['Beneficios / Sexo', 'F', 'M', 'O']);
+  const filaBeca = rows.find((fila, indice) =>
+    indice > indice2025 && fila[0] === 'BECA ESTATAL');
+  assert.deepEqual(filaBeca.slice(0, 4), ['BECA ESTATAL', 6, 2, 2]);
 });
 
 test('Hoja 1 recorre el detalle real y la fórmula DISTINCT con provider simulado', async () => {

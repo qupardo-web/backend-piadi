@@ -172,6 +172,74 @@ router.get('/:id/descargar', authenticateToken, reporteController.descargarRepor
 
 /**
  * @openapi
+ * /api/reportes/ejecuciones:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Lista las ejecuciones visibles para el usuario
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: reporteId
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: fromDate
+ *         description: Fecha desde (YYYY-MM-DD o ISO). Aliases: desde, fechaDesde.
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: toDate
+ *         description: Fecha hasta (YYYY-MM-DD o ISO). Aliases: hasta, fechaHasta.
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: fecha
+ *         description: Filtra un día completo. Equivale a fromDate = toDate.
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: estado
+ *         schema: { type: string, enum: [PENDIENTE, GENERANDO, LISTO, ERROR] }
+ *     responses:
+ *       200:
+ *         description: Listado de ejecuciones con reporte y solicitante.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: array
+ *                   items: { $ref: '#/components/schemas/ReporteEjecucion' }
+ *       400:
+ *         description: Filtros inválidos.
+ */
+router.get('/ejecuciones', authenticateToken, reporteController.listEjecucionesGeneral);
+
+/**
+ * @openapi
+ * /api/reportes/ejecuciones/{ejecucionId}/descargar:
+ *   get:
+ *     tags: [Reportes]
+ *     summary: Descarga el archivo original de una ejecución anterior
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: ejecucionId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Archivo Excel de la ejecución.
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema: { type: string, format: binary }
+ *       404:
+ *         description: Ejecución o archivo no disponible.
+ */
+router.get('/ejecuciones/:ejecucionId/descargar', authenticateToken, reporteController.descargarEjecucion);
+
+/**
+ * @openapi
  * /api/reportes/{id}/ejecuciones:
  *   get:
  *     tags: [Reportes]
@@ -183,6 +251,15 @@ router.get('/:id/descargar', authenticateToken, reporteController.descargarRepor
  *         name: id
  *         required: true
  *         schema: { type: integer }
+ *       - in: query
+ *         name: fromDate
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: toDate
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: estado
+ *         schema: { type: string, enum: [PENDIENTE, GENERANDO, LISTO, ERROR] }
  *     responses:
  *       200:
  *         description: Listado de ejecuciones.

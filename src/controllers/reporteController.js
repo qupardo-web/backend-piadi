@@ -62,8 +62,35 @@ const listAreas = async (req, res, next) => {
 
 const listEjecuciones = async (req, res, next) => {
   try {
-    const ejecuciones = await reporteGeneracionService.listEjecuciones(req.user, req.params.id);
+    const ejecuciones = await reporteGeneracionService.listEjecuciones(
+      req.user,
+      req.params.id,
+      req.query
+    );
     sendSuccess(res, ejecuciones);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const listEjecucionesGeneral = async (req, res, next) => {
+  try {
+    const ejecuciones = await reporteGeneracionService.listEjecucionesGeneral(req.user, req.query);
+    sendSuccess(res, ejecuciones);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const descargarEjecucion = async (req, res, next) => {
+  try {
+    const { buffer, nombre } = await reporteGeneracionService.descargarEjecucion(
+      req.user,
+      req.params.ejecucionId
+    );
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+    res.send(buffer);
   } catch (err) {
     next(err);
   }
@@ -90,5 +117,7 @@ module.exports = {
   listFormatos,
   listAreas,
   listEjecuciones,
+  listEjecucionesGeneral,
+  descargarEjecucion,
   descargarReporte
 };

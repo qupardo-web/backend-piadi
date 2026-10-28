@@ -1,10 +1,13 @@
 const ExcelJS = require('exceljs');
-const { ReporteEjecucion } = require('../models');
+const { Op } = require('sequelize');
+const { Reporte, ReporteEjecucion, User } = require('../models');
 const reporteService = require('./reporteService');
+const { politicaReportes } = require('./reportePolitica');
 const indicatorService = require('./indicatorService');
 const { DIMENSION_LABELS } = require('./indicatorCatalog');
 const { auditarReporte } = require('./reporteAuditoria');
-const { ValidationError } = require('../utils/errors');
+const reporteArchivos = require('../utils/reporteArchivos');
+const { ValidationError, NotFoundError } = require('../utils/errors');
 
 const MAX_SHEET_NAME = 31;
 
@@ -137,11 +140,59 @@ const resolverCategoria = (dimensiones, groupByPorDefecto, allowedGroupBy = []) 
   return restante || null;
 };
 
-const detectarLayout = (dimensiones, categoria, detalle) => {
-  if (!categoria || categoria === 'year' || !dimensiones.has('year')) return null;
+// Layout A: categoría base + una dimensión adicional (sexo, sección, región, etc.).
+// La dimensión adicional puede ir acompañada o no de período:
+// - con período: bloques por año, columnas de período, filas base y subfilas adicionales.
+// - sin período: bloques por año, columnas adicionales y filas base.
+const detectarLayoutA = (dimensiones, detalle) => {
+  if (!dimensiones.has('year')) return null;
   const permitidas = new Set(detalle?.allowedGroupBy || []);
   const permitida = (dimension) => !permitidas.size || permitidas.has(dimension);
-  if (!permitida(categoria) || !permitida('year')) return null;
+  if (!permitida('year')) return null;
+
+  const noTemporales = [...dimensiones].filter((dimension) =>
+    dimension !== 'year' && dimension !== 'periodo');
+  const porDefecto = detalle?.groupBy && detalle.groupBy !== 'year'
+    ? detalle.groupBy
+    : null;
+
+  let categoria;
+  let adicionales;
+  if (porDefecto && permitida(porDefecto)) {
+    categoria = porDefecto;
+    adicionales = noTemporales.filter((dimension) => dimension !== porDefecto);
+  } else {
+    if (noTemporales.length < 2) return null;
+    categoria = noTemporales[0];
+    adicionales = noTemporales.slice(1);
+  }
+
+  if (adicionales.length !== 1) return null;
+  const profundidad = adicionales[0];
+  if (!categoria || categoria === profundidad
+    || !permitida(categoria) || !permitida(profundidad)) {
+    return null;
+  }
+
+  return {
+    tipo: 'A',
+    categoria,
+    profundidad,
+    conPeriodo: dimensiones.has('periodo')
+  };
+};
+
+const detectarLayout = (dimensiones, categoria, detalle) => {
+  if (!dimensiones.has('year')) return null;
+  const permitidas = new Set(detalle?.allowedGroupBy || []);
+  const permitida = (dimension) => !permitidas.size || permitidas.has(dimension);
+
+  const layoutA = detectarLayoutA(dimensiones, detalle);
+  if (layoutA) return layoutA;
+
+  if (!categoria || categoria === 'year' || !permitida(categoria) || !permitida('year')) {
+    return null;
+  }
 
   const extras = new Set([...dimensiones].filter((dimension) =>
     dimension !== 'year' && dimension !== categoria));
@@ -149,10 +200,6 @@ const detectarLayout = (dimensiones, categoria, detalle) => {
   if (extras.size === 0) return { tipo: 'C' };
   if (extras.size === 1 && extras.has('periodo') && permitida('periodo')) {
     return { tipo: 'B' };
-  }
-  if (extras.size === 2 && extras.has('periodo') && extras.has('sexo')
-    && permitida('periodo') && permitida('sexo')) {
-    return { tipo: 'A' };
   }
   return null;
 };
@@ -201,6 +248,14 @@ const valorCelda = (detalle, value) => {
     return detalle?.format === 'number' ? 0 : null;
   }
   return value;
+};
+
+// Sin decimales opcionales: en Excel en español `#,##0.##` muestra una coma
+// decimal colgando en números enteros (ej. "10,").
+const formatoNumerico = (format) => {
+  if (format === 'percentage') return '0.00"%"';
+  if (format === 'currency') return '"$"#,##0';
+  return '#,##0';
 };
 
 const ordenarPeriodos = (labels) => [...new Set(labels)].sort((a, b) => {
@@ -263,22 +318,65 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
   }
 
   if (layout.tipo === 'A') {
+    const profundidad = layout.profundidad;
+    const profundidadLabel = detalle?.dimensionLabels?.[profundidad]
+      || DIMENSION_LABELS[profundidad]
+      || profundidad;
     const anios = resolverAnios(filtros, detalle);
+
+    if (!layout.conPeriodo) {
+      const bloques = [];
+      for (const anio of anios) {
+        const { data } = await indicatorService.getIndicatorDetailView(indicatorKey, {
+          ...filtros,
+          year: anio,
+          groupBy: categoria,
+          splitBy: profundidad
+        });
+        if (!data?.isBidimensional) {
+          throw new Error(`El indicador no devolvió una matriz por ${profundidadLabel} para ${anio}`);
+        }
+        bloques.push({
+          anio,
+          columnas: columnasDeMatriz(data),
+          filas: filasDeMatriz(data, categoria)
+        });
+      }
+      return {
+        tipo: 'A',
+        conPeriodo: false,
+        categoria,
+        categoriaLabel,
+        profundidad,
+        profundidadLabel,
+        columnas: ordenarPeriodos(bloques.flatMap((bloque) =>
+          bloque.columnas.map((columna) => columna.label))),
+        filas: unirFilas(bloques),
+        bloques: bloques.map((bloque) => ({
+          anio: bloque.anio,
+          valores: new Map(bloque.filas.map((fila) => [
+            fila.label,
+            new Map(bloque.columnas.map((columna) => [columna.label, fila.values[columna.id]]))
+          ]))
+        }))
+      };
+    }
+
     const bloques = [];
     const filas = new Map();
-    const sexos = new Map();
+    const subfilas = new Map();
     for (const anio of anios) {
       const { data } = await indicatorService.getIndicatorDetailView(indicatorKey, {
         ...filtros,
         year: anio,
         groupBy: categoria,
         splitBy: 'periodo',
-        splitBy2: 'sexo'
+        splitBy2: profundidad
       });
       if (!data?.isTridimensional) {
-        throw new Error(`El indicador no devolvió un cubo por período y sexo para ${anio}`);
+        throw new Error(`El indicador no devolvió un cubo por período y ${profundidadLabel} para ${anio}`);
       }
-      for (const id of data.depths) sexos.set(id, data.depthLabels[id]);
+      for (const id of data.depths) subfilas.set(id, data.depthLabels[id]);
       const columnas = columnasDeMatriz(data);
       const valores = new Map();
       for (const fila of data.cube) {
@@ -291,6 +389,7 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
       }
       bloques.push({ anio, columnas, valores });
     }
+
     const filasOrdenadas = [...filas.values()];
     const etiquetaNula = categoria === 'beneficios' ? 'Sin beneficio' : 'Sin dato';
     if (filasOrdenadas.some((fila) => fila.rowKey === `${categoria}:null`)) {
@@ -301,24 +400,33 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
         }
       }
     }
-    const sexosOrdenados = [...sexos].map(([id, label]) => ({ id, label }));
-    if (sexosOrdenados.some((sexo) => sexo.id === 'sexo:null')) {
-      for (const sexo of sexosOrdenados) {
-        if (sexo.id !== 'sexo:null' && normalizarTexto(sexo.label) === 'sin dato') {
-          sexo.label = `${sexo.label} (valor literal)`;
+
+    const subfilasOrdenadas = [...subfilas].map(([id, label]) => ({ id, label }));
+    if (subfilasOrdenadas.some((fila) => fila.id === `${profundidad}:null`)) {
+      for (const fila of subfilasOrdenadas) {
+        if (fila.id !== `${profundidad}:null` && normalizarTexto(fila.label) === 'sin dato') {
+          fila.label = `${fila.label} (valor literal)`;
         }
       }
     }
+    subfilasOrdenadas.sort((a, b) => {
+      const nuloA = a.id.endsWith(':null');
+      const nuloB = b.id.endsWith(':null');
+      if (nuloA !== nuloB) return nuloA ? 1 : -1;
+      return a.label.localeCompare(b.label, 'es', { numeric: true });
+    });
+
     return {
-      tipo: 'A', categoria, categoriaLabel,
-      periodos: ordenarPeriodos(bloques.flatMap((bloque) => bloque.columnas.map((columna) => columna.label))),
+      tipo: 'A',
+      conPeriodo: true,
+      categoria,
+      categoriaLabel,
+      profundidad,
+      profundidadLabel,
+      periodos: ordenarPeriodos(bloques.flatMap((bloque) =>
+        bloque.columnas.map((columna) => columna.label))),
       filas: filasOrdenadas,
-      sexos: sexosOrdenados.sort((a, b) => {
-        const nuloA = a.id.endsWith(':null');
-        const nuloB = b.id.endsWith(':null');
-        if (nuloA !== nuloB) return nuloA ? 1 : -1;
-        return a.label.localeCompare(b.label, 'es', { numeric: true });
-      }),
+      subfilas: subfilasOrdenadas,
       bloques
     };
   }
@@ -459,26 +567,28 @@ const escribirLayoutB = (hoja, estructura, detalle) => {
   }
 };
 
-const escribirLayoutA = (hoja, estructura, detalle) => {
+const formatearNumerosFila = (fila, desdeColumna, hastaColumna, numFmt) => {
+  for (let columna = desdeColumna; columna <= hastaColumna; columna += 1) {
+    fila.getCell(columna).numFmt = numFmt;
+  }
+};
+
+const escribirLayoutAConPeriodo = (hoja, estructura, detalle) => {
   if (estructura.bloques.length === 0 || estructura.periodos.length === 0
     || estructura.filas.length === 0) {
     estiloDato(hoja.addRow(['Sin datos para el período', '']));
     return;
   }
-  const numFmt = detalle.format === 'percentage' ? '0.00"%"'
-    : (detalle.format === 'currency' ? '"$"#,##0.##' : '#,##0.##');
-  const formatearNumeros = (fila) => {
-    for (let columna = 2; columna <= estructura.periodos.length + 1; columna++) {
-      fila.getCell(columna).numFmt = numFmt;
-    }
-  };
+  const numFmt = formatoNumerico(detalle.format);
+  const ultimaColumna = estructura.periodos.length + 1;
   let encabezadoFijado = null;
   estructura.bloques.forEach((bloque, indice) => {
     if (indice > 0) hoja.addRow([]);
     const filaAnio = hoja.addRow([bloque.anio]);
     filaAnio.getCell(1).font = { bold: true, size: 12, color: { argb: COLOR_PRIMARIO } };
     const encabezado = hoja.addRow([
-      `${estructura.categoriaLabel} / Sexo`, ...estructura.periodos.map(valorColumna)
+      `${estructura.categoriaLabel} / ${estructura.profundidadLabel}`,
+      ...estructura.periodos.map(valorColumna)
     ]);
     estiloEncabezado(encabezado);
     if (!encabezadoFijado) encabezadoFijado = encabezado;
@@ -488,18 +598,58 @@ const escribirLayoutA = (hoja, estructura, detalle) => {
       const principal = hoja.addRow([fila.label, ...totales]);
       estiloDato(principal);
       principal.getCell(1).font = { bold: true };
-      formatearNumeros(principal);
-      for (const sexo of estructura.sexos) {
+      formatearNumerosFila(principal, 2, ultimaColumna, numFmt);
+      for (const subfila of estructura.subfilas) {
         const valores = estructura.periodos.map((periodo) =>
-          porPeriodo?.get(periodo)?.depthValues?.[sexo.id] ?? null);
-        const subfila = hoja.addRow([sexo.label, ...valores]);
-        estiloDato(subfila);
-        subfila.getCell(1).alignment = { indent: 1 };
-        formatearNumeros(subfila);
+          porPeriodo?.get(periodo)?.depthValues?.[subfila.id] ?? null);
+        const creada = hoja.addRow([subfila.label, ...valores]);
+        estiloDato(creada);
+        creada.getCell(1).alignment = { indent: 1 };
+        formatearNumerosFila(creada, 2, ultimaColumna, numFmt);
       }
     }
   });
   if (encabezadoFijado) hoja.views = [{ state: 'frozen', ySplit: encabezadoFijado.number }];
+};
+
+const escribirLayoutASinPeriodo = (hoja, estructura, detalle) => {
+  if (estructura.bloques.length === 0 || estructura.columnas.length === 0
+    || estructura.filas.length === 0) {
+    estiloDato(hoja.addRow(['Sin datos para el período', '']));
+    return;
+  }
+  const numFmt = formatoNumerico(detalle.format);
+  const ultimaColumna = estructura.columnas.length + 1;
+  let encabezadoFijado = null;
+  estructura.bloques.forEach((bloque, indice) => {
+    if (indice > 0) hoja.addRow([]);
+    const filaAnio = hoja.addRow([bloque.anio]);
+    filaAnio.getCell(1).font = { bold: true, size: 12, color: { argb: COLOR_PRIMARIO } };
+    const encabezado = hoja.addRow([
+      `${estructura.categoriaLabel} / ${estructura.profundidadLabel}`,
+      ...estructura.columnas.map(valorColumna)
+    ]);
+    estiloEncabezado(encabezado);
+    if (!encabezadoFijado) encabezadoFijado = encabezado;
+    for (const etiqueta of estructura.filas) {
+      const porColumna = bloque.valores.get(etiqueta);
+      const valores = estructura.columnas.map((columna) =>
+        valorCelda(detalle, porColumna?.get(columna) ?? null));
+      const creada = hoja.addRow([etiqueta, ...valores]);
+      estiloDato(creada);
+      creada.getCell(1).font = { bold: true };
+      formatearNumerosFila(creada, 2, ultimaColumna, numFmt);
+    }
+  });
+  if (encabezadoFijado) hoja.views = [{ state: 'frozen', ySplit: encabezadoFijado.number }];
+};
+
+const escribirLayoutA = (hoja, estructura, detalle) => {
+  if (estructura.conPeriodo) {
+    escribirLayoutAConPeriodo(hoja, estructura, detalle);
+  } else {
+    escribirLayoutASinPeriodo(hoja, estructura, detalle);
+  }
 };
 
 const escribirEstructura = (hoja, detalle) => {
@@ -533,7 +683,8 @@ const reunirDetalles = async (reporte) => {
         const categoria = resolverCategoria(seleccionadas, detalle.groupBy, detalle.allowedGroupBy);
         const layout = detectarLayout(seleccionadas, categoria, detalle);
         if (layout) {
-          estructura = await construirEstructura(key, filtrosBase, detalle, categoria, layout);
+          const categoriaFinal = layout.categoria || categoria;
+          estructura = await construirEstructura(key, filtrosBase, detalle, categoriaFinal, layout);
         }
       } catch (err) {
         estructuraError = err.message;
@@ -592,12 +743,10 @@ const armarExcel = async (reporte) => {
   // --- Hoja por indicador ---
   detalles.forEach((detalle, indice) => {
     const hoja = wb.addWorksheet(nombreHoja(indice, detalle.title));
-    const cantidadColumnas = detalle.estructura
-      ? 1 + (detalle.estructura.tipo === 'C'
-        ? detalle.estructura.columnas.length
-        : detalle.estructura.periodos.length)
-      : 2;
-    configurarColumnas(hoja, cantidadColumnas);
+    const columnas = detalle.estructura?.columnas?.length
+      ?? detalle.estructura?.periodos?.length
+      ?? 0;
+    configurarColumnas(hoja, detalle.estructura ? 1 + columnas : 2);
     if (detalle.estructura) {
       escribirEstructura(hoja, detalle);
     } else {
@@ -608,7 +757,152 @@ const armarExcel = async (reporte) => {
   return Buffer.from(await wb.xlsx.writeBuffer());
 };
 
-// Genera el archivo al vuelo y registra la ejecución (solo metadata, sin archivo).
+const ESTADOS_EJECUCION = ['PENDIENTE', 'GENERANDO', 'LISTO', 'ERROR'];
+
+const validarIdEjecucion = (value, campo = 'id de la ejecución') => {
+  if (!/^\d+$/.test(String(value ?? ''))) {
+    throw new ValidationError(`El ${campo} debe ser numérico`);
+  }
+  return Number(value);
+};
+
+const parsearIdOpcional = (value, campo) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (['todos', 'all'].includes(String(value).trim().toLowerCase())) return null;
+  return validarIdEjecucion(value, campo);
+};
+
+const parseFecha = (value, finDelDia = false) => {
+  if (value === undefined || value === null || value === '') return null;
+  const texto = String(value).trim();
+  const fecha = new Date(texto);
+  if (Number.isNaN(fecha.getTime())) {
+    throw new ValidationError(`Fecha inválida: ${value}`);
+  }
+  if (finDelDia && /^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+    fecha.setUTCHours(23, 59, 59, 999);
+  }
+  return fecha;
+};
+
+const construirRangoFechas = (query = {}) => {
+  const fechaUnica = query.fecha;
+  const desdeRaw = query.fromDate ?? query.desde ?? query.fechaDesde ?? fechaUnica;
+  const hastaRaw = query.toDate ?? query.hasta ?? query.fechaHasta ?? fechaUnica;
+  const desde = parseFecha(desdeRaw, false);
+  const hasta = parseFecha(hastaRaw, true);
+  if (desde && hasta && desde > hasta) {
+    throw new ValidationError('La fecha desde no puede ser mayor que la fecha hasta');
+  }
+  if (!desde && !hasta) return null;
+  const rango = {};
+  if (desde) rango[Op.gte] = desde;
+  if (hasta) rango[Op.lte] = hasta;
+  return rango;
+};
+
+const construirWhereEjecuciones = (query = {}) => {
+  const where = {};
+  const estadoQuery = String(query.estado ?? '').trim().toLowerCase();
+  if (estadoQuery && !['todos', 'all'].includes(estadoQuery)) {
+    const estado = estadoQuery.toUpperCase();
+    if (!ESTADOS_EJECUCION.includes(estado)) {
+      throw new ValidationError(`Estado inválido. Permitidos: ${ESTADOS_EJECUCION.join(', ')}`);
+    }
+    where.estado = estado;
+  }
+  const rango = construirRangoFechas(query);
+  if (rango) where.generadoEn = rango;
+  return where;
+};
+
+const construirIncludeEjecucion = (whereReporte = null) => {
+  const reporte = {
+    model: Reporte,
+    as: 'reporte',
+    attributes: ['id', 'nombre', 'tipo', 'departmentId', 'createdBy'],
+    required: true
+  };
+  if (whereReporte) reporte.where = whereReporte;
+  return [
+    reporte,
+    { model: User, as: 'solicitante', attributes: ['id', 'name', 'email'], required: false }
+  ];
+};
+
+const serializarEjecucion = (ejecucion) => {
+  const data = typeof ejecucion.toJSON === 'function' ? ejecucion.toJSON() : ejecucion;
+  return {
+    ...data,
+    archivoDisponible: reporteArchivos.existeEjecucion(data.id)
+  };
+};
+
+const ordenEjecuciones = [['generadoEn', 'DESC'], ['createdAt', 'DESC']];
+
+const listEjecuciones = async (user, reporteId, query = {}) => {
+  const reporte = await reporteService.getReporteById(user, reporteId);
+  const where = { reporteId: reporte.id, ...construirWhereEjecuciones(query) };
+  const ejecuciones = await ReporteEjecucion.findAll({
+    where,
+    include: construirIncludeEjecucion(),
+    order: ordenEjecuciones
+  });
+  return ejecuciones.map(serializarEjecucion);
+};
+
+const listEjecucionesGeneral = async (user, query = {}) => {
+  const where = construirWhereEjecuciones(query);
+  const reporteId = parsearIdOpcional(query.reporteId, 'reporteId');
+
+  let whereReporte = null;
+  if (reporteId) {
+    const reporte = await reporteService.getReporteById(user, reporteId);
+    where.reporteId = reporte.id;
+  } else {
+    const politica = politicaReportes(user);
+    if (politica.lectura === 'area') {
+      whereReporte = { departmentId: { [Op.in]: politica.areas } };
+    } else if (politica.lectura === 'propios') {
+      whereReporte = { createdBy: user.id };
+    }
+  }
+
+  const ejecuciones = await ReporteEjecucion.findAll({
+    where,
+    include: construirIncludeEjecucion(whereReporte),
+    order: ordenEjecuciones
+  });
+  return ejecuciones.map(serializarEjecucion);
+};
+
+const descargarEjecucion = async (user, ejecucionId) => {
+  const id = validarIdEjecucion(ejecucionId);
+  const ejecucion = await ReporteEjecucion.findByPk(id);
+  if (!ejecucion) {
+    throw new NotFoundError('Ejecución no encontrada');
+  }
+
+  const reporte = await reporteService.getReporteById(user, ejecucion.reporteId);
+  if (!reporteArchivos.existeEjecucion(id)) {
+    throw new NotFoundError('El archivo de esta ejecución no está disponible. Vuelve a generar el reporte.');
+  }
+
+  const buffer = await reporteArchivos.leerEjecucion(id);
+  const nombre = ejecucion.archivoNombre || `reporte-${ejecucion.reporteId}.xlsx`;
+
+  auditarReporte({
+    user,
+    accion: 'REPORTE_REDOWNLOADED',
+    reporte,
+    extra: { ejecucionId: id, formato: ejecucion.formato },
+    path: `/api/reportes/ejecuciones/${id}/descargar`
+  });
+
+  return { buffer, nombre, ejecucion };
+};
+
+// Genera el archivo, registra la ejecución y persiste el XLSX para re-descargas.
 const descargarReporte = async (user, reporteId) => {
   const reporte = await reporteService.getReporteById(user, reporteId);
   if (!reporte.activo) {
@@ -618,35 +912,44 @@ const descargarReporte = async (user, reporteId) => {
   const buffer = await armarExcel(reporte);
   const nombre = nombreArchivo(reporte);
 
-  await ReporteEjecucion.create({
-    reporteId: reporte.id,
-    solicitadoPor: user.id,
-    estado: 'LISTO',
-    formato: 'XLSX',
-    parametros: reporte.filtros || {},
-    archivoNombre: nombre,
-    generadoEn: new Date()
-  });
+  let ejecucion;
+  try {
+    ejecucion = await ReporteEjecucion.create({
+      reporteId: reporte.id,
+      solicitadoPor: user.id,
+      estado: 'GENERANDO',
+      formato: 'XLSX',
+      parametros: reporte.filtros || {},
+      archivoNombre: nombre
+    });
+    await reporteArchivos.guardarEjecucion(ejecucion.id, buffer);
+    await ejecucion.update({ estado: 'LISTO', generadoEn: new Date() });
+  } catch (error) {
+    if (ejecucion?.id) {
+      await ejecucion.update({ estado: 'ERROR', error: error.message }).catch(() => {});
+    }
+    throw error;
+  }
 
   auditarReporte({
     user,
     accion: 'REPORTE_GENERATED',
     reporte,
-    extra: { indicadores: (reporte.indicadores || []).length },
+    extra: {
+      indicadores: (reporte.indicadores || []).length,
+      ejecucionId: ejecucion.id
+    },
     path: `/api/reportes/${reporte.id}/descargar`
   });
 
-  return { buffer, nombre };
-};
-
-const listEjecuciones = async (user, reporteId) => {
-  await reporteService.getReporteById(user, reporteId);
-  return ReporteEjecucion.findAll({ where: { reporteId }, order: [['createdAt', 'DESC']] });
+  return { buffer, nombre, ejecucion };
 };
 
 module.exports = {
   descargarReporte,
+  descargarEjecucion,
   listEjecuciones,
+  listEjecucionesGeneral,
   armarExcel,
   __test: {
     limpiarFiltros,
@@ -656,6 +959,9 @@ module.exports = {
     resolverAnios,
     resolverAnioReferencia,
     ordenarPeriodos,
-    construirMapaDimensiones
+    construirMapaDimensiones,
+    construirWhereEjecuciones,
+    parseFecha,
+    formatoNumerico
   }
 };
