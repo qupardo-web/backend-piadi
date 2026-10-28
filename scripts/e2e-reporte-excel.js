@@ -164,6 +164,20 @@ const valorEnBloque = (rows, anio, categoria, periodo) => {
   throw new Error(`No se encontró la categoría ${categoria} en el bloque ${anio}`);
 };
 
+const valorSexoEnBloque = (rows, anio, categoria, sexo, periodo, cantidadSexos) => {
+  const indice = filaAnio(rows, anio);
+  assert.ok(indice >= 0, `No se encontró el bloque del año ${anio}`);
+  const columna = rows[indice + 1].findIndex((valor, idx) => idx > 0 && String(valor) === String(periodo));
+  assert.ok(columna > 0, `No se encontró el período ${periodo}`);
+  const categoriaIndex = rows.findIndex((fila, idx) => idx > indice + 1
+    && String(fila[0]).trim().toLowerCase() === String(categoria).trim().toLowerCase());
+  assert.ok(categoriaIndex > indice, `No se encontró ${categoria} en ${anio}`);
+  const subfila = rows.slice(categoriaIndex + 1, categoriaIndex + 1 + cantidadSexos)
+    .find((fila) => String(fila[0]).trim() === sexo);
+  assert.ok(subfila, `No se encontró sexo ${sexo} bajo ${categoria}`);
+  return subfila[columna];
+};
+
 const valorEnAnios = (rows, categoria, anio) => {
   const encabezado = rows.find((fila) => String(fila[0]).startsWith('Desglose por '));
   assert.ok(encabezado, 'No se encontró el encabezado "Desglose por ..."');
@@ -195,6 +209,20 @@ const oracleBeneficioPeriodo = async (anio, periodo, beneficio) => {
        JOIN caracterizacion_estudiante c ON c.rut = a.rut
       WHERE m.anio = $1 AND m.periodo = $2 AND c.beneficios = $3`,
     [anio, periodo, beneficio]
+  );
+  return rows[0].n;
+};
+
+const oracleBeneficioPeriodoSexo = async (anio, periodo, beneficio, sexo) => {
+  const { rows } = await db.query(
+    `SELECT COUNT(DISTINCT m."codCli")::int AS n
+       FROM matriculas_por_asignatura m
+       JOIN alumnos a ON a."codCli" = m."codCli"
+       JOIN caracterizacion_estudiante c ON c.rut = a.rut
+      WHERE m.anio = $1 AND m.periodo = $2
+        AND c.beneficios IS NOT DISTINCT FROM $3
+        AND c.sexo IS NOT DISTINCT FROM $4`,
+    [anio, periodo, beneficio, sexo]
   );
   return rows[0].n;
 };
@@ -325,22 +353,47 @@ const casos = [
     }
   },
   {
-    nombre: '04-hoja1-degradada',
+    nombre: '04-hoja1-pivot-3d',
     async run(token) {
       const { wb } = await crearYDescargar({
         token,
-        caso: '04-hoja1-degradada',
+        caso: '04-hoja1-pivot-3d',
         indicadores: ['beneficios_becas'],
-        filtros: { fromYear: 2025, toYear: 2025 },
+        filtros: { fromYear: 2024, toYear: 2025 },
         dimsPorIndicador: { beneficios_becas: ['year', 'periodo', 'sexo'] }
       });
       const rows = filas(wb, hojasIndicador(wb)[0]);
-      assert.ok(rows.some((fila) => String(fila[0]).toLowerCase().includes('sexo')),
-        'Falta el aviso de degradación por sexo');
-      assert.equal(rows.some((fila) => ['F', 'M', 'O'].includes(String(fila[0]))), false,
-        'No debe haber subfilas de sexo todavía');
+      assert.ok(rows.some((fila) => String(fila[0]).includes(' / Sexo')), 'Falta el encabezado 3D');
+      assert.equal(rows.some((fila) => String(fila[0]).includes('aún no está disponible')), false);
+      assert.ok(filaAnio(rows, 2024) >= 0 && filaAnio(rows, 2025) >= 0, 'Faltan bloques por año');
       const esperado = await oracleBeneficioPeriodo(2025, 1, 'BECA ESTATAL');
       assert.equal(Number(valorEnBloque(rows, 2025, 'BECA ESTATAL', 1)), esperado);
+      const detalle = await api('/api/indicators/beneficios_becas/detail?groupBy=beneficios&splitBy=periodo&splitBy2=sexo&year=2025', { token });
+      const cubo = detalle?.data || detalle;
+      assert.equal(cubo.isTridimensional, true);
+      for (const id of cubo.depths) {
+        const sexo = id.endsWith(':null') ? null : cubo.depthLabels[id];
+        const conteo = await oracleBeneficioPeriodoSexo(2025, 1, 'BECA ESTATAL', sexo);
+        const valor = valorSexoEnBloque(rows, 2025, 'BECA ESTATAL', cubo.depthLabels[id], 1, cubo.depths.length);
+        if (conteo > 0) assert.equal(Number(valor), conteo);
+        else assert.equal(valor, '', 'Una intersección sin registros debe permanecer vacía');
+      }
+    }
+  },
+  {
+    nombre: '04b-hoja1-filtro-beneficio',
+    async run(token) {
+      const { wb } = await crearYDescargar({
+        token,
+        caso: '04b-hoja1-filtro-beneficio',
+        indicadores: ['beneficios_becas'],
+        filtros: { year: 2024, beneficios: ['GRATUIDAD'] },
+        dimsPorIndicador: { beneficios_becas: ['year', 'periodo', 'sexo'] }
+      });
+      const rows = filas(wb, hojasIndicador(wb)[0]);
+      assert.equal(rows.some((fila) => String(fila[0]).toUpperCase() === 'BECA ESTATAL'), false);
+      const esperado = await oracleBeneficioPeriodo(2024, 1, 'GRATUIDAD');
+      assert.equal(Number(valorEnBloque(rows, 2024, 'GRATUIDAD', 1)), esperado);
     }
   },
   {
