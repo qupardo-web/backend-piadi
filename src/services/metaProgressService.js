@@ -2,6 +2,7 @@ const { Meta, MetaMetric, IndicatorDefinition, sequelize } = require('../models'
 const indicatorService = require('./indicatorService');
 const { ValidationError, NotFoundError } = require('../utils/errors');
 const { canReadMeta } = require('../middleware/rectoriaAuthorization');
+const { readFinalSnapshot } = require('../utils/metaSnapshot');
 
 const STATUSES = ['cumplida', 'en_progreso', 'en_riesgo', 'no_cumplida'];
 const TARGET_LIMIT_BEHAVIOR = 'no-debe-superar';
@@ -117,14 +118,14 @@ const determineStatus = (meta, totalProgress, now = new Date(), metrics = []) =>
   return totalProgress < elapsedProgress ? 'en_riesgo' : 'en_progreso';
 };
 
-const createIndicatorResolver = () => {
+const createIndicatorResolver = ({ fresh = false } = {}) => {
   const pending = new Map();
   return (indicatorKey, query, meta) => {
     const cacheKey = JSON.stringify([indicatorKey, query]);
     if (!pending.has(cacheKey)) {
       const getDBValue = async () => {
-        if (process.env.NODE_ENV === 'test') {
-          return indicatorService.getIndicatorValue(indicatorKey, query);
+        if (fresh || process.env.NODE_ENV === 'test') {
+          return indicatorService.getIndicatorValue(indicatorKey, query, { bypassCache: fresh });
         }
         try {
           const year = meta.anio;
@@ -149,10 +150,10 @@ const createIndicatorResolver = () => {
           if (result && result[0] && result[0].value !== null && result[0].value !== undefined) {
             return { data: { value: Number(result[0].value), hasData: true } };
           }
-          return indicatorService.getIndicatorValue(indicatorKey, query);
+          return indicatorService.getIndicatorValue(indicatorKey, query, { bypassCache: fresh });
         } catch (err) {
           console.warn(`Fallback to JS indicator calculation for ${indicatorKey}:`, err.message);
-          return indicatorService.getIndicatorValue(indicatorKey, query);
+          return indicatorService.getIndicatorValue(indicatorKey, query, { bypassCache: fresh });
         }
       };
       pending.set(cacheKey, getDBValue());
@@ -209,6 +210,9 @@ const calculateMetric = async (meta, rawMetric, resolveIndicator) => {
 
 const calculateProgress = async (rawMeta, options = {}) => {
   const meta = asPlain(rawMeta);
+  if (meta.lifecycleStatus === 'CERRADA') {
+    return readFinalSnapshot(meta.finalSnapshot);
+  }
   if (meta.lifecycleStatus === 'BORRADOR') {
     return { totalProgress: null, elapsedProgress: null, status: null, metrics: [] };
   }
@@ -282,6 +286,7 @@ module.exports = {
   elapsedPercentage,
   evaluateMetricRisk,
   determineStatus,
+  createIndicatorResolver,
   calculateProgress,
   getMetaProgress,
   listMetasWithProgress,

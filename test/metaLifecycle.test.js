@@ -277,7 +277,7 @@ test('ACTIVA no vuelve a BORRADOR y conserva reemplazo completo de métricas', a
     lifecycleStatus: 'ACTIVA', indicatorKey: 'kpi-a', valorMeta: 80, draftMetrics: null
   });
   await assert.rejects(metaService.update(5, { lifecycleStatus: 'BORRADOR' }), validation400);
-  await assert.rejects(metaService.update(5, { lifecycleStatus: 'CERRADA' }), validation400);
+  await assert.rejects(metaService.update(5, { lifecycleStatus: 'CERRADA' }), (error) => error.statusCode === 409);
   await assert.rejects(metaService.update(5, { draftMetrics: [{ weight: 10 }], metrics: [metric()] }), validation400);
   await metaService.update(5, { metrics: [metric({ targetValue: 90 })] });
   assert.equal(row.lifecycleStatus, 'ACTIVA');
@@ -287,7 +287,7 @@ test('ACTIVA no vuelve a BORRADOR y conserva reemplazo completo de métricas', a
 });
 
 test('un estado actual desconocido no permite transiciones arbitrarias', async () => {
-  const { calls } = setupWrites({ lifecycleStatus: 'CERRADA' });
+  const { calls } = setupWrites({ lifecycleStatus: 'ARCHIVADA' });
   await assert.rejects(metaService.update(5, { lifecycleStatus: 'ACTIVA', metrics: [metric()] }), validation400);
   assert.equal(calls.update.length, 0);
 });
@@ -462,11 +462,12 @@ test('migración declara backfill, restricciones condicionales y vista pública 
   assert.equal((views.match(/SELECT DISTINCT anio FROM metas WHERE anio IS NOT NULL AND "lifecycleStatus" = 'ACTIVA'/g) || []).length, 2);
 });
 
-test('inicio de servidor conserva ambas migraciones antes de semillas y restricciones', () => {
+test('inicio de servidor conserva las tres migraciones antes de semillas y restricciones', () => {
   const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
   const steps = [
     'await sequelize.sync()',
     'await migrateMetaLifecycle()',
+    'await migrateMetaClosure()',
     'await migrateHelpAdmin()',
     'await preparePlantillaDepartmentMigration()',
     'await seedDatabase()',

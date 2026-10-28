@@ -103,7 +103,9 @@ const router = express.Router();
  *         nombre: { type: string }
  *         fechaInicio: { type: string, format: date-time }
  *         fechaLimite: { type: string, format: date-time }
- *         lifecycleStatus: { type: string, enum: [BORRADOR, ACTIVA] }
+ *         lifecycleStatus: { type: string, enum: [BORRADOR, ACTIVA, CERRADA] }
+ *         closedAt: { type: string, format: date-time, nullable: true }
+ *         finalSnapshot: { $ref: '#/components/schemas/MetaFinalSnapshot' }
  *         draftMetrics:
  *           type: array
  *           nullable: true
@@ -128,10 +130,26 @@ const router = express.Router();
  *         progress: { type: number, description: Cumplimiento no ponderado de la métrica. }
  *         weightedProgress: { type: number, description: Aporte ponderado al progreso total. }
  *         hasData: { type: boolean }
+ *         calculationIssue: { type: string, nullable: true }
+ *     MetaFinalSnapshot:
+ *       type: object
+ *       nullable: true
+ *       description: Resultado final inmutable, capturado al cerrar; no se recalcula al consultar.
+ *       required: [version, totalProgress, elapsedProgress, status, metrics]
+ *       properties:
+ *         version: { type: integer, enum: [1] }
+ *         totalProgress: { type: number }
+ *         elapsedProgress: { type: number }
+ *         status: { type: string, enum: [cumplida, en_progreso, en_riesgo, no_cumplida] }
+ *         metrics:
+ *           type: array
+ *           items: { $ref: '#/components/schemas/MetaMetricProgress' }
  *     MetaProgress:
  *       type: object
  *       properties:
- *         lifecycleStatus: { type: string, enum: [BORRADOR, ACTIVA] }
+ *         lifecycleStatus: { type: string, enum: [BORRADOR, ACTIVA, CERRADA] }
+ *         closedAt: { type: string, format: date-time, nullable: true }
+ *         finalSnapshot: { $ref: '#/components/schemas/MetaFinalSnapshot' }
  *         draftMetrics:
  *           type: array
  *           nullable: true
@@ -142,7 +160,7 @@ const router = express.Router();
  *           type: string
  *           nullable: true
  *           enum: [cumplida, en_progreso, en_riesgo, no_cumplida]
- *           description: Estado de cumplimiento; en BORRADOR es null, al igual que ambos progresos.
+ *           description: Estado de cumplimiento; en BORRADOR es null, al igual que ambos progresos; en CERRADA procede del snapshot.
  *         metrics:
  *           type: array
  *           items: { $ref: '#/components/schemas/MetaMetricProgress' }
@@ -250,8 +268,8 @@ router.get('/institucional', authenticateToken, requireRectoria, metaController.
  * /api/metas/{id}/progress:
  *   get:
  *     tags: [Metas]
- *     summary: Obtiene el detalle de progreso de una meta ACTIVA o un BORRADOR sin cálculo
- *     description: Los BORRADOR solo son visibles para su creador y Rectoría; su status y progresos son null.
+ *     summary: Obtiene el progreso de una meta ACTIVA, CERRADA o un BORRADOR sin cálculo
+ *     description: Los BORRADOR solo son visibles para su creador y Rectoría; su status y progresos son null. En CERRADA se devuelve el snapshot persistido sin recalcular indicadores.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
@@ -276,11 +294,42 @@ router.get('/:id/progress', authenticateToken, metaController.getProgress);
 
 /**
  * @openapi
+ * /api/metas/{id}/cerrar:
+ *   post:
+ *     tags: [Metas]
+ *     summary: Cierra definitivamente una meta ACTIVA y conserva su resultado final
+ *     description: Permite el cierre manual anticipado sin cambiar fechaLimite. No admite payload; el servidor calcula y guarda un único snapshot. Repetir el cierre devuelve el resultado original sin recalcular ni auditar de nuevo.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer, minimum: 1 }
+ *     responses:
+ *       200:
+ *         description: Meta cerrada o resultado previo de un cierre repetido.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 data: { $ref: '#/components/schemas/MetaProgress' }
+ *       400: { description: ID o solicitud inválida. }
+ *       401: { description: Token ausente o inválido. }
+ *       403: { description: El usuario no puede administrar la meta. }
+ *       404: { description: Meta inexistente. }
+ *       409: { description: Solo una meta ACTIVA puede cerrarse. }
+ */
+router.post('/:id/cerrar', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, metaController.close);
+
+/**
+ * @openapi
  * /api/metas/{id}:
  *   get:
  *     tags: [Metas]
  *     summary: Obtiene una meta con lifecycleStatus, métricas completas y datos parciales del BORRADOR
- *     description: Un BORRADOR solo es visible para su creador y Rectoría.
+ *     description: Un BORRADOR solo es visible para su creador y Rectoría. Una CERRADA devuelve su resultado final sin recalcularlo.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
@@ -302,7 +351,7 @@ router.get('/:id/progress', authenticateToken, metaController.getProgress);
  *   put:
  *     tags: [Metas]
  *     summary: Edita BORRADOR o actualiza/activa una meta con métricas completas
- *     description: BORRADOR a ACTIVA exige metrics completos cuya suma de weight sea 100; limpia draftMetrics en una transacción. ACTIVA a BORRADOR y estados ajenos se rechazan. Una meta ACTIVA mantiene el reemplazo completo de metrics.
+ *     description: BORRADOR a ACTIVA exige metrics completos cuya suma de weight sea 100 y limpia draftMetrics en una transacción. Una meta ACTIVA mantiene el reemplazo completo de metrics; ACTIVA a BORRADOR se rechaza. CERRADA se obtiene únicamente con POST /api/metas/{id}/cerrar y después no admite PUT.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
@@ -320,6 +369,7 @@ router.get('/:id/progress', authenticateToken, metaController.getProgress);
  *       401: { description: Token ausente o inválido. }
  *       403: { description: El usuario no es creador ni pertenece a Rectoría. }
  *       404: { description: Meta, departamento o indicador inexistente. }
+ *       409: { description: La meta está CERRADA o la transición no está permitida. }
  *   delete:
  *     tags: [Metas]
  *     summary: Elimina una meta y sus métricas asociadas
@@ -334,6 +384,7 @@ router.get('/:id/progress', authenticateToken, metaController.getProgress);
  *       401: { description: Token ausente o inválido. }
  *       403: { description: El usuario no es creador ni pertenece a Rectoría. }
  *       404: { description: Meta inexistente. }
+ *       409: { description: Una meta CERRADA no puede eliminarse. }
  */
 router.get('/:id', authenticateToken, metaController.getById);
 router.put('/:id', authenticateToken, requireMetaOwnership, requireMetaDepartmentAccess, auditMetaOperation('UPDATE'), metaController.update);
