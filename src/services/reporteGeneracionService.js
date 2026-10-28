@@ -262,6 +262,67 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
     };
   }
 
+  if (layout.tipo === 'A') {
+    const anios = resolverAnios(filtros, detalle);
+    const bloques = [];
+    const filas = new Map();
+    const sexos = new Map();
+    for (const anio of anios) {
+      const { data } = await indicatorService.getIndicatorDetailView(indicatorKey, {
+        ...filtros,
+        year: anio,
+        groupBy: categoria,
+        splitBy: 'periodo',
+        splitBy2: 'sexo'
+      });
+      if (!data?.isTridimensional) {
+        throw new Error(`El indicador no devolvió un cubo por período y sexo para ${anio}`);
+      }
+      for (const id of data.depths) sexos.set(id, data.depthLabels[id]);
+      const columnas = columnasDeMatriz(data);
+      const valores = new Map();
+      for (const fila of data.cube) {
+        const label = etiquetaCategoria(categoria, fila);
+        filas.set(fila.rowKey, { rowKey: fila.rowKey, label });
+        valores.set(fila.rowKey, new Map(columnas.map((columna) => [
+          columna.label,
+          fila.values[columna.id]
+        ])));
+      }
+      bloques.push({ anio, columnas, valores });
+    }
+    const filasOrdenadas = [...filas.values()];
+    const etiquetaNula = categoria === 'beneficios' ? 'Sin beneficio' : 'Sin dato';
+    if (filasOrdenadas.some((fila) => fila.rowKey === `${categoria}:null`)) {
+      for (const fila of filasOrdenadas) {
+        if (fila.rowKey !== `${categoria}:null`
+          && normalizarTexto(fila.label) === normalizarTexto(etiquetaNula)) {
+          fila.label = `${fila.label} (valor literal)`;
+        }
+      }
+    }
+    const sexosOrdenados = [...sexos].map(([id, label]) => ({ id, label }));
+    if (sexosOrdenados.some((sexo) => sexo.id === 'sexo:null')) {
+      for (const sexo of sexosOrdenados) {
+        if (sexo.id !== 'sexo:null' && normalizarTexto(sexo.label) === 'sin dato') {
+          sexo.label = `${sexo.label} (valor literal)`;
+        }
+      }
+    }
+    return {
+      tipo: 'A', categoria, categoriaLabel,
+      periodos: ordenarPeriodos(bloques.flatMap((bloque) => bloque.columnas.map((columna) => columna.label))),
+      filas: filasOrdenadas,
+      sexos: sexosOrdenados.sort((a, b) => {
+        const nuloA = a.id.endsWith(':null');
+        const nuloB = b.id.endsWith(':null');
+        if (nuloA !== nuloB) return nuloA ? 1 : -1;
+        return a.label.localeCompare(b.label, 'es', { numeric: true });
+      }),
+      bloques
+    };
+  }
+
   const anios = resolverAnios(filtros, detalle);
   const bloques = [];
   for (const anio of anios) {
@@ -285,9 +346,7 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
     bloque.columnas.map((columna) => columna.label)));
 
   return {
-    // A requiere una tercera dimensión (sexo) que el motor actual no soporta.
-    // Se degrada a B con un aviso visible hasta que exista el pivot 3D.
-    tipo: layout.tipo === 'A' ? 'A' : 'B',
+    tipo: 'B',
     categoria,
     categoriaLabel,
     anios: bloques.map((bloque) => bloque.anio),
@@ -299,10 +358,7 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
         fila.label,
         new Map(bloque.columnas.map((columna) => [columna.label, fila.values[columna.id]]))
       ]))
-    })),
-    nota: layout.tipo === 'A'
-      ? 'El desglose por sexo aún no está disponible; se muestra la vista sin sexo.'
-      : null
+    }))
   };
 };
 
@@ -403,18 +459,56 @@ const escribirLayoutB = (hoja, estructura, detalle) => {
   }
 };
 
+const escribirLayoutA = (hoja, estructura, detalle) => {
+  if (estructura.bloques.length === 0 || estructura.periodos.length === 0
+    || estructura.filas.length === 0) {
+    estiloDato(hoja.addRow(['Sin datos para el período', '']));
+    return;
+  }
+  const numFmt = detalle.format === 'percentage' ? '0.00"%"'
+    : (detalle.format === 'currency' ? '"$"#,##0.##' : '#,##0.##');
+  const formatearNumeros = (fila) => {
+    for (let columna = 2; columna <= estructura.periodos.length + 1; columna++) {
+      fila.getCell(columna).numFmt = numFmt;
+    }
+  };
+  let encabezadoFijado = null;
+  estructura.bloques.forEach((bloque, indice) => {
+    if (indice > 0) hoja.addRow([]);
+    const filaAnio = hoja.addRow([bloque.anio]);
+    filaAnio.getCell(1).font = { bold: true, size: 12, color: { argb: COLOR_PRIMARIO } };
+    const encabezado = hoja.addRow([
+      `${estructura.categoriaLabel} / Sexo`, ...estructura.periodos.map(valorColumna)
+    ]);
+    estiloEncabezado(encabezado);
+    if (!encabezadoFijado) encabezadoFijado = encabezado;
+    for (const fila of estructura.filas) {
+      const porPeriodo = bloque.valores.get(fila.rowKey);
+      const totales = estructura.periodos.map((periodo) => porPeriodo?.get(periodo)?.total ?? null);
+      const principal = hoja.addRow([fila.label, ...totales]);
+      estiloDato(principal);
+      principal.getCell(1).font = { bold: true };
+      formatearNumeros(principal);
+      for (const sexo of estructura.sexos) {
+        const valores = estructura.periodos.map((periodo) =>
+          porPeriodo?.get(periodo)?.depthValues?.[sexo.id] ?? null);
+        const subfila = hoja.addRow([sexo.label, ...valores]);
+        estiloDato(subfila);
+        subfila.getCell(1).alignment = { indent: 1 };
+        formatearNumeros(subfila);
+      }
+    }
+  });
+  if (encabezadoFijado) hoja.views = [{ state: 'frozen', ySplit: encabezadoFijado.number }];
+};
+
 const escribirEstructura = (hoja, detalle) => {
   const estructura = detalle.estructura;
-  const cantidadColumnas = 1 + (estructura.tipo === 'C'
-    ? estructura.columnas.length
-    : estructura.periodos.length);
   escribirCabeceraDetalle(hoja, detalle);
-  if (estructura.nota) {
-    escribirAviso(hoja, estructura.nota, cantidadColumnas);
-    hoja.addRow([]);
-  }
   if (estructura.tipo === 'C') {
     escribirLayoutC(hoja, estructura, detalle);
+  } else if (estructura.tipo === 'A') {
+    escribirLayoutA(hoja, estructura, detalle);
   } else {
     escribirLayoutB(hoja, estructura, detalle);
   }
