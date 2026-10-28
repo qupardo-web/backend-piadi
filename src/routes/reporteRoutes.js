@@ -184,11 +184,11 @@ router.get('/:id/descargar', authenticateToken, reporteController.descargarRepor
  *         schema: { type: integer }
  *       - in: query
  *         name: fromDate
- *         description: Fecha desde (YYYY-MM-DD o ISO). Aliases: desde, fechaDesde.
+ *         description: "Fecha desde (YYYY-MM-DD o ISO). Aliases: desde, fechaDesde."
  *         schema: { type: string, format: date }
  *       - in: query
  *         name: toDate
- *         description: Fecha hasta (YYYY-MM-DD o ISO). Aliases: hasta, fechaHasta.
+ *         description: "Fecha hasta (YYYY-MM-DD o ISO). Aliases: hasta, fechaHasta."
  *         schema: { type: string, format: date }
  *       - in: query
  *         name: fecha
