@@ -235,7 +235,8 @@ const resolverAnioReferencia = (filtros, detalle) => {
   return Number.isInteger(hastaSerie) ? hastaSerie : null;
 };
 
-const esFilaNula = (fila) => Boolean(fila?.rowKey) && String(fila.rowKey).endsWith(':null');
+const esIdNulo = (id) => /^[^:]+:null$/.test(String(id));
+const esFilaNula = (fila) => Boolean(fila?.rowKey) && esIdNulo(fila.rowKey);
 
 const etiquetaCategoria = (dimension, fila) => {
   if (esFilaNula(fila)) {
@@ -281,14 +282,27 @@ const filasDeMatriz = (data, categoria) => (data?.matrix || []).map((fila) => ({
   values: Object.fromEntries((data?.columns || []).map((id) => [id, fila.values?.[id] ?? null]))
 }));
 
+const desambiguarNulos = (items, id, etiqueta) => {
+  const etiquetasNulas = new Set(items.filter((item) => esIdNulo(id(item)))
+    .map((item) => normalizarTexto(etiqueta(item))));
+  return items.map((item) => {
+    const label = etiqueta(item);
+    return {
+      ...item,
+      label: !esIdNulo(id(item)) && etiquetasNulas.has(normalizarTexto(label))
+        ? `${label} (valor literal)` : label
+    };
+  });
+};
+
 const unirFilas = (bloques) => {
   const vistas = new Set();
   const filas = [];
   for (const bloque of bloques) {
     for (const fila of bloque.filas) {
-      if (!vistas.has(fila.label)) {
-        vistas.add(fila.label);
-        filas.push(fila.label);
+      if (!vistas.has(fila.rowKey)) {
+        vistas.add(fila.rowKey);
+        filas.push({ rowKey: fila.rowKey, label: fila.label });
       }
     }
   }
@@ -314,7 +328,8 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
       categoria,
       categoriaLabel,
       columnas: columnasDeMatriz(data),
-      filas: filasDeMatriz(data, categoria)
+      filas: desambiguarNulos(filasDeMatriz(data, categoria),
+        (fila) => fila.rowKey, (fila) => fila.label)
     };
   }
 
@@ -343,6 +358,11 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
           filas: filasDeMatriz(data, categoria)
         });
       }
+      const columnas = new Map();
+      for (const bloque of bloques) {
+        for (const columna of bloque.columnas) columnas.set(columna.id, columna);
+      }
+      const ordenColumnas = ordenarPeriodos([...columnas.values()].map((columna) => columna.label));
       return {
         tipo: 'A',
         conPeriodo: false,
@@ -350,14 +370,16 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
         categoriaLabel,
         profundidad,
         profundidadLabel,
-        columnas: ordenarPeriodos(bloques.flatMap((bloque) =>
-          bloque.columnas.map((columna) => columna.label))),
-        filas: unirFilas(bloques),
+        columnas: desambiguarNulos([...columnas.values()].sort((a, b) =>
+          ordenColumnas.indexOf(a.label) - ordenColumnas.indexOf(b.label)),
+          (columna) => columna.id, (columna) => columna.label),
+        filas: desambiguarNulos(unirFilas(bloques),
+          (fila) => fila.rowKey, (fila) => fila.label),
         bloques: bloques.map((bloque) => ({
           anio: bloque.anio,
           valores: new Map(bloque.filas.map((fila) => [
-            fila.label,
-            new Map(bloque.columnas.map((columna) => [columna.label, fila.values[columna.id]]))
+            fila.rowKey,
+            new Map(bloque.columnas.map((columna) => [columna.id, fila.values[columna.id]]))
           ]))
         }))
       };
@@ -411,8 +433,8 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
       }
     }
     subfilasOrdenadas.sort((a, b) => {
-      const nuloA = a.id.endsWith(':null');
-      const nuloB = b.id.endsWith(':null');
+      const nuloA = esIdNulo(a.id);
+      const nuloB = esIdNulo(b.id);
       if (nuloA !== nuloB) return nuloA ? 1 : -1;
       return a.label.localeCompare(b.label, 'es', { numeric: true });
     });
@@ -460,11 +482,12 @@ const construirEstructura = async (indicatorKey, filtros, detalle, categoria, la
     categoriaLabel,
     anios: bloques.map((bloque) => bloque.anio),
     periodos,
-    filas: unirFilas(bloques),
+    filas: desambiguarNulos(unirFilas(bloques),
+      (fila) => fila.rowKey, (fila) => fila.label),
     bloques: bloques.map((bloque) => ({
       anio: bloque.anio,
       valores: new Map(bloque.filas.map((fila) => [
-        fila.label,
+        fila.rowKey,
         new Map(bloque.columnas.map((columna) => [columna.label, fila.values[columna.id]]))
       ]))
     }))
@@ -552,11 +575,11 @@ const escribirLayoutB = (hoja, estructura, detalle) => {
     ]);
     estiloEncabezado(encabezado);
 
-    for (const etiqueta of estructura.filas) {
-      const filaValores = bloque.valores.get(etiqueta);
+    for (const fila of estructura.filas) {
+      const filaValores = bloque.valores.get(fila.rowKey);
       const valores = estructura.periodos.map((periodo) =>
         valorCelda(detalle, filaValores ? filaValores.get(periodo) : null));
-      const creada = hoja.addRow([etiqueta, ...valores]);
+      const creada = hoja.addRow([fila.label, ...valores]);
       estiloDato(creada);
       creada.getCell(1).font = { bold: true };
     }
@@ -619,14 +642,14 @@ const escribirLayoutASinPeriodo = (hoja, estructura, detalle) => {
     filaAnio.getCell(1).font = { bold: true, size: 12, color: { argb: COLOR_PRIMARIO } };
     const encabezado = hoja.addRow([
       `${estructura.categoriaLabel} / ${estructura.profundidadLabel}`,
-      ...estructura.columnas.map(valorColumna)
+      ...estructura.columnas.map((columna) => valorColumna(columna.label))
     ]);
     estiloEncabezado(encabezado);
-    for (const etiqueta of estructura.filas) {
-      const porColumna = bloque.valores.get(etiqueta);
+    for (const fila of estructura.filas) {
+      const porColumna = bloque.valores.get(fila.rowKey);
       const valores = estructura.columnas.map((columna) =>
-        valorCelda(detalle, porColumna?.get(columna) ?? null));
-      const creada = hoja.addRow([etiqueta, ...valores]);
+        valorCelda(detalle, porColumna?.get(columna.id) ?? null));
+      const creada = hoja.addRow([fila.label, ...valores]);
       estiloDato(creada);
       creada.getCell(1).font = { bold: true };
       formatearNumerosFila(creada, 2, ultimaColumna, numFmt);

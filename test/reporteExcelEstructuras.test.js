@@ -328,6 +328,119 @@ test('genera hoja 4 con años como columnas', async () => {
   assert.deepEqual(filaNula.slice(0, 3), ['Sin beneficio', 0, 2]);
 });
 
+test('Hoja 4 distingue una categoría nula del texto literal con la misma etiqueta', async () => {
+  indicatorService.getIndicatorDetailView = async (_key, query = {}) => {
+    if (query.splitBy === 'year') {
+      return { data: {
+        ...matrizAnio,
+        matrix: [
+          { row: 'Sin beneficio', rowKey: 'beneficios:string:Sin beneficio',
+            values: { 'year:number:2023': 3, 'year:number:2024': 4 } },
+          { row: 'Sin dato', rowKey: 'beneficios:null',
+            values: { 'year:number:2023': 1, 'year:number:2024': 2 } }
+        ]
+      } };
+    }
+    return { data: detalleBase };
+  };
+  const rows = hojaIndicador(await service.armarExcel(reporte({
+    fromYear: 2023, toYear: 2024, desag: ['beneficios_becas|Año']
+  })));
+  assert.deepEqual(rows.filter((fila) => fila[0] === 'Sin beneficio').map((fila) => fila.slice(0, 3)),
+    [['Sin beneficio', 1, 2]]);
+  assert.deepEqual(rows.filter((fila) => fila[0] === 'Sin beneficio (valor literal)').map((fila) => fila.slice(0, 3)),
+    [['Sin beneficio (valor literal)', 3, 4]]);
+});
+
+test('Hoja 4 no interpreta el texto literal null como un ID nulo', async () => {
+  indicatorService.getIndicatorDetailView = async (_key, query = {}) => query.splitBy === 'year'
+    ? { data: {
+      ...matrizAnio,
+      matrix: [
+        { row: 'null', rowKey: 'beneficios:string:null',
+          values: { 'year:number:2023': 3, 'year:number:2024': 4 } },
+        { row: 'Sin dato', rowKey: 'beneficios:null',
+          values: { 'year:number:2023': 1, 'year:number:2024': 2 } }
+      ]
+    } }
+    : { data: detalleBase };
+  const rows = hojaIndicador(await service.armarExcel(reporte({
+    fromYear: 2023, toYear: 2024, desag: ['beneficios_becas|Año']
+  })));
+  assert.deepEqual(rows.find((fila) => fila[0] === 'null').slice(0, 3), ['null', 3, 4]);
+  assert.deepEqual(rows.find((fila) => fila[0] === 'Sin beneficio').slice(0, 3),
+    ['Sin beneficio', 1, 2]);
+});
+
+test('Hoja 3 no sobreescribe categorías homónimas de años distintos', async () => {
+  indicatorService.getIndicatorDetailView = async (_key, query = {}) => {
+    if (query.splitBy === 'periodo') {
+      return { data: {
+        ...matrizPeriodo(Number(query.year)),
+        matrix: Number(query.year) === 2023
+          ? [{ row: 'Sin beneficio', rowKey: 'beneficios:string:Sin beneficio',
+            values: { 'periodo:number:1': 3, 'periodo:number:2': 4 } }]
+          : [{ row: 'Sin dato', rowKey: 'beneficios:null',
+            values: { 'periodo:number:1': 1, 'periodo:number:2': 2 } }]
+      } };
+    }
+    return { data: detalleBase };
+  };
+  const rows = hojaIndicador(await service.armarExcel(reporte({
+    fromYear: 2023, toYear: 2024,
+    desag: ['beneficios_becas|Año', 'beneficios_becas|Período']
+  })));
+  assert.equal(valorEnBloqueDePrueba(rows, 2023, 'Sin beneficio (valor literal)', 1), 3);
+  assert.equal(valorEnBloqueDePrueba(rows, 2024, 'Sin beneficio', 1), 1);
+});
+
+test('Hoja 1 sin período distingue filas y columnas nulas de valores literales', async () => {
+  indicatorService.getIndicatorDetailView = async (_key, query = {}) => {
+    if (query.splitBy === 'sexo') {
+      return { data: {
+        isBidimensional: true,
+        columns: ['sexo:string:Sin dato', 'sexo:null'],
+        columnLabels: { 'sexo:string:Sin dato': 'Sin dato', 'sexo:null': 'Sin dato' },
+        matrix: [
+          { row: 'Sin beneficio', rowKey: 'beneficios:string:Sin beneficio',
+            values: { 'sexo:string:Sin dato': 3, 'sexo:null': 4 } },
+          { row: 'Sin dato', rowKey: 'beneficios:null',
+            values: { 'sexo:string:Sin dato': 1, 'sexo:null': 2 } }
+        ]
+      } };
+    }
+    return { data: detalleBase };
+  };
+  const rows = hojaIndicador(await service.armarExcel(reporte({
+    year: 2025,
+    desag: ['beneficios_becas|Año', 'beneficios_becas|Sexo']
+  })));
+  const header = rows.find((fila) => fila[0] === 'Beneficios / Sexo');
+  assert.deepEqual(header.slice(0, 3), ['Beneficios / Sexo', 'Sin dato (valor literal)', 'Sin dato']);
+  assert.deepEqual(rows.find((fila) => fila[0] === 'Sin beneficio (valor literal)').slice(0, 3),
+    ['Sin beneficio (valor literal)', 3, 4]);
+  assert.deepEqual(rows.find((fila) => fila[0] === 'Sin beneficio').slice(0, 3),
+    ['Sin beneficio', 1, 2]);
+});
+
+test('Excel conserva el contrato actual: null es cero en conteos y vacío en porcentajes', async () => {
+  const matriz = {
+    ...matrizAnio,
+    matrix: [{ row: 'Beca', rowKey: 'beneficios:string:Beca',
+      values: { 'year:number:2023': null, 'year:number:2024': 25 } }]
+  };
+  let format = 'number';
+  indicatorService.getIndicatorDetailView = async (_key, query = {}) => query.splitBy === 'year'
+    ? { data: matriz }
+    : { data: { ...detalleBase, format } };
+  const filtros = { fromYear: 2023, toYear: 2024, desag: ['beneficios_becas|Año'] };
+  const conteo = hojaIndicador(await service.armarExcel(reporte(filtros)));
+  assert.deepEqual(conteo.find((fila) => fila[0] === 'Beca').slice(0, 3), ['Beca', 0, 25]);
+  format = 'percentage';
+  const porcentaje = hojaIndicador(await service.armarExcel(reporte(filtros)));
+  assert.deepEqual(porcentaje.find((fila) => fila[0] === 'Beca').slice(0, 3), ['Beca', '', 25]);
+});
+
 test('genera hoja 1 real con bloques anuales, totales y subfilas de sexo indentadas', async () => {
   stubDetalle();
   const buffer = await service.armarExcel(reporte({
