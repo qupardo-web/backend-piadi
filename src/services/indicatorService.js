@@ -321,6 +321,16 @@ const computeFromRows = (config, definition, rows) => {
   return { value: hasData ? result.value : null, hasData };
 };
 
+const VCM_SEX_COUNTERS = ['mujeres', 'hombres', 'noInforma'];
+
+// Las participaciones almacenan tres contadores, no una persona ni un sexo por fila.
+// Estas filas de medida sólo existen en memoria y conservan las demás dimensiones.
+const splitVcmParticipationBySex = (rows) => rows.flatMap((row) =>
+  VCM_SEX_COUNTERS.flatMap((sexo) => {
+    const count = Number(row[sexo] ?? 0);
+    return count > 0 ? [{ ...row, sexo, totalPersonas: count }] : [];
+  }));
+
 const groupRowsBy = (rows, dimension) => {
   const groups = new Map();
   rows.forEach((row) => {
@@ -383,6 +393,10 @@ const buildBidimensionalMatrix = async ({ config, definition, filters, rowDimens
   }
   let rows = await getRows(config, fetchFilters, { historical: colDimension === 'year' || rowDimension === 'year' });
   if (fetchFilters.primeraMatricula) rows = applyAdmissionFirstPeriod(rows, filters);
+  const sourceRows = rows;
+  if (config.kind === 'vcm_participacion' && [rowDimension, colDimension].includes('sexo')) {
+    rows = splitVcmParticipationBySex(rows);
+  }
 
   const rowGroups = new Map();
   const colGroups = new Map();
@@ -438,7 +452,7 @@ const buildBidimensionalMatrix = async ({ config, definition, filters, rowDimens
     columns,
     columnLabels,
     matrix,
-    totals: { columns: columnTotals, general: computeFromRows(config, definition, rows).value },
+    totals: { columns: columnTotals, general: computeFromRows(config, definition, sourceRows).value },
     matrixFilters: buildFilterMeta(filters)
   };
 };
@@ -699,12 +713,15 @@ const getIndicatorSeries = async (indicatorKey, query = {}) => {
         };
       }
 
-    const bySegment = groupRowsBy(rows, groupBy);
-    const series = [];
     const sharedYearAxis = yearAxis || buildYearAxis(historicalFilters, rows);
+    const segmentRows = config.kind === 'vcm_participacion' && groupBy === 'sexo'
+      ? splitVcmParticipationBySex(rows)
+      : rows;
+    const bySegment = groupRowsBy(segmentRows, groupBy);
+    const series = [];
     [...bySegment.keys()].sort().forEach((label) => {
-      const segmentRows = bySegment.get(label);
-      const points = buildAnnualPoints(config, definition, segmentRows, historicalFilters, sharedYearAxis);
+      const rowsForSegment = bySegment.get(label);
+      const points = buildAnnualPoints(config, definition, rowsForSegment, historicalFilters, sharedYearAxis);
       if (points.length > 0) {
         series.push({ label: String(label), points });
       }
@@ -760,16 +777,14 @@ const getIndicatorBreakdown = async (indicatorKey, query = {}) => {
     }
     const metaContext = await require('./metaIndicatorIntegrationService').getIndicatorMetaContext(key, query);
 
-    // Custom handler for VCM participaciones grouped by sex
+    // Conserva el contrato del breakdown y comparte la medida con series y matriz.
     if (config.kind === 'vcm_participacion' && groupBy === 'sexo') {
-      const totalMujeres = rows.reduce((sum, r) => sum + (r.mujeres || 0), 0);
-      const totalHombres = rows.reduce((sum, r) => sum + (r.hombres || 0), 0);
-      const totalNoInforma = rows.reduce((sum, r) => sum + (r.noInforma || 0), 0);
-
-      const items = [];
-      if (totalMujeres > 0) items.push({ label: 'mujeres', value: totalMujeres });
-      if (totalHombres > 0) items.push({ label: 'hombres', value: totalHombres });
-      if (totalNoInforma > 0) items.push({ label: 'noInforma', value: totalNoInforma });
+      const groups = groupRowsBy(splitVcmParticipationBySex(rows), 'sexo');
+      const items = VCM_SEX_COUNTERS.filter((sexo) => groups.has(sexo))
+        .map((sexo) => ({
+          label: sexo,
+          value: computeFromRows(config, definition, groups.get(sexo)).value
+        }));
       items.sort((a, b) => b.value - a.value);
 
       return {
