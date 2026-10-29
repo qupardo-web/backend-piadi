@@ -13,7 +13,10 @@
  * Variables opcionales:
  *   E2E_BASE_URL, E2E_DB_URL, E2E_OUTDIR,
  *   E2E_ADMISION_USER, E2E_ADMISION_PASSWORD,
- *   E2E_RECTOR_USER, E2E_RECTOR_PASSWORD
+ *   E2E_RECTOR_USER, E2E_RECTOR_PASSWORD.
+ * Fixtures de Educación Continua: E2E_EC_FIXTURES=1 y E2E_DB_URL explícito
+ * apuntando a una base PostgreSQL local, descartable y cuyo nombre contenga
+ * _e2e o _test. El backend local debe utilizar esa misma base.
  */
 
 const assert = require('node:assert/strict');
@@ -22,6 +25,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const XLSX = require('xlsx');
 const { Client } = require('pg');
+const {
+  verificarCredencialesRemotas, verificarDestinoAislado,
+  crearFixtureEc, limpiarFixtureEc
+} = require('./fixtures/reporteEc');
 
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:5000';
 const DB_URL = process.env.E2E_DB_URL || 'postgresql://postgres:postgres@localhost:5439/mydb';
@@ -56,6 +63,7 @@ let tokenRector;
 let tokenCurricular;
 let tokenVcm;
 let tokenEc;
+let fixtureEc;
 
 const api = async (pathname, { token, method = 'GET', body } = {}) => {
   const headers = {};
@@ -313,6 +321,77 @@ const oracleParticipacionesRegion = async (anio, region) => {
     [anio, region]
   );
   return rows[0].n;
+};
+
+const oracleOfertaEc = async (fixture, dimension) => {
+  assert.ok(['area', 'tipo', 'modalidad'].includes(dimension));
+  const { rows } = await db.query(
+    `SELECT p.anio, p.${dimension} AS categoria, COUNT(*)::int AS valor
+       FROM programas p
+      WHERE p.area = ANY($1::text[]) AND p.anio = ANY($2::int[])
+      GROUP BY p.anio, p.${dimension}`,
+    [fixture.areas, fixture.anios]
+  );
+  return rows;
+};
+
+const oracleMatriculaEc = async (fixture) => {
+  const { rows } = await db.query(
+    `SELECT p.anio, p.programa AS categoria,
+            COALESCE(SUM(r.matricula), 0)::int AS valor
+       FROM programas p
+       LEFT JOIN resultados_programa r ON r."idPrograma" = p."idPrograma"
+      WHERE p.area = ANY($1::text[]) AND p.anio = ANY($2::int[])
+      GROUP BY p.anio, p.programa`,
+    [fixture.areas, fixture.anios]
+  );
+  return rows;
+};
+
+const verificarHoja4Ec = (wb, fixture, dimension, esperados) => {
+  const hojas = hojasIndicador(wb);
+  assert.equal(hojas.length, 1);
+  const rows = filas(wb, hojas[0]);
+  const indiceEncabezado = rows.findIndex((fila) => fila[0] === `Desglose por ${dimension}`);
+  const encabezado = rows[indiceEncabezado];
+  assert.ok(encabezado, `No se generó la Hoja 4 por ${dimension}`);
+  assert.deepEqual(encabezado.slice(1).filter((valor) => valor !== ''), fixture.anios,
+    'Los años deben estar ordenados y aparecer una sola vez');
+  const categorias = [...new Set(esperados.map((fila) => fila.categoria))];
+  const categoriasExcel = rows.slice(indiceEncabezado + 1)
+    .map((fila) => fila[0]).filter((valor) => typeof valor === 'string' && valor !== '');
+  assert.deepEqual(categoriasExcel.sort(), [...categorias].sort(),
+    'La Hoja 4 no debe omitir ni agregar categorías');
+  for (const categoria of categorias) {
+    assert.equal(rows.filter((fila) => fila[0] === categoria).length, 1,
+      `Categoría ${categoria} duplicada`);
+    for (const anio of fixture.anios) {
+      const esperado = esperados.find((fila) => fila.categoria === categoria && Number(fila.anio) === anio);
+      const actual = valorEnAnios(rows, categoria, anio);
+      assert.equal(typeof actual, 'number', `Valor no numérico para ${categoria} en ${anio}`);
+      assert.equal(actual, esperado ? Number(esperado.valor) : 0,
+        `Valor incorrecto para ${categoria} en ${anio}`);
+    }
+  }
+  for (const anio of fixture.anios) {
+    const totalSql = esperados
+      .filter((fila) => Number(fila.anio) === anio)
+      .reduce((suma, fila) => suma + Number(fila.valor), 0);
+    const totalExcel = categorias
+      .reduce((suma, categoria) => suma + valorEnAnios(rows, categoria, anio), 0);
+    assert.equal(totalExcel, totalSql, `Total incorrecto para ${dimension} en ${anio}`);
+  }
+};
+
+const verificarBackendDelFixture = async (fixture) => {
+  const area = fixture.areas[0];
+  const anio = fixture.anios[0];
+  const json = await api(`/api/indicators/oferta_programada/detail?groupBy=area&year=${anio}&area=${encodeURIComponent(area)}`,
+    { token: tokenEc });
+  const detalle = json?.data || json;
+  const esperado = fixture.programas.filter((programa) => programa.area === area && programa.anio === anio).length;
+  assert.equal(detalle.table?.find((fila) => fila.label === area)?.value, esperado,
+    'El backend local no ve el fixture; comprueba que utiliza la misma base E2E antes de crear reportes');
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -724,6 +803,23 @@ const casos = [
     }
   },
   {
+    nombre: '21-ec-sin-datos',
+    async run() {
+      const { rows: anios } = await db.query('SELECT COALESCE(MAX(anio), 2026) + 1 AS anio FROM programas');
+      const anioVacio = Number(anios[0].anio);
+      const { wb } = await crearYDescargar({
+        token: tokenEc,
+        caso: '21-ec-sin-datos',
+        indicadores: ['oferta_programada'],
+        filtros: { fromYear: anioVacio, toYear: anioVacio },
+        dimsPorIndicador: { oferta_programada: ['year', 'area'] }
+      });
+      const rows = filas(wb, hojasIndicador(wb)[0]);
+      assert.ok(rows.some((fila) => String(fila[0]).includes('Sin datos para el período')),
+        'EC sin datos debe generar la hoja sin romper');
+    }
+  },
+  {
     nombre: '13-reporte-legacy',
     async run(_token, tokenRector) {
       const res = await api('/api/reportes', { token: tokenRector });
@@ -736,7 +832,68 @@ const casos = [
   }
 ];
 
+const casosEc = [
+  {
+    nombre: '22-ec-oferta-por-area',
+    async run() {
+      const { rows: existentes } = await db.query(
+        'SELECT "idPrograma" FROM programas WHERE area = ANY($1::text[])', [fixtureEc.areas]
+      );
+      assert.deepEqual(existentes.map((fila) => fila.idPrograma).sort(), [...fixtureEc.ids].sort(),
+        'Las áreas del fixture deben contener exclusivamente sus programas');
+      const { wb } = await crearYDescargar({
+        token: tokenEc, caso: '22-ec-oferta-por-area', indicadores: ['oferta_programada'],
+        filtros: { fromYear: fixtureEc.anios[0], toYear: fixtureEc.anios[1], area: fixtureEc.areas },
+        dimsPorIndicador: { oferta_programada: ['year', 'area'] }
+      });
+      verificarHoja4Ec(wb, fixtureEc, 'Área', await oracleOfertaEc(fixtureEc, 'area'));
+    }
+  },
+  {
+    nombre: '23-ec-oferta-por-modalidad-y-tipo',
+    async run() {
+      for (const [dimension, etiqueta] of [['modalidad', 'Modalidad'], ['tipo', 'Tipo']]) {
+        const { wb } = await crearYDescargar({
+          token: tokenEc, caso: `23-ec-oferta-${dimension}`, indicadores: ['oferta_programada'],
+          filtros: { fromYear: fixtureEc.anios[0], toYear: fixtureEc.anios[1], area: fixtureEc.areas },
+          dimsPorIndicador: { oferta_programada: ['year', dimension] }
+        });
+        verificarHoja4Ec(wb, fixtureEc, etiqueta, await oracleOfertaEc(fixtureEc, dimension));
+      }
+    }
+  },
+  {
+    nombre: '24-ec-matricula-por-programa',
+    async run() {
+      const { rows: inscripciones } = await db.query(
+        'SELECT COUNT(*)::int AS n FROM matriculas_programa WHERE "idPrograma" = ANY($1::text[])',
+        [fixtureEc.ids]
+      );
+      assert.equal(inscripciones[0].n, 0, 'El fixture no debe necesitar MatriculaPrograma');
+      const { wb } = await crearYDescargar({
+        token: tokenEc, caso: '24-ec-matricula-por-programa', indicadores: ['matricula_por_programa'],
+        filtros: { fromYear: fixtureEc.anios[0], toYear: fixtureEc.anios[1], area: fixtureEc.areas },
+        dimsPorIndicador: { matricula_por_programa: ['year', 'programa'] }
+      });
+      const esperados = await oracleMatriculaEc(fixtureEc);
+      verificarHoja4Ec(wb, fixtureEc, 'Programa', esperados);
+      const programaRepetido = fixtureEc.programas.find((programa) =>
+        programa.programa === fixtureEc.nombres.A && programa.anio === fixtureEc.anios[0]);
+      assert.equal(Number(valorEnAnios(filas(wb, hojasIndicador(wb)[0]), fixtureEc.nombres.A,
+        fixtureEc.anios[0])), programaRepetido.matricula);
+      const sinResultado = esperados.find((fila) => fila.categoria === fixtureEc.nombres.D
+        && Number(fila.anio) === fixtureEc.anios[1]);
+      assert.equal(Number(sinResultado?.valor), 0,
+        'El programa sin ResultadosPrograma debe permanecer con matrícula cero');
+    }
+  }
+];
+
 const main = async () => {
+  verificarCredencialesRemotas({ env: process.env, baseUrl: BASE_URL, dbUrl: DB_URL });
+  if (process.env.E2E_EC_FIXTURES === '1') {
+    verificarDestinoAislado({ env: process.env, baseUrl: BASE_URL, dbUrl: DB_URL });
+  }
   db = new Client({ connectionString: DB_URL });
   await db.connect();
   tokenAdmision = await login(ADMISION);
@@ -746,7 +903,7 @@ const main = async () => {
   tokenEc = await login(EC);
 
   const resultados = [];
-  for (const caso of casos) {
+  const ejecutarCaso = async (caso) => {
     const inicio = performance.now();
     try {
       await caso.run(tokenAdmision, tokenRector);
@@ -759,6 +916,19 @@ const main = async () => {
       console.error(`FAIL ${caso.nombre} (${ms} ms)`);
       console.error(`     ${error.message}`);
     }
+  };
+  for (const caso of casos) await ejecutarCaso(caso);
+  if (process.env.E2E_EC_FIXTURES === '1') {
+    fixtureEc = await crearFixtureEc(db, { baseUrl: BASE_URL, dbUrl: DB_URL });
+    try {
+      await verificarBackendDelFixture(fixtureEc);
+      for (const caso of casosEc) await ejecutarCaso(caso);
+    } finally {
+      await limpiarFixtureEc(db, fixtureEc);
+      fixtureEc = null;
+    }
+  } else {
+    console.log('SKIP 22-24 EC con fixtures: requiere E2E_EC_FIXTURES=1 y PostgreSQL local aislado');
   }
 
   const fallidos = resultados.filter((resultado) => !resultado.ok);
@@ -773,13 +943,23 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    if (fixtureEc && db) {
+      try {
+        await limpiarFixtureEc(db, fixtureEc);
+      } catch (error) {
+        console.error(`No se pudo limpiar el fixture EC: ${error.message}`);
+        process.exitCode = 1;
+      }
+    }
     try {
-      const token = tokenRector || await login(RECTOR);
-      for (const id of creados) {
-        try {
-          await api(`/api/reportes/${id}`, { token, method: 'DELETE' });
-        } catch (error) {
-          console.warn(`No se pudo borrar el reporte temporal ${id}: ${error.message}`);
+      if (creados.length) {
+        const token = tokenRector || await login(RECTOR);
+        for (const id of creados) {
+          try {
+            await api(`/api/reportes/${id}`, { token, method: 'DELETE' });
+          } catch (error) {
+            console.warn(`No se pudo borrar el reporte temporal ${id}: ${error.message}`);
+          }
         }
       }
     } catch (error) {
