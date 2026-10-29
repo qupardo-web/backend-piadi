@@ -1,5 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const {
   verificarCredencialesRemotas, verificarDestinoAislado,
   prepararProgramas, crearFixtureEc, limpiarFixtureEc
@@ -82,4 +86,40 @@ test('si una inserción falla se revierte sin borrar registros ajenos', async ()
   await assert.rejects(crearFixtureEc(db, destino), /fallo simulado/);
   assert.deepEqual(consultas.map((sql) => sql === 'BEGIN' || sql === 'ROLLBACK' ? sql : 'INSERT'),
     ['BEGIN', 'INSERT', 'ROLLBACK']);
+});
+
+test('la selección E2E limita casos EC sin conectar ni escribir archivos', () => {
+  const outputDir = path.join(os.tmpdir(), `piadi-e2e-list-${process.pid}-${Date.now()}`);
+  const result = spawnSync(process.execPath, [path.join(__dirname, '../scripts/e2e-reporte-excel.js'), '--list-cases'], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      E2E_CASES: '21-ec-sin-datos,22-ec-oferta-por-area,23-ec-oferta-por-modalidad-y-tipo,24-ec-matricula-por-programa',
+      E2E_EC_FIXTURES: '1',
+      E2E_OUTDIR: outputDir
+    }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.trim().split(/\r?\n/), [
+    '21-ec-sin-datos', '22-ec-oferta-por-area',
+    '23-ec-oferta-por-modalidad-y-tipo', '24-ec-matricula-por-programa'
+  ]);
+  assert.equal(fs.existsSync(outputDir), false);
+});
+
+test('la selección E2E rechaza casos desconocidos y fixtures sin habilitación', () => {
+  const script = path.join(__dirname, '../scripts/e2e-reporte-excel.js');
+  for (const [names, flag, expected] of [
+    ['caso-inexistente', '1', 'desconocidos'],
+    ['22-ec-oferta-por-area', '0', 'E2E_EC_FIXTURES=1'],
+    ['21-ec-sin-datos', '0', 'E2E_EC_FIXTURES=1'],
+    ['', '1', 'no puede estar vacío']
+  ]) {
+    const result = spawnSync(process.execPath, [script, '--list-cases'], {
+      encoding: 'utf8',
+      env: { ...process.env, E2E_CASES: names, E2E_EC_FIXTURES: flag }
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, new RegExp(expected));
+  }
 });

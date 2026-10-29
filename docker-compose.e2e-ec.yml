@@ -1,0 +1,19 @@
+name: piadi-ec-e2e
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: piadi_ec_e2e
+      POSTGRES_USER: piadi_e2e
+      POSTGRES_PASSWORD: ${PIADI_E2E_DB_PASSWORD:?Configure una clave local temporal para E2E}
+    ports:
+      - "127.0.0.1:55439:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U piadi_e2e -d piadi_ec_e2e"]
+      interval: 2s
+      timeout: 2s
+      retries: 15

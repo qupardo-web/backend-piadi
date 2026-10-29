@@ -17,6 +17,8 @@
  * Fixtures de Educación Continua: E2E_EC_FIXTURES=1 y E2E_DB_URL explícito
  * apuntando a una base PostgreSQL local, descartable y cuyo nombre contenga
  * _e2e o _test. El backend local debe utilizar esa misma base.
+ * E2E_CASES permite seleccionar nombres exactos separados por coma; --list-cases
+ * comprueba la selección sin conectar con el backend ni PostgreSQL.
  */
 
 const assert = require('node:assert/strict');
@@ -53,8 +55,6 @@ const EC = {
   username: process.env.E2E_EC_USER || 'educacioncontinua@ecas.cl',
   password: process.env.E2E_EC_PASSWORD || 'admin123'
 };
-
-fs.mkdirSync(OUTDIR, { recursive: true });
 
 const creados = [];
 let db;
@@ -889,11 +889,37 @@ const casosEc = [
   }
 ];
 
+const seleccionarCasos = () => {
+  const solicitado = Object.prototype.hasOwnProperty.call(process.env, 'E2E_CASES');
+  const nombres = solicitado
+    ? process.env.E2E_CASES.split(',').map((nombre) => nombre.trim()).filter(Boolean)
+    : null;
+  if (solicitado && nombres.length === 0) {
+    throw new Error('E2E_CASES no puede estar vacío');
+  }
+  const conocidos = new Set([...casos, ...casosEc].map((caso) => caso.nombre));
+  const desconocidos = nombres?.filter((nombre) => !conocidos.has(nombre)) || [];
+  if (desconocidos.length) {
+    throw new Error(`Escenarios E2E desconocidos: ${desconocidos.join(', ')}`);
+  }
+  const base = nombres ? casos.filter((caso) => nombres.includes(caso.nombre)) : casos;
+  const ec = nombres ? casosEc.filter((caso) => nombres.includes(caso.nombre)) :
+    (process.env.E2E_EC_FIXTURES === '1' ? casosEc : []);
+  const requiereAislamiento = ec.length > 0 ||
+    (solicitado && base.some((caso) => caso.nombre.includes('-ec-')));
+  if (requiereAislamiento && process.env.E2E_EC_FIXTURES !== '1') {
+    throw new Error('Los escenarios EC seleccionados requieren E2E_EC_FIXTURES=1');
+  }
+  return { base, ec, requiereAislamiento };
+};
+
 const main = async () => {
+  const seleccion = seleccionarCasos();
   verificarCredencialesRemotas({ env: process.env, baseUrl: BASE_URL, dbUrl: DB_URL });
-  if (process.env.E2E_EC_FIXTURES === '1') {
+  if (seleccion.requiereAislamiento) {
     verificarDestinoAislado({ env: process.env, baseUrl: BASE_URL, dbUrl: DB_URL });
   }
+  fs.mkdirSync(OUTDIR, { recursive: true });
   db = new Client({ connectionString: DB_URL });
   await db.connect();
   tokenAdmision = await login(ADMISION);
@@ -917,17 +943,17 @@ const main = async () => {
       console.error(`     ${error.message}`);
     }
   };
-  for (const caso of casos) await ejecutarCaso(caso);
-  if (process.env.E2E_EC_FIXTURES === '1') {
+  for (const caso of seleccion.base) await ejecutarCaso(caso);
+  if (seleccion.ec.length) {
     fixtureEc = await crearFixtureEc(db, { baseUrl: BASE_URL, dbUrl: DB_URL });
     try {
       await verificarBackendDelFixture(fixtureEc);
-      for (const caso of casosEc) await ejecutarCaso(caso);
+      for (const caso of seleccion.ec) await ejecutarCaso(caso);
     } finally {
       await limpiarFixtureEc(db, fixtureEc);
       fixtureEc = null;
     }
-  } else {
+  } else if (!Object.prototype.hasOwnProperty.call(process.env, 'E2E_CASES')) {
     console.log('SKIP 22-24 EC con fixtures: requiere E2E_EC_FIXTURES=1 y PostgreSQL local aislado');
   }
 
@@ -937,7 +963,14 @@ const main = async () => {
   if (fallidos.length) process.exitCode = 1;
 };
 
-main()
+const ejecucion = process.argv.includes('--list-cases')
+  ? Promise.resolve().then(() => {
+    const seleccion = seleccionarCasos();
+    for (const caso of [...seleccion.base, ...seleccion.ec]) console.log(caso.nombre);
+  })
+  : main();
+
+ejecucion
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;
