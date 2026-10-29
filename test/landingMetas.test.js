@@ -32,6 +32,7 @@ const meta = (overrides = {}) => ({
   totalProgress: 64,
   elapsedProgress: 50,
   status: 'en_progreso',
+  lifecycleStatus: 'ACTIVA',
   metrics: [{
     metricId: 10,
     indicatorKey: 'kpi-a',

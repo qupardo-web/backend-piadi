@@ -455,7 +455,11 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
  *         schema: { type: string }
   *       - in: query
   *         name: splitBy
-  *         description: Segunda dimensión opcional de matriz (máximo dos dimensiones, distintas y permitidas). Requiere groupBy explícito o defaultGroupBy; groupBy vacío no es válido. Sin splitBy el contrato anterior no cambia. Ejemplos nivel_socioeconomico × sexo/periodo y matricula_por_asignatura × year. year filtra la matriz al año de referencia; fromYear/toYear la limitan al rango cuando no hay year.
+  *         description: Segunda dimensión opcional de matriz. Requiere groupBy explícito o defaultGroupBy; groupBy vacío no es válido. Sin splitBy el contrato anterior no cambia. year filtra la matriz al año de referencia; fromYear/toYear la limitan al rango cuando no hay year.
+  *         schema: { type: string }
+  *       - in: query
+  *         name: splitBy2
+  *         description: Tercera dimensión opcional de cubo. Requiere groupBy y splitBy distintos; las tres dimensiones deben estar en allowedGroupBy. Ejemplo beneficios_becas con groupBy=beneficios, splitBy=periodo, splitBy2=sexo y year=2025. Sin splitBy2 se conserva exactamente la matriz 2D. El cubo por sexo de participaciones VcM no está disponible porque su fuente contiene contadores agregados.
   *         schema: { type: string }
  *     responses:
  *       200:
@@ -523,7 +527,21 @@ router.get('/indicators/:indicatorKey/breakdown', authenticateToken, indicatorCo
   *                     columns: { type: object }
   *                     general: { type: number, nullable: true }
   *                 matrixFilters: { type: object, description: Alcance temporal y filtros aplicados a la matriz. }
-  *       400: { description: Filtros o dimensiones inválidos (INVALID_SPLIT_BY, INVALID_GROUP_BY, MISSING_ROW_DIMENSION, DUPLICATE_GROUP_DIMENSIONS, MATRIX_LIMIT_EXCEEDED). }
+  *                 isTridimensional: { type: boolean, description: Solo presente con splitBy2; no reemplaza el contrato de matrix. }
+  *                 depthDimension: { type: string, description: Tercera dimensión del cubo. }
+  *                 depths:
+  *                   type: array
+  *                   description: IDs tipados y ordenados de subcategorías.
+  *                   items: { type: string }
+  *                 depthLabels:
+  *                   type: object
+  *                   description: Etiquetas visibles por ID de subcategoría; los valores nulos conservan su ID propio.
+  *                   additionalProperties: { type: string }
+  *                 cube:
+  *                   type: array
+  *                   description: Solo con splitBy2. Cada fila tiene row, rowKey, total y values; cada values[columnId] contiene total y depthValues[depthId]. Los totales se recalculan desde filas fuente. Una intersección sin registros es null; cero calculado sigue siendo 0. Máximos por defecto 50 filas, 20 columnas, 10 subcategorías y 10000 intersecciones posibles.
+  *                   items: { type: object }
+  *       400: { description: Filtros o dimensiones inválidos (INVALID_SPLIT_BY, INVALID_SPLIT_BY2, INVALID_GROUP_BY, MISSING_ROW_DIMENSION, MISSING_COLUMN_DIMENSION, DUPLICATE_GROUP_DIMENSIONS, UNSUPPORTED_GROUP_DIMENSION, MATRIX_LIMIT_EXCEEDED). }
  *       401: { description: Token ausente o inválido. }
  *       404: { description: Indicador inexistente. }
  */

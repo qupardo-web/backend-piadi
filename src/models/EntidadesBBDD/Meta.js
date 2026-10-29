@@ -1,5 +1,6 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../../config/database');
+const { validateFinalSnapshot } = require('../../utils/metaSnapshot');
 
 const Meta = sequelize.define('Meta', {
     id: {
@@ -38,9 +39,17 @@ const Meta = sequelize.define('Meta', {
         type: DataTypes.STRING(16),
         allowNull: false,
         defaultValue: 'ACTIVA',
-        validate: { isIn: [['BORRADOR', 'ACTIVA']] }
+        validate: { isIn: [['BORRADOR', 'ACTIVA', 'CERRADA']] }
     },
     draftMetrics: {
+        type: DataTypes.JSONB,
+        allowNull: true
+    },
+    closedAt: {
+        type: DataTypes.DATE,
+        allowNull: true
+    },
+    finalSnapshot: {
         type: DataTypes.JSONB,
         allowNull: true
     },
@@ -107,6 +116,15 @@ const Meta = sequelize.define('Meta', {
             if (this.lifecycleStatus === 'BORRADOR'
                 && (this.indicatorKey != null || this.valorMeta != null)) {
                 throw new Error('Una meta BORRADOR no debe contener indicador ni valorMeta definitivos');
+            }
+            if (this.lifecycleStatus === 'CERRADA') {
+                if (this.indicatorKey == null || this.valorMeta == null || this.draftMetrics != null
+                    || !this.closedAt) {
+                    throw new Error('Una meta CERRADA requiere objetivos y fecha de cierre, sin draftMetrics');
+                }
+                validateFinalSnapshot(this.finalSnapshot);
+            } else if (this.closedAt != null || this.finalSnapshot != null) {
+                throw new Error('Solo una meta CERRADA puede conservar un resultado final');
             }
         }
     },

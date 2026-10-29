@@ -1,12 +1,12 @@
 const { Op } = require('sequelize');
 const { sequelize, Meta, MetaMetric, IndicatorDefinition, Department } = require('../models');
-const { ValidationError, NotFoundError } = require('../utils/errors');
+const { ValidationError, NotFoundError, ConflictError } = require('../utils/errors');
 const cacheService = require('./cacheService');
 
 const WEIGHT_SCALE = 10000;
 const EXPECTED_WEIGHT_UNITS = 100 * WEIGHT_SCALE;
 const META_FIELDS = ['departmentId', 'anio', 'periodo', 'nombre', 'fechaInicio', 'fechaLimite', 'prioridad', 'comportamiento'];
-const LIFECYCLE_STATUSES = ['BORRADOR', 'ACTIVA'];
+const LIFECYCLE_STATUSES = ['BORRADOR', 'ACTIVA', 'CERRADA'];
 const DRAFT_TEXT_FIELDS = new Set(['indicatorKey', 'behavior', 'valueType']);
 const DRAFT_NUMBER_FIELDS = new Set(['weight', 'targetValue', 'lowerLimit', 'upperLimit']);
 
@@ -41,12 +41,22 @@ const resolveLifecycleStatus = (currentStatus, requestedStatus) => {
   }
   const next = requestedStatus === undefined ? current : requestedStatus;
   if (!LIFECYCLE_STATUSES.includes(next)) {
-    throw new ValidationError('lifecycleStatus debe ser BORRADOR o ACTIVA');
+    throw new ValidationError('lifecycleStatus debe ser BORRADOR, ACTIVA o CERRADA');
+  }
+  if (next === 'CERRADA' || current === 'CERRADA') {
+    throw new ConflictError('El cierre de metas solo puede realizarse mediante la operación de cierre');
   }
   if (current === 'ACTIVA' && next === 'BORRADOR') {
     throw new ValidationError('Una meta ACTIVA no puede volver a BORRADOR');
   }
   return next;
+};
+
+const rejectClosureFields = (payload) => {
+  if (Object.prototype.hasOwnProperty.call(payload, 'closedAt')
+    || Object.prototype.hasOwnProperty.call(payload, 'finalSnapshot')) {
+    throw new ValidationError('El resultado final solo puede generarse mediante el cierre de la meta');
+  }
 };
 
 const normalizeDraftMetrics = (draftMetrics) => {
@@ -264,6 +274,7 @@ const getById = async (id, options = {}) => {
 };
 
 const create = async (payload, creatorId) => {
+  rejectClosureFields(payload);
   const result = await sequelize.transaction(async (transaction) => {
     const lifecycleStatus = resolveLifecycleStatus('BORRADOR',
       payload.lifecycleStatus === undefined ? 'ACTIVA' : payload.lifecycleStatus);
@@ -306,6 +317,10 @@ const update = async (id, payload) => {
     if (!meta) {
       throw new NotFoundError('La meta solicitada no existe');
     }
+    if (meta.lifecycleStatus === 'CERRADA') {
+      throw new ConflictError('Una meta CERRADA no puede modificarse');
+    }
+    rejectClosureFields(payload);
     const lifecycleStatus = resolveLifecycleStatus(meta.lifecycleStatus, payload.lifecycleStatus);
     const metaFields = await normalizeMetaFields(payload, transaction, { partial: true, currentMeta: meta });
     if (lifecycleStatus === 'BORRADOR') {
@@ -352,6 +367,9 @@ const remove = async (id) => {
     const meta = await Meta.findByPk(normalizeMetaId(id), { transaction, lock: transaction.LOCK.UPDATE });
     if (!meta) {
       throw new NotFoundError('La meta solicitada no existe');
+    }
+    if (meta.lifecycleStatus === 'CERRADA') {
+      throw new ConflictError('Una meta CERRADA no puede eliminarse');
     }
     await meta.destroy({ transaction });
   });

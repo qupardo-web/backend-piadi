@@ -238,3 +238,135 @@ test('cache separa splitBy y Swagger documenta únicamente el detalle', async ()
   assert.ok(operation.parameters.some((parameter) => parameter.name === 'splitBy'));
   assert.ok(operation.responses[200].content['application/json'].schema.properties.matrix);
 });
+
+test('cubo beneficios × período × sexo conserva DISTINCT, nulos y cero frente a ausencia', async () => {
+  fixture('beneficios_becas');
+  const rows = [
+    { codCli: 'A', anio: 2025, periodo: 1, beneficios: 'Beca', sexo: 'F' },
+    { codCli: 'A', anio: 2025, periodo: 1, beneficios: 'Beca', sexo: 'F' },
+    { codCli: 'B', anio: 2025, periodo: 1, beneficios: 'Beca', sexo: 'M' },
+    { codCli: 'C', anio: 2025, periodo: 1, beneficios: 'Beca', sexo: null },
+    { codCli: 'A', anio: 2025, periodo: 2, beneficios: 'Beca', sexo: 'F' },
+    { codCli: 'B', anio: 2025, periodo: 2, beneficios: 'Beca', sexo: 'M' },
+    { codCli: 'D', anio: 2025, periodo: 2, beneficios: 'Beca', sexo: 'O' },
+    { codCli: 'E', anio: 2025, periodo: 1, beneficios: null, sexo: 'F' },
+    { codCli: 'F', anio: 2025, periodo: 1, beneficios: 'Sin beneficio', sexo: 'M' }
+  ];
+  stub(provider, 'getAdmissionCharacterizationRows', async (filters) => filtered(rows, filters));
+  const view = await service.getIndicatorDetail('beneficios_becas', {
+    groupBy: 'beneficios', splitBy: 'periodo', splitBy2: 'sexo', year: '2025'
+  });
+  assert.equal(view.isTridimensional, true);
+  assert.equal(view.isBidimensional, undefined);
+  assert.deepEqual([view.rowDimension, view.colDimension, view.depthDimension],
+    ['beneficios', 'periodo', 'sexo']);
+  assert.deepEqual(view.columns, ['periodo:number:1', 'periodo:number:2']);
+  assert.equal(view.depthLabels['sexo:null'], 'Sin dato');
+  assert.equal(view.cube.find((row) => row.rowKey === 'beneficios:null').total, 1);
+  assert.equal(view.cube.find((row) => row.rowKey === 'beneficios:string:Sin beneficio').total, 1);
+  const beca = view.cube.find((row) => row.row === 'Beca');
+  assert.equal(beca.total, 4);
+  assert.equal(beca.values['periodo:number:1'].total, 3);
+  assert.equal(beca.values['periodo:number:1'].depthValues['sexo:string:F'], 1);
+  assert.equal(beca.values['periodo:number:1'].depthValues['sexo:null'], 1);
+  assert.equal(beca.values['periodo:number:1'].depthValues['sexo:string:O'], null);
+  assert.equal(beca.values['periodo:number:2'].total, 3);
+  assert.equal(view.totals.general, 6);
+  assert.equal(view.matrixFilters.year, 2025);
+});
+
+test('cubo recalcula tasas no aditivas y no cambia el contrato 2D', async () => {
+  fixture('tasa_aprobacion', 'educacion_continua');
+  stub(provider, 'getProgramRows', async () => [
+    { anio: 2025, programa: 'A', modalidad: 'Online', matricula: 10, aprobados: 0 },
+    { anio: 2025, programa: 'A', modalidad: 'Presencial', matricula: 10, aprobados: 10 }
+  ]);
+  const query = { groupBy: 'programa', splitBy: 'year' };
+  const two = await service.getIndicatorDetail('tasa_aprobacion', query);
+  const three = await service.getIndicatorDetail('tasa_aprobacion', { ...query, splitBy2: 'modalidad' });
+  assert.equal(two.isBidimensional, true);
+  assert.equal(Object.hasOwn(two, 'cube'), false);
+  assert.equal(three.isBidimensional, undefined);
+  assert.equal(three.cube[0].values['year:number:2025'].total, 50);
+  assert.equal(three.cube[0].values['year:number:2025'].depthValues['modalidad:string:Online'], 0);
+  assert.equal(three.cube[0].values['year:number:2025'].depthValues['modalidad:string:Presencial'], 100);
+  assert.equal(three.totals.general, 50);
+});
+
+test('splitBy2 valida forma, presencia, permisos y dimensiones repetidas', async () => {
+  fixture('beneficios_becas');
+  const base = { groupBy: 'beneficios', splitBy: 'periodo' };
+  for (const [query, code] of [
+    [{ ...base, splitBy2: '' }, 'INVALID_SPLIT_BY2'],
+    [{ ...base, splitBy2: ['sexo'] }, 'INVALID_SPLIT_BY2'],
+    [{ ...base, splitBy2: 'sexo,year' }, 'INVALID_SPLIT_BY2'],
+    [{ ...base, splitBy2: 'invalida' }, 'INVALID_SPLIT_BY2'],
+    [{ groupBy: 'beneficios', splitBy2: 'sexo' }, 'MISSING_COLUMN_DIMENSION'],
+    [{ groupBy: '', splitBy: 'periodo', splitBy2: 'sexo' }, 'MISSING_ROW_DIMENSION'],
+    [{ ...base, splitBy2: 'periodo' }, 'DUPLICATE_GROUP_DIMENSIONS'],
+    [{ ...base, splitBy2: 'beneficios' }, 'DUPLICATE_GROUP_DIMENSIONS']
+  ]) {
+    await assert.rejects(service.getIndicatorDetail('beneficios_becas', query),
+      (error) => error.statusCode === 400 && error.code === code);
+  }
+});
+
+test('cubo limita tercera dimensión e intersecciones sin truncar', async () => {
+  fixture('beneficios_becas');
+  stub(provider, 'getAdmissionCharacterizationRows', async () => [
+    { codCli: 'A', anio: 2025, periodo: 1, beneficios: 'Beca', sexo: 'F' },
+    { codCli: 'B', anio: 2025, periodo: 2, beneficios: 'Beca', sexo: 'M' }
+  ]);
+  const query = { groupBy: 'beneficios', splitBy: 'periodo', splitBy2: 'sexo', year: '2025' };
+  const previousDepth = process.env.INDICATOR_CUBE_MAX_DEPTH;
+  const previousCells = process.env.INDICATOR_CUBE_MAX_INTERSECTIONS;
+  try {
+    process.env.INDICATOR_CUBE_MAX_DEPTH = '1';
+    await assert.rejects(service.getIndicatorDetail('beneficios_becas', query),
+      (error) => error.statusCode === 400 && error.code === 'MATRIX_LIMIT_EXCEEDED');
+    process.env.INDICATOR_CUBE_MAX_DEPTH = '10';
+    process.env.INDICATOR_CUBE_MAX_INTERSECTIONS = '3';
+    await assert.rejects(service.getIndicatorDetail('beneficios_becas', query),
+      (error) => error.statusCode === 400 && error.code === 'MATRIX_LIMIT_EXCEEDED');
+  } finally {
+    if (previousDepth === undefined) delete process.env.INDICATOR_CUBE_MAX_DEPTH;
+    else process.env.INDICATOR_CUBE_MAX_DEPTH = previousDepth;
+    if (previousCells === undefined) delete process.env.INDICATOR_CUBE_MAX_INTERSECTIONS;
+    else process.env.INDICATOR_CUBE_MAX_INTERSECTIONS = previousCells;
+  }
+  const operation = swaggerDocs.paths['/api/indicators/{indicatorKey}/detail'].get;
+  assert.ok(operation.parameters.some((parameter) => parameter.name === 'splitBy2'));
+  assert.ok(operation.responses[200].content['application/json'].schema.properties.cube);
+});
+
+test('cubo vacío conserva null y alias anio de la tercera dimensión', async () => {
+  fixture('beneficios_becas');
+  stub(provider, 'getAdmissionCharacterizationRows', async () => []);
+  const empty = await service.getIndicatorDetail('beneficios_becas', {
+    groupBy: 'beneficios', splitBy: 'periodo', splitBy2: 'sexo', year: '2030'
+  });
+  assert.deepEqual(empty.columns, []);
+  assert.deepEqual(empty.depths, []);
+  assert.deepEqual(empty.cube, []);
+  assert.equal(empty.totals.general, null);
+  assert.equal(empty.hasData, false);
+  cache.flush();
+  stub(provider, 'getAdmissionCharacterizationRows', async () => [
+    { codCli: 'A', anio: 2025, periodo: 1, beneficios: 'Beca', sexo: 'F' }
+  ]);
+  const alias = await service.getIndicatorDetail('beneficios_becas', {
+    groupBy: 'beneficios', splitBy: 'periodo', splitBy2: 'anio', year: '2025'
+  });
+  assert.equal(alias.depthDimension, 'year');
+  assert.deepEqual(alias.depths, ['year:number:2025']);
+});
+
+test('cubo no inventa sexo individual para contadores de participaciones VcM', async () => {
+  fixture('participaciones', 'vinculacion_medio');
+  stub(provider, 'getVcmParticipacionRows', async () => [
+    { anio: 2025, region: 'Norte', totalPersonas: 5, mujeres: 3, hombres: 2, noInforma: 0 }
+  ]);
+  await assert.rejects(service.getIndicatorDetail('participaciones', {
+    groupBy: 'region', splitBy: 'year', splitBy2: 'sexo', year: '2025'
+  }), (error) => error.statusCode === 400 && error.code === 'UNSUPPORTED_GROUP_DIMENSION');
+});

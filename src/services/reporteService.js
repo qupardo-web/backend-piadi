@@ -1,8 +1,9 @@
 const { Op } = require('sequelize');
-const { Reporte, Role, Department, IndicatorDefinition } = require('../models');
+const { Reporte, ReporteEjecucion, Role, Department, IndicatorDefinition } = require('../models');
 const indicatorService = require('./indicatorService');
 const { politicaReportes } = require('./reportePolitica');
 const { auditarReporte, calcularCambios } = require('./reporteAuditoria');
+const reporteArchivos = require('../utils/reporteArchivos');
 const { ValidationError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
 const TIPOS = ['PREDEFINIDO', 'PERSONALIZADO'];
@@ -241,13 +242,16 @@ const updateReporte = async (user, id, data) => {
 
   const antes = reporte.toJSON();
   await reporte.update(campos);
-  auditarReporte({
-    user,
-    accion: 'REPORTE_UPDATED',
-    reporte,
-    cambios: calcularCambios(antes, campos),
-    path: `/api/reportes/${reporte.id}`
-  });
+  const cambios = calcularCambios(antes, campos);
+  if (Object.keys(cambios).length > 0) {
+    auditarReporte({
+      user,
+      accion: 'REPORTE_UPDATED',
+      reporte,
+      cambios,
+      path: `/api/reportes/${reporte.id}`
+    });
+  }
   return reporte;
 };
 
@@ -266,7 +270,13 @@ const deleteReporte = async (user, id) => {
   }
 
   const datos = reporte.toJSON();
+  const ejecuciones = await ReporteEjecucion.findAll({
+    where: { reporteId: reporte.id },
+    attributes: ['id']
+  });
   await reporte.destroy();
+  await Promise.allSettled(ejecuciones.map((ejecucion) =>
+    reporteArchivos.eliminarEjecucion(ejecucion.id)));
   auditarReporte({
     user,
     accion: 'REPORTE_DELETED',

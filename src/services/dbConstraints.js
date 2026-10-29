@@ -15,7 +15,7 @@ async function initDbConstraints() {
       DO $$
       BEGIN
         IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_department'
+          SELECT 1 FROM pg_constraint WHERE conname IN ('fk_users_department', 'users_departmentId_fkey')
         ) THEN
           ALTER TABLE users
             ADD CONSTRAINT fk_users_department FOREIGN KEY ("departmentId")
@@ -46,7 +46,7 @@ async function initDbConstraints() {
       DO $$
       BEGIN
         IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'fk_metas_creator'
+          SELECT 1 FROM pg_constraint WHERE conname IN ('fk_metas_creator', 'metas_creatorId_fkey')
         ) THEN
           ALTER TABLE metas
             ADD CONSTRAINT fk_metas_creator FOREIGN KEY ("creatorId")
@@ -1078,7 +1078,7 @@ async function initDbConstraints() {
       DO $$
       BEGIN
         IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'fk_financiamientos_proyecto'
+          SELECT 1 FROM pg_constraint WHERE conname IN ('fk_financiamientos_proyecto', 'financiamientos_idProyecto_fkey')
         ) THEN
           ALTER TABLE financiamientos
             ADD CONSTRAINT fk_financiamientos_proyecto
@@ -1199,7 +1199,7 @@ async function initDbConstraints() {
       DO $$
       BEGIN
         IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'fk_matricula_alumnos'
+          SELECT 1 FROM pg_constraint WHERE conname IN ('fk_matricula_alumnos', 'matriculas_por_asignatura_codCli_fkey')
         ) THEN
           ALTER TABLE matriculas_por_asignatura
             ADD CONSTRAINT fk_matricula_alumnos
@@ -1210,7 +1210,7 @@ async function initDbConstraints() {
         END IF;
 
         IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'fk_matricula_asignaturas'
+          SELECT 1 FROM pg_constraint WHERE conname IN ('fk_matricula_asignaturas', 'matriculas_por_asignatura_ramoEquiv_fkey')
         ) THEN
           ALTER TABLE matriculas_por_asignatura
             ADD CONSTRAINT fk_matricula_asignaturas
@@ -1221,7 +1221,7 @@ async function initDbConstraints() {
         END IF;
 
         IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'fk_caracterizacion_alumnos'
+          SELECT 1 FROM pg_constraint WHERE conname IN ('fk_caracterizacion_alumnos', 'caracterizacion_estudiante_rut_fkey')
         ) THEN
           ALTER TABLE caracterizacion_estudiante
             ADD CONSTRAINT fk_caracterizacion_alumnos
@@ -1473,22 +1473,22 @@ async function initDbConstraints() {
     await sequelize.query(`
       DO $$
       BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_rendimiento_alumno') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('fk_rendimiento_alumno', 'rendimiento_asignatura_rut_fkey')) THEN
           ALTER TABLE rendimiento_asignatura
             ADD CONSTRAINT fk_rendimiento_alumno FOREIGN KEY (rut)
             REFERENCES alumnos(rut) ON UPDATE CASCADE ON DELETE CASCADE;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_rendimiento_asignatura') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('fk_rendimiento_asignatura', 'rendimiento_asignatura_ramoEquiv_fkey')) THEN
           ALTER TABLE rendimiento_asignatura
             ADD CONSTRAINT fk_rendimiento_asignatura FOREIGN KEY ("ramoEquiv")
             REFERENCES asignaturas("ramoEquiv") ON UPDATE CASCADE ON DELETE CASCADE;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_practicas_alumno') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('fk_practicas_alumno', 'practicas_rut_fkey')) THEN
           ALTER TABLE practicas
             ADD CONSTRAINT fk_practicas_alumno FOREIGN KEY (rut)
             REFERENCES alumnos(rut) ON UPDATE CASCADE ON DELETE CASCADE;
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_titulacion_alumno') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('fk_titulacion_alumno', 'titulacion_rut_fkey')) THEN
           ALTER TABLE titulacion
             ADD CONSTRAINT fk_titulacion_alumno FOREIGN KEY (rut)
             REFERENCES alumnos(rut) ON UPDATE CASCADE ON DELETE CASCADE;
