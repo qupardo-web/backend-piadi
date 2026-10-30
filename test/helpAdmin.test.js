@@ -282,7 +282,7 @@ test('rutas reales exigen JWT y Rectoría; GET, POST y PUT mantienen contratos y
     assert.equal(calls.destroy, 0);
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(auditCalls.map(({ accion }) => accion), [
-      'HELP_ENTRY_CREATED', 'HELP_ENTRY_UPDATED', 'HELP_ENTRY_UPDATED'
+      'AYUDA_CREAR', 'AYUDA_EDITAR', 'AYUDA_DESACTIVAR'
     ]);
     assert.deepEqual(auditCalls.map(({ usuarioId }) => usuarioId), [7, 8, 7]);
     assert.deepEqual(auditCalls.map(({ entidad }) => entidad), [

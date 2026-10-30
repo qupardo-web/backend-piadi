@@ -5,10 +5,14 @@ const auditHelpChange = (action) => (req, res, next) => {
     const entry = res.locals.helpAuditEntry;
     if (res.statusCode >= 400 || !entry) return;
 
+    const recordedAction = action === 'AYUDA_EDITAR' && req.body?.activo === false
+      ? 'AYUDA_DESACTIVAR'
+      : action;
+
     Promise.resolve().then(() => auditService.record('session', {
       userId: req.user.id,
       role: req.user.role || req.user.roleGroup || null,
-      action,
+      action: recordedAction,
       entity: 'EntradaAyuda',
       detalles: JSON.stringify({
         entryId: entry.id,

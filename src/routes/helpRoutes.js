@@ -64,7 +64,7 @@ const router = express.Router();
  *       500: { description: Error interno. }
  */
 router.get('/admin', authenticateToken, requireRectoria, helpController.listAdmin);
-router.post('/admin', authenticateToken, requireRectoria, auditHelpChange('HELP_ENTRY_CREATED'), helpController.createEntry);
+router.post('/admin', authenticateToken, requireRectoria, auditHelpChange('AYUDA_CREAR'), helpController.createEntry);
 
 /**
  * @openapi
@@ -101,7 +101,7 @@ router.post('/admin', authenticateToken, requireRectoria, auditHelpChange('HELP_
  *       404: { description: Entrada inexistente. }
  *       500: { description: Error interno. }
  */
-router.put('/admin/:id', authenticateToken, requireRectoria, auditHelpChange('HELP_ENTRY_UPDATED'), helpController.updateEntry);
+router.put('/admin/:id', authenticateToken, requireRectoria, auditHelpChange('AYUDA_EDITAR'), helpController.updateEntry);
 
 /**
  * @openapi
