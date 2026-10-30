@@ -1,9 +1,8 @@
 const { Op } = require('sequelize');
-const { Reporte, ReporteEjecucion, Role, Department, IndicatorDefinition } = require('../models');
+const { Reporte, Role, Department, IndicatorDefinition } = require('../models');
 const indicatorService = require('./indicatorService');
 const { politicaReportes } = require('./reportePolitica');
 const { auditarReporte, calcularCambios } = require('./reporteAuditoria');
-const reporteArchivos = require('../utils/reporteArchivos');
 const { ValidationError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
 const TIPOS = ['PREDEFINIDO', 'PERSONALIZADO'];
@@ -174,8 +173,11 @@ const listReportes = async (user, { tipo, activo } = {}) => {
   return Reporte.findAll({ where, include: includeRelaciones, order: [['createdAt', 'DESC']] });
 };
 
-const getReporteById = async (user, id) => {
-  const reporte = await Reporte.findByPk(validarIdReporte(id), { include: includeRelaciones });
+const getReporteById = async (user, id, { incluirEliminado = false } = {}) => {
+  const reporte = await Reporte.findByPk(validarIdReporte(id), {
+    include: includeRelaciones,
+    paranoid: !incluirEliminado
+  });
   if (!reporte) {
     throw new NotFoundError('Reporte no encontrado');
   }
@@ -269,19 +271,13 @@ const deleteReporte = async (user, id) => {
     throw new ForbiddenError('Solo puedes eliminar tus propios reportes');
   }
 
-  const datos = reporte.toJSON();
-  const ejecuciones = await ReporteEjecucion.findAll({
-    where: { reporteId: reporte.id },
-    attributes: ['id']
-  });
+  reporte.deletedBy = user.id;
   await reporte.destroy();
-  await Promise.allSettled(ejecuciones.map((ejecucion) =>
-    reporteArchivos.eliminarEjecucion(ejecucion.id)));
   auditarReporte({
     user,
     accion: 'REPORTE_DELETED',
-    reporte: datos,
-    path: `/api/reportes/${datos.id}`
+    reporte,
+    path: `/api/reportes/${reporte.id}`
   });
   return true;
 };

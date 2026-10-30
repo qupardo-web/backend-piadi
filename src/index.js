@@ -74,6 +74,9 @@ async function initDb(retries = 5, delay = 2000) {
       const { migrateHelpAdmin } = require('./migrations/20261025-help-admin');
       await migrateHelpAdmin();
 
+      const { migrateReporteSoftDelete } = require('./migrations/20261030-reporte-soft-delete');
+      await migrateReporteSoftDelete();
+
       const {
         preparePlantillaDepartmentMigration,
         migratePlantillaDepartments

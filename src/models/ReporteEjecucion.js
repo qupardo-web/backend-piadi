@@ -38,6 +38,16 @@ const sequelize = require('../config/database');
  *           type: string
  *           format: date-time
  *           description: Fecha de finalización de la generación.
+ *         archivoDisponible:
+ *           type: boolean
+ *           description: Indica si el archivo puede re-descargarse.
+ *         reporteEliminado:
+ *           type: boolean
+ *           description: Indica si el reporte asociado fue eliminado lógicamente.
+ *         reporteEliminadoEn:
+ *           type: string
+ *           format: date-time
+ *           description: Fecha de eliminación lógica del reporte asociado.
  */
 const ReporteEjecucion = sequelize.define('ReporteEjecucion', {
   id: {
