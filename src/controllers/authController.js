@@ -71,17 +71,10 @@ const login = async (req, res, next) => {
       throw new UnauthorizedError('Usuario o contraseña incorrectos');
     }
 
-    // Resolve departmentId
+    // Resolve departmentId strictly based on user/role departmentId, without fragile role name matching
     let departmentId = user.department ? user.department.key : user.departmentId;
-    if (!departmentId && user.role) {
-      const roleLower = (user.role.name || '').toLowerCase();
-      if (roleLower.includes('innovación') || roleLower.includes('innovacion')) {
-        departmentId = 'innovacion';
-      } else if (roleLower.includes('vinculación') || roleLower.includes('vinculacion') || roleLower.includes('vcm')) {
-        departmentId = 'vinculacion_medio';
-      } else if (roleLower.includes('continua')) {
-        departmentId = 'educacion_continua';
-      }
+    if (!departmentId && user.role && user.role.departmentId) {
+      departmentId = user.role.departmentId;
     }
 
     // Generate JWT token
