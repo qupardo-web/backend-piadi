@@ -44,8 +44,26 @@ const slug = (texto) => String(texto || 'reporte')
   .toLowerCase()
   .slice(0, 40) || 'reporte';
 
-const nombreArchivo = (reporte) =>
-  `reporte-${reporte.id}-${slug(reporte.nombre)}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+const rangoAniosNombre = (filtros = {}) => {
+  const year = Number(filtros.year ?? filtros.anio ?? filtros['año']);
+  if (Number.isInteger(year) && year > 1900) return String(year);
+
+  const desde = Number(filtros.fromYear);
+  const hasta = Number(filtros.toYear);
+  const valido = (valor) => Number.isInteger(valor) && valor > 1900;
+  if (!valido(desde) && !valido(hasta)) return null;
+
+  const inicio = valido(desde) ? desde : hasta;
+  const fin = valido(hasta) ? hasta : desde;
+  const menor = Math.min(inicio, fin);
+  const mayor = Math.max(inicio, fin);
+  return menor === mayor ? String(menor) : `${menor}-a-${mayor}`;
+};
+
+const nombreArchivo = (reporte) => {
+  const rango = rangoAniosNombre(reporte.filtros);
+  return `${slug(reporte.nombre)}${rango ? `-${rango}` : ''}.xlsx`;
+};
 
 const nombreHoja = (indice, titulo) =>
   `${indice + 1}. ${titulo || 'Indicador'}`.slice(0, MAX_SHEET_NAME);
@@ -1098,6 +1116,8 @@ module.exports = {
     detectarLayout,
     resolverAnios,
     resolverAnioReferencia,
+    rangoAniosNombre,
+    nombreArchivo,
     ordenarPeriodos,
     construirMapaDimensiones,
     construirWhereEjecuciones,
