@@ -10,7 +10,7 @@ const metaIntegration = require('../src/services/metaIndicatorIntegrationService
 const cache = require('../src/services/cacheService');
 
 const requested = {
-  matricula_total: 'asignatura',
+  matricula_total: 'periodo',
   matricula_por_seccion: 'seccion',
   matricula_por_estado_academico: 'estadoAcademico',
   nuevos_vs_antiguos: 'nuevoAntiguo',

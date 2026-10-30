@@ -125,10 +125,10 @@ test('detail aplica el default de asignatura y respeta los groupBy explícitos',
 
   stubKpi('matricula_total');
   const grouped = await indicatorService.getIndicatorDetail('matricula_total');
-  assert.equal(grouped.groupBy, 'asignatura');
+  assert.equal(grouped.groupBy, 'periodo');
   assert.equal(grouped.disaggregated, true);
   assert.deepEqual(grouped.table, [
-    { label: 'Contabilidad', value: 2 }, { label: 'Auditoría', value: 1 }
+    { label: '1', value: 2 }, { label: '2', value: 1 }
   ]);
   const temporal = await indicatorService.getIndicatorDetail('matricula_total', { groupBy: '' });
   assert.equal(temporal.groupBy, null);
@@ -149,7 +149,7 @@ test('matricula_total cuenta estudiantes únicos y no inscripciones', async () =
   assert.equal(result.data.hasData, true);
 });
 
-test('matricula_total aplica asignatura por defecto sin alterar filtros ni overrides', async () => {
+test('matricula_total muestra períodos por año sin alterar filtros ni agrupaciones manuales', async () => {
   stubKpi('matricula_total');
   const rows = [
     enrollment('A', { anio: 2024, asignatura: 'Auditoría' }),
@@ -169,18 +169,30 @@ test('matricula_total aplica asignatura por defecto sin alterar filtros ni overr
     && (!filters.nuevoAntiguo?.length || filters.nuevoAntiguo.includes(row.nuevoAntiguo))
   ));
 
-  const view = await indicatorService.getIndicatorDetail('matricula_total', { year: '2024' });
-  assert.equal(view.groupBy, 'asignatura');
+  const view = await indicatorService.getIndicatorDetail('matricula_total');
+  assert.equal(view.groupBy, 'periodo');
   assert.equal(view.disaggregated, true);
   assert.deepEqual(view.table, [
-    { label: 'Auditoría', value: 1 }, { label: 'Contabilidad', value: 1 }
+    { label: '1', value: 2 }, { label: '2', value: 1 }
   ]);
-  assert.equal(view.total, 2);
-  assert.equal(view.formattedTotal, '2');
+  assert.deepEqual(view.series, [
+    { label: '1', points: [{ year: 2024, value: 1 }, { year: 2025, value: 1 }] },
+    { label: '2', points: [{ year: 2024, value: 1 }, { year: 2025, value: 0 }] }
+  ]);
+  assert.equal(view.total, 1);
+  assert.equal(view.formattedTotal, '1');
   assert.equal(view.hasData, true);
   assert.deepEqual(view.period, { from: 2024, to: 2025 });
-  assert.deepEqual(view.comparison, null);
-  assert.deepEqual(view.series.map((item) => item.label), ['Auditoría', 'Contabilidad']);
+  assert.deepEqual(view.comparison, { previousYear: 2024, previousValue: 2, diff: -1 });
+
+  const filteredYear = await indicatorService.getIndicatorDetail('matricula_total', { year: '2024' });
+  assert.deepEqual(filteredYear.table, [
+    { label: '1', value: 1 }, { label: '2', value: 1 }
+  ]);
+  assert.equal(filteredYear.total, 2);
+  assert.deepEqual(filteredYear.series.map((item) => item.points), [
+    [{ year: 2024, value: 1 }], [{ year: 2024, value: 1 }]
+  ]);
 
   const temporal = await indicatorService.getIndicatorDetail('matricula_total', { groupBy: '', year: '2024' });
   assert.equal(temporal.groupBy, null);
@@ -191,24 +203,29 @@ test('matricula_total aplica asignatura por defecto sin alterar filtros ni overr
   assert.equal(annual.groupBy, 'year');
   assert.equal(annual.disaggregated, false);
 
-  for (const groupBy of ['seccion', 'estadoAcademico', 'nuevoAntiguo', 'periodo']) {
+  for (const groupBy of ['asignatura', 'seccion', 'estadoAcademico', 'nuevoAntiguo']) {
     const alternate = await indicatorService.getIndicatorDetail('matricula_total', { groupBy, year: '2024' });
     assert.equal(alternate.groupBy, groupBy);
     assert.equal(alternate.disaggregated, true);
     assert.equal(alternate.table.length, 2);
+    if (groupBy === 'asignatura') {
+      assert.deepEqual(alternate.table, [
+        { label: 'Auditoría', value: 1 }, { label: 'Contabilidad', value: 1 }
+      ]);
+    }
   }
   for (const [filter, value] of [
     ['asignatura', 'Auditoría'], ['seccion', '2'],
     ['estadoAcademico', 'Egresado'], ['nuevoAntiguo', 'antiguo']
   ]) {
     const filtered = await indicatorService.getIndicatorDetail('matricula_total', { year: '2024', [filter]: value });
-    assert.equal(filtered.groupBy, 'asignatura');
+    assert.equal(filtered.groupBy, 'periodo');
     assert.equal(filtered.total, 1, filter);
   }
   const firstPeriod = await indicatorService.getIndicatorDetail('matricula_total', {
     year: '2024', periodo: '1'
   });
-  assert.deepEqual(firstPeriod.table, [{ label: 'Auditoría', value: 1 }]);
+  assert.deepEqual(firstPeriod.table, [{ label: '1', value: 1 }]);
   assert.equal(firstPeriod.total, 1);
   assert.deepEqual(firstPeriod.filters.periodo, [1]);
   assert.equal((await indicatorService.getIndicatorValue('matricula_total', {
