@@ -112,7 +112,7 @@ const INDICATORS = {
   docentes_involucrados: { kind: 'innovation_project', formulaKey: 'SUM_INNOVATION_TEACHERS', allowedGroupBy: INNOVACION_PROJECT_GROUP_BY },
 
   // Admisión - Matrícula y Académico
-  matricula_total: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_ENROLLMENT_TOTAL', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY },
+  matricula_total: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_ENROLLMENT_TOTAL', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY, defaultGroupBy: 'periodo' },
   nuevos_vs_antiguos: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_NEW_VS_OLD', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY, defaultGroupBy: 'nuevoAntiguo' },
   matricula_por_asignatura: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_BY_COURSE', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY, defaultGroupBy: 'asignatura' },
   matricula_por_seccion: { kind: 'admission_enrollment', formulaKey: 'COUNT_ADMISSION_BY_SECTION', allowedGroupBy: ADMISSION_ENROLLMENT_GROUP_BY, defaultGroupBy: 'seccion' },
