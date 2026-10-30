@@ -87,6 +87,9 @@ async function initDb(retries = 5, delay = 2000) {
       await seedDatabase();
       await migratePlantillaDepartments();
 
+      const { seedHelpEntries } = require('./services/seedHelpEntries');
+      await seedHelpEntries();
+
       const { seedIndicators } = require('./services/indicatorSeeder');
       await seedIndicators();
 
