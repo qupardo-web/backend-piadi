@@ -18,7 +18,9 @@ const {
   resolverCategoria,
   detectarLayout,
   ordenarPeriodos,
-  formatoNumerico
+  formatoNumerico,
+  rangoAniosNombre,
+  nombreArchivo
 } = service.__test;
 
 const allowed = ['year', 'periodo', 'sexo', 'beneficios', 'asignatura'];
@@ -221,6 +223,22 @@ const hojaResumen = (buffer) => {
   const wb = XLSX.read(buffer, { type: 'buffer' });
   return XLSX.utils.sheet_to_json(wb.Sheets.Resumen, { header: 1, defval: '' });
 };
+
+test('el nombre del archivo usa el nombre del reporte y su rango de años', () => {
+  assert.equal(rangoAniosNombre({ year: 2026 }), '2026');
+  assert.equal(rangoAniosNombre({ fromYear: 2024, toYear: 2026 }), '2024-a-2026');
+  assert.equal(rangoAniosNombre({ fromYear: 2026, toYear: 2024 }), '2024-a-2026');
+  assert.equal(rangoAniosNombre({ fromYear: 2025, toYear: 2025 }), '2025');
+  assert.equal(rangoAniosNombre({}), null);
+  assert.equal(
+    nombreArchivo({ id: 486, nombre: 'Reporte de Admisión 2024 a 2026', filtros: { fromYear: 2024, toYear: 2026 } }),
+    'reporte-de-admision-2024-a-2026-2024-a-2026.xlsx'
+  );
+  assert.equal(
+    nombreArchivo({ id: 487, nombre: 'Reporte de Admisión 2026', filtros: { fromYear: 2026, toYear: 2026 } }),
+    'reporte-de-admision-2026-2026.xlsx'
+  );
+});
 
 test('detecta dimensiones, categoría y layout sin lógica por indicador', () => {
   assert.deepEqual(
