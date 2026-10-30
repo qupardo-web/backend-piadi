@@ -118,6 +118,16 @@ test('creación normaliza texto plano, conserva activo=false y aplica true por d
   assert.equal(calls.create[1].activo, true);
 });
 
+test('pregunta y respuesta respetan límites de longitud sin alterar el texto plano', async () => {
+  const { calls } = setupStore();
+  await helpService.createEntry(entryData({ pregunta: 'P'.repeat(300), respuesta: 'R'.repeat(5000) }));
+  assert.equal(calls.create[0].pregunta.length, 300);
+  assert.equal(calls.create[0].respuesta.length, 5000);
+  await rejects400(helpService.createEntry(entryData({ pregunta: 'P'.repeat(301) })));
+  await rejects400(helpService.createEntry(entryData({ respuesta: 'R'.repeat(5001) })));
+  assert.equal(calls.create.length, 1);
+});
+
 test('POST rechaza módulo, pregunta, respuesta, orden, activo y propiedades inválidas', async () => {
   const { calls } = setupStore();
   for (const invalid of [
@@ -163,7 +173,8 @@ test('PUT rechaza ID, payload y módulo inválidos; devuelve 404 sin upsert', as
     await rejects400(helpService.updateEntry(id, { activo: false }));
   }
   for (const body of [{}, { activo: 'false' }, { modulo: 'inexistente' },
-    { pregunta: '<img src=x>' }, { orden: -1 }, { foo: 1 }, { id: 2 }, null]) {
+    { pregunta: '<img src=x>' }, { pregunta: 'P'.repeat(301) },
+    { respuesta: 'R'.repeat(5001) }, { orden: -1 }, { foo: 1 }, { id: 2 }, null]) {
     await rejects400(helpService.updateEntry('1', body));
   }
   await assert.rejects(helpService.updateEntry('999', { activo: false }), { statusCode: 404 });
@@ -201,6 +212,8 @@ test('Swagger documenta únicamente tres operaciones administrativas con el mism
   const schemas = swaggerDocs.components.schemas;
   assert.deepEqual(schemas.ModuloAyuda.enum, HELP_MODULES);
   assert.equal(schemas.DatosEntradaAyuda.additionalProperties, false);
+  assert.equal(schemas.DatosEntradaAyuda.properties.pregunta.maxLength, 300);
+  assert.equal(schemas.DatosEntradaAyuda.properties.respuesta.maxLength, 5000);
   assert.ok(schemas.EntradaAyuda.properties.createdAt);
   assert.ok(schemas.EntradaAyuda.properties.updatedAt);
   const admin = swaggerDocs.paths['/api/help/admin'];
@@ -265,6 +278,9 @@ test('rutas reales exigen JWT y Rectoría; GET, POST y PUT mantienen contratos y
     assert.equal((await request('/admin/no', 'PUT', rector, { activo: false })).status, 400);
     assert.equal((await request('/admin/999', 'PUT', rector, { activo: false })).status, 404);
     assert.equal((await request('/admin', 'POST', rector, entryData({ modulo: 'otro' }))).status, 400);
+    assert.equal((await request('/admin', 'POST', rector, entryData({ pregunta: 'P'.repeat(301) }))).status, 400);
+    assert.equal((await request(`/admin/${saved.id}`, 'PUT', rector,
+      { respuesta: 'R'.repeat(5001) })).status, 400);
     assert.equal((await request(`/admin/${saved.id}`, 'PUT', rector, {})).status, 400);
     assert.equal((await request(`/admin/${saved.id}`, 'DELETE', rector)).status, 404);
     const publicRead = await request('?modulo=dashboard', 'GET', rector);

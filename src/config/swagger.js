@@ -8,8 +8,8 @@ const swaggerUrl = (process.env.SWAGGER_URL || `http://localhost:${port}`).repla
 
 const helpEntryFields = {
   modulo: { $ref: '#/components/schemas/ModuloAyuda' },
-  pregunta: { type: 'string', description: 'Pregunta en texto plano, no vacía.' },
-  respuesta: { type: 'string', description: 'Respuesta en texto plano, no vacía.' },
+  pregunta: { type: 'string', maxLength: 300, description: 'Pregunta en texto plano, no vacía.' },
+  respuesta: { type: 'string', maxLength: 5000, description: 'Respuesta en texto plano, no vacía.' },
   orden: { type: 'integer', minimum: 0 },
   activo: { type: 'boolean', default: true }
 };
