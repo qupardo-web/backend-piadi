@@ -12,6 +12,7 @@ const listAdmin = async (req, res, next) => {
 const createEntry = async (req, res, next) => {
   try {
     const entry = await helpService.createEntry(req.body);
+    res.locals.helpAuditEntry = entry;
     res.status(201).json({ success: true, data: entry });
   } catch (error) {
     next(error);
@@ -21,6 +22,7 @@ const createEntry = async (req, res, next) => {
 const updateEntry = async (req, res, next) => {
   try {
     const entry = await helpService.updateEntry(req.params.id, req.body);
+    res.locals.helpAuditEntry = entry;
     res.status(200).json({ success: true, data: entry });
   } catch (error) {
     next(error);

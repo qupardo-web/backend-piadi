@@ -8,6 +8,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const models = require('../src/models');
 const helpService = require('../src/services/helpService');
+const auditService = require('../src/services/auditService');
 const helpRoutes = require('../src/routes/helpRoutes');
 const errorHandler = require('../src/middleware/errorHandler');
 const { swaggerDocs } = require('../src/config/swagger');
@@ -191,6 +192,7 @@ test('errores internos responden 500 sin exponer detalles técnicos', async () =
 
 test('GET, POST y PUT administrativos conservan Rectoría y su comportamiento', async () => {
   const { rows, calls } = setupStore();
+  stub(auditService, 'record', async () => ({ persisted: true }));
   await withServer(async ({ request }) => {
     for (const [path, method] of [['/admin', 'GET'], ['/admin', 'POST'], ['/admin/3', 'PUT']]) {
       assert.equal((await request(path, { method })).status, 401);

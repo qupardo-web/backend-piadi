@@ -231,6 +231,11 @@ test('Swagger documenta únicamente tres operaciones administrativas con el mism
 
 test('rutas reales exigen JWT y Rectoría; GET, POST y PUT mantienen contratos y no hay DELETE', async () => {
   const { rows, calls } = setupStore();
+  const auditCalls = [];
+  stub(models.AuditSesion, 'create', async (payload) => {
+    auditCalls.push(payload);
+    return payload;
+  });
   const app = express();
   app.use(express.json());
   app.use('/api/help', helpRoutes);
@@ -291,6 +296,17 @@ test('rutas reales exigen JWT y Rectoría; GET, POST y PUT mantienen contratos y
     assert.doesNotMatch(JSON.stringify(await serverError.json()), /detalle interno de SQL/);
     assert.equal(rows.length, 1);
     assert.equal(calls.destroy, 0);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(auditCalls.map(({ accion }) => accion), [
+      'AYUDA_CREAR', 'AYUDA_EDITAR', 'AYUDA_DESACTIVAR'
+    ]);
+    assert.deepEqual(auditCalls.map(({ usuarioId }) => usuarioId), [7, 8, 7]);
+    assert.deepEqual(auditCalls.map(({ entidad }) => entidad), [
+      'EntradaAyuda', 'EntradaAyuda', 'EntradaAyuda'
+    ]);
+    assert.deepEqual(auditCalls.map(({ detalles }) => JSON.parse(detalles).entryId), [saved.id, saved.id, saved.id]);
+    assert.deepEqual(JSON.parse(auditCalls[1].detalles).changedFields, ['activo']);
+    assert.doesNotMatch(JSON.stringify(auditCalls), /Selecciona el período|Authorization|Bearer|password|stack/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     console.error = priorError;
