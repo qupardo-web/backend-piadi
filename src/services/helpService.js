@@ -3,6 +3,7 @@ const { isHelpModule } = require('../config/helpModules');
 const { ValidationError, NotFoundError } = require('../utils/errors');
 
 const MAX_ID = 2147483647;
+const TEXT_LIMITS = { pregunta: 300, respuesta: 5000 };
 const WRITABLE_FIELDS = new Set(['modulo', 'pregunta', 'respuesta', 'orden', 'activo']);
 
 const validateId = (id) => {
@@ -20,6 +21,9 @@ const validateText = (value, field) => {
   const normalized = value.trim().replace(/\r\n?/g, '\n').replace(/[ \t]+/g, ' ');
   if (!normalized) {
     throw new ValidationError(`${field} es obligatorio`);
+  }
+  if (TEXT_LIMITS[field] && Array.from(normalized).length > TEXT_LIMITS[field]) {
+    throw new ValidationError(`${field} no puede superar ${TEXT_LIMITS[field]} caracteres`);
   }
   if (/[<>]/.test(normalized)) {
     throw new ValidationError(`${field} debe ser texto plano, sin HTML`);
