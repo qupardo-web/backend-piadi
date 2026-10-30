@@ -978,8 +978,9 @@ const construirIncludeEjecucion = (whereReporte = null) => {
   const reporte = {
     model: Reporte,
     as: 'reporte',
-    attributes: ['id', 'nombre', 'tipo', 'departmentId', 'createdBy'],
-    required: true
+    attributes: ['id', 'nombre', 'tipo', 'departmentId', 'createdBy', 'deletedAt', 'deletedBy'],
+    required: true,
+    paranoid: false
   };
   if (whereReporte) reporte.where = whereReporte;
   return [
@@ -990,16 +991,19 @@ const construirIncludeEjecucion = (whereReporte = null) => {
 
 const serializarEjecucion = (ejecucion) => {
   const data = typeof ejecucion.toJSON === 'function' ? ejecucion.toJSON() : ejecucion;
+  const reporte = data.reporte || null;
   return {
     ...data,
-    archivoDisponible: reporteArchivos.existeEjecucion(data.id)
+    archivoDisponible: reporteArchivos.existeEjecucion(data.id),
+    reporteEliminado: Boolean(reporte?.deletedAt),
+    reporteEliminadoEn: reporte?.deletedAt || null
   };
 };
 
 const ordenEjecuciones = [['generadoEn', 'DESC'], ['createdAt', 'DESC']];
 
 const listEjecuciones = async (user, reporteId, query = {}) => {
-  const reporte = await reporteService.getReporteById(user, reporteId);
+  const reporte = await reporteService.getReporteById(user, reporteId, { incluirEliminado: true });
   const where = { reporteId: reporte.id, ...construirWhereEjecuciones(query) };
   const ejecuciones = await ReporteEjecucion.findAll({
     where,
@@ -1015,7 +1019,7 @@ const listEjecucionesGeneral = async (user, query = {}) => {
 
   let whereReporte = null;
   if (reporteId) {
-    const reporte = await reporteService.getReporteById(user, reporteId);
+    const reporte = await reporteService.getReporteById(user, reporteId, { incluirEliminado: true });
     where.reporteId = reporte.id;
   } else {
     const politica = politicaReportes(user);
@@ -1080,7 +1084,7 @@ const descargarEjecucion = async (user, ejecucionId) => {
     throw new NotFoundError('Ejecución no encontrada');
   }
 
-  const reporte = await reporteService.getReporteById(user, ejecucion.reporteId);
+  const reporte = await reporteService.getReporteById(user, ejecucion.reporteId, { incluirEliminado: true });
   if (!reporteArchivos.existeEjecucion(id)) {
     throw new NotFoundError('El archivo de esta ejecución no está disponible. Vuelve a generar el reporte.');
   }
@@ -1158,6 +1162,7 @@ module.exports = {
     resolverAnioReferencia,
     rangoAniosNombre,
     nombreArchivo,
+    serializarEjecucion,
     ordenarPeriodos,
     construirMapaDimensiones,
     construirWhereEjecuciones,

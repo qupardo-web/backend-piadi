@@ -43,6 +43,7 @@ const auditarReporte = ({ user, accion, reporte, cambios = null, extra = null, p
     nombre: r.nombre ?? null,
     tipo: r.tipo ?? null,
     departmentId: r.departmentId ?? null,
+    ...(r.deletedAt ? { deletedAt: r.deletedAt, deletedBy: r.deletedBy ?? null } : {}),
     roleGroup: user?.roleGroup ?? null,
     method: METODOS[accion] ?? null,
     path,

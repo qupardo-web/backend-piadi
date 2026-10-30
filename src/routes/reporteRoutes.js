@@ -373,7 +373,10 @@ router.post('/:id/ejecuciones', authenticateToken, reporteController.registrarEj
  *         description: Reporte no encontrado.
  *   delete:
  *     tags: [Reportes]
- *     summary: Elimina un reporte
+ *     summary: Elimina lógicamente un reporte
+ *     description: >
+ *       El reporte deja de estar visible, pero sus ejecuciones y archivos se
+ *       conservan para el historial y la auditoría.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -383,7 +386,7 @@ router.post('/:id/ejecuciones', authenticateToken, reporteController.registrarEj
  *         schema: { type: integer }
  *     responses:
  *       200:
- *         description: Reporte eliminado.
+ *         description: Reporte eliminado lógicamente.
  *       403:
  *         description: El rol no puede gestionar reportes.
  *       404:

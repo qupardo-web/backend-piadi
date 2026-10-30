@@ -43,6 +43,13 @@ const sequelize = require('../config/database');
  *         activo:
  *           type: boolean
  *           description: Si el reporte está activo.
+ *         deletedAt:
+ *           type: string
+ *           format: date-time
+ *           description: Fecha de eliminación lógica; null si el reporte está vigente.
+ *         deletedBy:
+ *           type: integer
+ *           description: Usuario que eliminó lógicamente el reporte.
  */
 const Reporte = sequelize.define('Reporte', {
   id: {
@@ -115,10 +122,23 @@ const Reporte = sequelize.define('Reporte', {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: true
+  },
+  deletedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  deletedBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
   }
 }, {
   tableName: 'reportes',
-  timestamps: true
+  timestamps: true,
+  paranoid: true
 });
 
 module.exports = Reporte;
