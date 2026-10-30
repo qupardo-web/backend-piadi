@@ -154,7 +154,11 @@ test('dimensiones inválidas, repetidas y faltantes responden 400', async () => 
       (error) => error.statusCode === 400 && error.code === code);
   }
   fixture('matricula_total');
-  await assert.rejects(service.getIndicatorDetail('matricula_total', { splitBy: 'sexo' }),
+  const totalMatrix = await service.getIndicatorDetail('matricula_total', { splitBy: 'periodo', year: '2024' });
+  assert.equal(totalMatrix.rowDimension, 'asignatura');
+  assert.equal(totalMatrix.colDimension, 'periodo');
+  assert.equal(totalMatrix.totals.general, 2);
+  await assert.rejects(service.getIndicatorDetail('matricula_total', { groupBy: '', splitBy: 'periodo' }),
     (error) => error.statusCode === 400 && error.code === 'MISSING_ROW_DIMENSION');
 });
 

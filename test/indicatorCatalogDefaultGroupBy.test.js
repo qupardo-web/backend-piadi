@@ -10,6 +10,7 @@ const metaIntegration = require('../src/services/metaIndicatorIntegrationService
 const cache = require('../src/services/cacheService');
 
 const requested = {
+  matricula_total: 'asignatura',
   matricula_por_seccion: 'seccion',
   matricula_por_estado_academico: 'estadoAcademico',
   nuevos_vs_antiguos: 'nuevoAntiguo',
@@ -29,8 +30,8 @@ const requested = {
   asignaturas_criticas: 'asignatura'
 };
 
-test('solo los 17 indicadores solicitados ganan defaults válidos y se conserva el anterior', () => {
-  assert.equal(Object.keys(requested).length, 17);
+test('solo los 18 indicadores solicitados ganan defaults válidos y se conserva el anterior', () => {
+  assert.equal(Object.keys(requested).length, 18);
   const actual = Object.entries(INDICATORS)
     .filter(([, config]) => config.defaultGroupBy !== undefined)
     .map(([key]) => key)
@@ -41,7 +42,7 @@ test('solo los 17 indicadores solicitados ganan defaults válidos y se conserva 
     assert.ok(INDICATORS[key].allowedGroupBy.includes(dimension), key);
   }
   assert.equal(INDICATORS.matricula_por_asignatura.defaultGroupBy, 'asignatura');
-  for (const key of ['matricula_total', 'tasa_aprobacion', 'total_convenios', 'proyectos_activos']) {
+  for (const key of ['tasa_aprobacion', 'total_convenios', 'proyectos_activos']) {
     assert.equal(INDICATORS[key].defaultGroupBy, undefined, key);
   }
   assert.equal(INDICATORS.tasa_aprobacion_asignatura.kind, 'curricular_rendimiento');
@@ -165,9 +166,9 @@ test('detail respeta year, vacío, otra dimensión, inválido y filtros sin alte
   assert.equal(value.data.value, 2);
 });
 
-test('indicador sin default e Innovación conservan vista temporal', async () => {
+test('matricula_total conserva la vista temporal con groupBy vacío y otros sin default no cambian', async () => {
   fixture('matricula_total');
-  const enrollmentView = await service.getIndicatorDetail('matricula_total');
+  const enrollmentView = await service.getIndicatorDetail('matricula_total', { groupBy: '' });
   assert.equal(enrollmentView.groupBy, null);
   assert.equal(enrollmentView.disaggregated, false);
   assert.deepEqual(enrollmentView.series, [{ year: 2024, value: 2 }, { year: 2025, value: 1 }]);
