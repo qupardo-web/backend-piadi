@@ -82,6 +82,19 @@ const listEjecucionesGeneral = async (req, res, next) => {
   }
 };
 
+const registrarEjecucionPdf = async (req, res, next) => {
+  try {
+    const ejecucion = await reporteGeneracionService.registrarEjecucionPdf(
+      req.user,
+      req.params.id,
+      req.body || {}
+    );
+    sendSuccess(res, ejecucion, 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const descargarEjecucion = async (req, res, next) => {
   try {
     const { buffer, nombre } = await reporteGeneracionService.descargarEjecucion(
@@ -118,6 +131,7 @@ module.exports = {
   listAreas,
   listEjecuciones,
   listEjecucionesGeneral,
+  registrarEjecucionPdf,
   descargarEjecucion,
   descargarReporte
 };
