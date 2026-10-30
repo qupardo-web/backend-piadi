@@ -60,9 +60,9 @@ const rangoAniosNombre = (filtros = {}) => {
   return menor === mayor ? String(menor) : `${menor}-a-${mayor}`;
 };
 
-const nombreArchivo = (reporte) => {
+const nombreArchivo = (reporte, extension = 'xlsx') => {
   const rango = rangoAniosNombre(reporte.filtros);
-  return `${slug(reporte.nombre)}${rango ? `-${rango}` : ''}.xlsx`;
+  return `${slug(reporte.nombre)}${rango ? `-${rango}` : ''}.${extension}`;
 };
 
 const nombreHoja = (indice, titulo) =>
@@ -1034,6 +1034,45 @@ const listEjecucionesGeneral = async (user, query = {}) => {
   return ejecuciones.map(serializarEjecucion);
 };
 
+// El PDF se genera en el navegador. Este endpoint registra la ejecución sin
+// almacenar el archivo, por lo que la re-descarga no estará disponible.
+const registrarEjecucionPdf = async (user, reporteId, data = {}) => {
+  const payload = data && typeof data === 'object' ? data : {};
+  const formato = String(payload.formato || 'PDF').trim().toUpperCase();
+  if (formato !== 'PDF') {
+    throw new ValidationError('Este endpoint solo registra ejecuciones PDF');
+  }
+
+  const reporte = await reporteService.getReporteById(user, reporteId);
+  if (!reporte.activo) {
+    throw new ValidationError('El reporte está inactivo y no puede generarse');
+  }
+
+  const ejecucion = await ReporteEjecucion.create({
+    reporteId: reporte.id,
+    solicitadoPor: user.id,
+    estado: 'LISTO',
+    formato: 'PDF',
+    parametros: reporte.filtros || {},
+    archivoNombre: nombreArchivo(reporte, 'pdf'),
+    generadoEn: new Date()
+  });
+
+  auditarReporte({
+    user,
+    accion: 'REPORTE_GENERATED',
+    reporte,
+    extra: {
+      ejecucionId: ejecucion.id,
+      formato: 'PDF',
+      origen: 'cliente'
+    },
+    path: `/api/reportes/${reporte.id}/ejecuciones`
+  });
+
+  return serializarEjecucion(ejecucion);
+};
+
 const descargarEjecucion = async (user, ejecucionId) => {
   const id = validarIdEjecucion(ejecucionId);
   const ejecucion = await ReporteEjecucion.findByPk(id);
@@ -1108,6 +1147,7 @@ module.exports = {
   descargarEjecucion,
   listEjecuciones,
   listEjecucionesGeneral,
+  registrarEjecucionPdf,
   armarExcel,
   __test: {
     limpiarFiltros,

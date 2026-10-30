@@ -279,6 +279,49 @@ router.get('/:id/ejecuciones', authenticateToken, reporteController.listEjecucio
 
 /**
  * @openapi
+ * /api/reportes/{id}/ejecuciones:
+ *   post:
+ *     tags: [Reportes]
+ *     summary: Registra una ejecución PDF generada en el cliente
+ *     description: >
+ *       Registra solo la metadata de la ejecución. El archivo PDF no se
+ *       almacena en el backend, por lo que se devuelve archivoDisponible=false.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               formato: { type: string, enum: [PDF], default: PDF }
+ *     responses:
+ *       201:
+ *         description: Ejecución PDF registrada.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data: { $ref: '#/components/schemas/ReporteEjecucion' }
+ *       400:
+ *         description: Formato inválido o reporte inactivo.
+ *       403:
+ *         description: Sin acceso al reporte.
+ *       404:
+ *         description: Reporte no encontrado.
+ */
+router.post('/:id/ejecuciones', authenticateToken, reporteController.registrarEjecucionPdf);
+
+/**
+ * @openapi
  * /api/reportes/{id}:
  *   get:
  *     tags: [Reportes]
