@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { requireRectoria } = require('../middleware/rectoriaAuthorization');
+const { auditHelpChange } = require('../middleware/helpAudit');
 const helpController = require('../controllers/helpController');
 
 const router = express.Router();
@@ -63,7 +64,7 @@ const router = express.Router();
  *       500: { description: Error interno. }
  */
 router.get('/admin', authenticateToken, requireRectoria, helpController.listAdmin);
-router.post('/admin', authenticateToken, requireRectoria, helpController.createEntry);
+router.post('/admin', authenticateToken, requireRectoria, auditHelpChange('HELP_ENTRY_CREATED'), helpController.createEntry);
 
 /**
  * @openapi
@@ -100,7 +101,7 @@ router.post('/admin', authenticateToken, requireRectoria, helpController.createE
  *       404: { description: Entrada inexistente. }
  *       500: { description: Error interno. }
  */
-router.put('/admin/:id', authenticateToken, requireRectoria, helpController.updateEntry);
+router.put('/admin/:id', authenticateToken, requireRectoria, auditHelpChange('HELP_ENTRY_UPDATED'), helpController.updateEntry);
 
 /**
  * @openapi
